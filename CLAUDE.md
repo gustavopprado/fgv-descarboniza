@@ -1,0 +1,1205 @@
+# FGV Descarboniza
+
+Inventário de emissões de CO₂ da FGV Ferragens para Móveis.
+Este documento é a especificação do sistema. Leia inteiro antes de escrever código.
+
+---
+
+## 0. Regras de trabalho
+
+**Não suba servidor de desenvolvimento.** Não rode `npm run dev`, `next dev` ou equivalente.
+O Gustavo roda a aplicação e reporta o que viu. Faça build ou typecheck se precisar validar,
+mas não deixe processo servindo.
+
+**O protótipo é referência visual, não fonte de dado.** O arquivo
+`fgv-descarboniza-prototipo.html` define layout, paleta, tipografia, comportamento dos mapas
+e das animações. **Todos os números dentro dele são de exemplo** — alguns são inventados.
+Nenhum valor do protótipo entra no sistema.
+
+**Este repositório é público.** Leia a seção 2 antes de criar qualquer arquivo, escrever
+qualquer constante ou montar qualquer fixture.
+
+**O contexto real dos dados está em `CONTEXTO.md`**, que é ignorado pelo git. Lá estão as
+colunas reais de cada base, os valores de conferência, as armadilhas de formato e os números
+de referência. Consulte-o para implementar; **nunca copie o conteúdo dele para cá, para
+comentário de código, para mensagem de commit ou para teste.**
+
+**Registre o que fizer** na seção 14.
+
+---
+
+## 1. O que este sistema é
+
+Um inventário de emissões com três módulos e um painel consolidado.
+**Somente relatórios de emissão** — sem cenários de redução, sem simulações, sem projeções.
+
+| Módulo | Escopo GHG | Métrica exibida |
+|---|---|---|
+| Mobilidade casa-trabalho | Escopo 3, cat. 7 | kg CO₂ por funcionário por mês |
+| Viagens corporativas | Escopo 3 cat. 6 / Escopo 1 | kg CO₂ por viagem |
+| Transporte marítimo de importações | Escopo 3, cat. 4 | kg CO₂ por contêiner |
+| Painel consolidado | — | toneladas de CO₂e por ano |
+
+**Regra de exibição:** peso, volume, distância, tonelada-quilômetro e intensidade por quilo
+são insumo de cálculo e **não aparecem na interface**.
+
+### 1.1 O sistema tem duas partes separadas
+
+**Inventário** — retrospectivo, alimentado por bases fechadas. Telas: Visão geral,
+Mobilidade, Viagens, Marítimo, Método.
+
+**Programa de viagens** — prospectivo, alimentado pelos próprios funcionários.
+Telas: Registrar viagem, Emissões registradas.
+
+A separação é visível na navegação e é conceitual: a primeira parte relata o que já
+aconteceu, a segunda começa a medir daqui para a frente.
+
+---
+
+## 2. Repositório público: o que nunca entra no git
+
+O repositório é público no GitHub. Trate tudo que segue como segredo.
+
+### 2.1 Nunca versionar
+
+- **Arquivos de base** — planilhas e JSON de mobilidade, viagens e importações, em qualquer
+  formato, em qualquer pasta
+- **Qualquer arquivo derivado deles** — JSON intermediário, CSV de conferência, dump de
+  banco, backup, export de relatório
+- **Variáveis de ambiente** — `.env` e todas as variantes
+- **Credenciais** — service account do Firebase, chave de API de rotas, client secret do
+  OAuth. **O JSON da service account nunca entra no repositório**, em nenhuma pasta
+- **Identificadores da infraestrutura** — id do projeto Firebase, domínio do
+  Workspace da empresa
+- **Coordenada da fábrica** — é parâmetro de ambiente, nunca constante no código
+- **Nomes reais** — de funcionários, de agentes de carga, de empresas do grupo, de clientes,
+  de fornecedores, de navios
+- **Volumes e valores reais** — emissão por agente, contagem de contêineres, número de
+  embarques, número de respondentes, totais de conferência
+
+### 2.2 Onde isso costuma vazar sem ninguém perceber
+
+- **Seeds e fixtures.** Toda massa de teste é fictícia, inventada do zero. Nunca recortar
+  linhas da base real, nem "só algumas para testar".
+- **Testes.** Valores esperados em asserção viram dado público. Use números fictícios.
+- **Comentários de código.** Não documente a base real dentro do código.
+- **Mensagens de commit.** Não cite nome de empresa, de agente ou valor de emissão.
+- **Snapshots e arquivos de saída de teste.**
+- **README e documentação.** Descreva o sistema, não os dados.
+
+### 2.3 `.gitignore`
+
+Existe um `.gitignore` na raiz cobrindo os itens acima. **Mantenha-o atualizado**: ao criar
+uma pasta nova que possa receber dado real, adicione a regra antes de rodar qualquer coisa
+que escreva nela.
+
+### 2.4 Antes do primeiro push
+
+`.gitignore` não remove o que já foi commitado. Se algum arquivo de base já entrou no
+histórico, ele continua público mesmo depois de apagado. Nesse caso o caminho é repositório
+novo, não `git rm`. Avise o Gustavo se encontrar rastro assim.
+
+---
+
+## 3. Identificação de pessoas
+
+**Regra geral: nas telas de inventário, nenhuma pessoa é identificável.**
+
+### 3.1 Inventário — anônimo
+
+Nas telas de Mobilidade, Viagens (histórico) e Marítimo:
+
+- **Nunca exibir nome, matrícula, e-mail ou qualquer identificador de pessoa.** Nem em
+  tabela, nem em tooltip, nem em legenda, nem em exportação.
+- O identificador interno existe no banco para cálculo e deduplicação, mas **não é enviado
+  ao cliente**. O agregado sai pronto do servidor.
+- No radar de mobilidade, cada ponto é um funcionário **sem nenhum dado associado**. Sem
+  tooltip, sem clique, sem nada que permita isolar um indivíduo.
+- **Supressão de grupos pequenos:** não exibir recorte com menos de 5 pessoas. Um bairro com
+  um respondente identifica esse respondente mesmo sem o nome dele. Agrupe o que ficar
+  abaixo do limite em "outros".
+
+A base histórica de viagens contém nomes de passageiros. Eles são carregados para ligar a
+viagem ao funcionário, e **não aparecem em tela nenhuma do inventário**.
+
+### 3.2 Programa de viagens — identificado
+
+Só aqui a pessoa aparece pelo nome:
+
+- O viajante vê as próprias submissões, identificadas.
+- Os perfis `admin` e `sustentabilidade` veem quem registrou cada viagem. É necessário para
+  acompanhar adesão e corrigir lançamento errado.
+- O perfil `gestor` **não vê nome nem aqui** — para ele o programa também é agregado.
+
+---
+
+## 4. Stack e infraestrutura
+
+- **Next.js** (App Router) + **TypeScript**
+- **Firestore** — banco de documentos, acessado só pelo **Admin SDK**, no servidor
+- **Firebase Auth**, provedor Google, restrito ao domínio corporativo
+- **Deploy: Vercel**
+- Aplicação única, com telas e acessos variando por perfil
+
+O Firebase é a plataforma dos demais sistemas internos da empresa: a autenticação
+corporativa já está resolvida nesse ecossistema e o volume deste inventário é
+pequeno — ordem de centenas a poucos milhares de documentos por ano. Não há ganho
+prático em manter um banco relacional separado.
+
+**Firebase Storage não é usado e não deve ser configurado.** Serviço sem uso é
+credencial a mais para administrar. Ver seção 13.
+
+Identidade visual: ver protótipo. Paleta `#618264` `#79AC78` `#B0D9B1` `#D0E7D2`, com
+`#7BC258` (verde da FGV) reservado para marca, item ativo de menu e elementos vivos.
+
+---
+
+## 5. Perfis de acesso
+
+Quatro papéis consultam o painel. O quinto não consulta nada — só alimenta.
+
+| Perfil | Acesso |
+|---|---|
+| `admin` | Tudo |
+| `sustentabilidade` | Inventário completo e programa (Diretoria/Sustentabilidade) |
+| `gestor` | Indicadores agregados, sem nome de pessoa em nenhuma tela (Gestor de Área) |
+| `importacao` | Somente módulo marítimo, podendo ser filtrado por empresa (Importação/Suprimentos) |
+| `colaborador` | Somente registrar a própria viagem e ler as próprias submissões |
+
+### 5.1 `colaborador` é o papel de menor privilégio
+
+É o único perfil usado por gente de fora da equipe do inventário, e por isso o
+escopo dele é fechado e explícito:
+
+- **Pode criar registro de viagem e ler apenas os próprios.**
+- **Não acessa o painel**, não vê dado de terceiro, não vê agregado.
+- A verificação é **na consulta, filtrando pelo uid do próprio usuário** — nunca
+  escondendo item de menu.
+
+Autorização aplicada **no servidor, dentro de cada consulta**, junto do dado.
+Esconder item de menu não é controle de acesso.
+
+**Não existe tela de upload de arquivo.** A carga das bases é feita por script, rodado pelo
+Gustavo fora da aplicação.
+
+---
+
+## 6. Módulo Mobilidade
+
+Fonte: planilha da pesquisa de mobilidade, aba única de respostas. Colunas, tipos,
+armadilhas de formato e distribuição atual estão em `CONTEXTO.md`.
+
+### 6.1 Restrição obrigatória de privacidade
+
+**O endereço não entra no banco.** O script de ingestão geocodifica a partir do CEP, calcula
+a distância até a fábrica e grava **apenas distância, bairro e cidade**. CEP, logradouro,
+número e complemento são descartados após o cálculo e nunca são persistidos — nem em coleção
+de staging, nem em log, nem em cache, nem em arquivo temporário.
+
+### 6.2 Regras de cálculo
+
+- Dois deslocamentos por dia útil (ida e volta).
+- Dias úteis por mês: parâmetro configurável, não constante no código.
+- Coordenada da fábrica: variável de ambiente.
+- Bicicleta e deslocamento a pé: emissão zero.
+- Ônibus: fator de transporte público, por passageiro-km.
+- Respostas marcadas como exceção não entram na média e são listadas na tela de método.
+
+O campo de combustível só é válido para modais motorizados; preenchido em modal não
+motorizado, ou vazio em modal motorizado, é erro de entrada e deve ser sinalizado.
+
+---
+
+## 7. Módulo Viagens corporativas
+
+Cobre **aéreo** e **carro**, com duas fontes separadas por data.
+
+| Período | Fonte | Situação |
+|---|---|---|
+| Até 30/09/2026 | Relatório da agência | Histórico congelado, carga única, **imutável** |
+| A partir de 01/10/2026 | Formulário do viajante | Fonte oficial |
+
+**O corte é pela data do voo ou da viagem, não pela data de preenchimento nem pela data de
+lançamento da passagem.** O formulário recusa viagem com partida anterior a 01/10/2026.
+
+Toda viagem carrega `fonte` (`agencia` | `formulario`).
+
+**Na série mensal, marcar visualmente a troca de fonte em outubro de 2026.** Nos primeiros
+meses a adesão será parcial e a emissão vai parecer cair sem ter caído.
+
+### 7.1 Base histórica
+
+Vem de um JSON já consolidado e validado, com aeroportos, companhias, pessoas e reservas
+contendo trechos. Estrutura, valores de conferência e regras específicas em `CONTEXTO.md`.
+
+**Reimplemente o cálculo e confira contra o valor de conferência antes de seguir.**
+
+### 7.2 Regras de cálculo aéreo
+
+```
+kg_co2e = trecho.distancia_km
+        × fator_da_faixa_de_distancia
+        × multiplicador_classe
+        × trecho.passageiros
+```
+
+- **A unidade de cálculo é o trecho, não a reserva.** Cada trecho é um passageiro.
+- Na base histórica, `distancia_km` **já inclui o uplift de 8%** sobre a ortodrômica. Não
+  aplicar de novo. No formulário, a distância é calculada do zero e o uplift **precisa** ser
+  aplicado.
+- **Ignorar reservas com `contabilizar: false`** — são itinerários duplicados no relatório
+  da agência.
+- **Agrupar o inventário pela data do voo, nunca pela data de lançamento da passagem.** Há
+  passagem emitida num ano com voo no ano seguinte.
+- O relatório não informa a cabine. Classe econômica é assumida em todos os trechos, e isso
+  é declarado na tela de método.
+- Escalas contam como trechos separados e emitem mais que um voo direto equivalente.
+
+Fatores: DEFRA/UK DESNZ, kg CO₂e por passageiro-km, **com forçamento radiativo**, por faixa
+de distância. Os valores vêm do JSON da base, carregados para a coleção `fatorEmissao`.
+
+Na base de origem, quem aprovou a passagem às vezes é a agência e às vezes o próprio
+passageiro. **Para emissão, o que vale é quem viajou, não quem aprovou.**
+
+### 7.3 Formulário de viagens
+
+Quem viajou preenche. **Não há fluxo de aprovação** — se a viagem aconteceu, já foi aprovada
+antes. O viajante vê apenas as próprias submissões e pode editar enquanto o período não for
+fechado.
+
+Ao enviar, o sistema devolve na hora a emissão calculada. Esse retorno imediato é o
+principal incentivo de adesão; não omitir.
+
+**O formulário existe para centralizar num lugar só a informação de deslocamento
+que hoje não está em sistema nenhum.** Peça o mínimo necessário para calcular
+emissão: origem, destino, data e modal. **Não peça valor, não peça justificativa,
+não peça aprovação.** Quanto mais curto o formulário, maior a chance de ser
+preenchido — e nenhum desses campos entra no cálculo.
+
+**Campos comuns:** viajante (do login), data de ida, data de volta.
+
+**Aéreo:** um ou mais trechos com aeroporto de origem e destino, em autocomplete sobre a
+coleção de aeroportos. Botão para gerar o trecho de volta.
+
+**Carro:** lista ordenada de municípios — origem, paradas intermediárias, destino. Botões
+"adicionar parada" e "retornar à origem". A distância é a soma dos trechos consecutivos.
+
+Campos adicionais do carro — os três entram na conta, por isso são exceção à regra
+do formulário mínimo:
+- `propriedadeVeiculo`: `frota` | `proprio` | `locado`
+  → **`frota` é Escopo 1; `proprio` e `locado` são Escopo 3.** Gravar o escopo resolvido.
+- `combustivel`: `gasolina` | `etanol` | `diesel` | `flex`
+- `ocupantes`: inteiro ≥ 1. A emissão é do veículo. Dividir pelo número de ocupantes ao
+  atribuir por pessoa, e deixar a regra explícita na interface.
+
+### 7.4 Distância rodoviária
+
+Distância **rodoviária**, nunca ortodrômica. Em trajetos regionais a diferença passa de 25%,
+é irregular e não se corrige com fator fixo.
+
+- Provedor: **Google Routes API** ou **OpenRouteService** (decidir; volume é baixo).
+- **Cachear toda rota no banco**, com chave = sequência ordenada de códigos IBGE. As rotas
+  da empresa se repetem muito.
+- Seleção de município via **lista do IBGE embarcada na aplicação** (5.570 registros), não
+  campo de texto livre. Elimina ambiguidade de grafia e é o que torna o cache eficaz.
+
+---
+
+## 8. Módulo Transporte marítimo
+
+Fonte: relatório do agente de carga, exportado de sistema de gestão de embarques, com abas
+de detalhe por agente e uma aba de resumo montada manualmente. Estrutura, armadilhas e
+números de referência em `CONTEXTO.md`.
+
+### 8.1 Como o CO₂ é alocado
+
+A emissão informada pelo agente é alocada **por contêiner, por corredor**, não por peso. Na
+mesma rota o CO₂ por quilo varia até dez vezes, enquanto o CO₂ por contêiner é estável.
+
+**Não recalcular por tonelada-quilômetro.** O valor do agente é o dado primário. O CO₂ por
+contêiner é o teste de sanidade da ingestão: linha muito fora da mediana do corredor é
+sinalizada para revisão.
+
+**Não reproduzir a metodologia da aba de resumo.** Ela deriva peso a partir de contagem de
+contêiner com uma constante e depois deriva contagem a partir do peso — a conta é circular,
+e a constante usada está acima da média real.
+
+### 8.2 Estimativa dos agentes sem detalhe
+
+Nem todos os agentes entregam detalhe linha a linha. Cascata, do mais específico para o mais
+genérico:
+
+1. `medido` — CO₂ informado pelo agente para aquele embarque
+2. `estimado_corredor` — contêineres reais × média de CO₂/contêiner do corredor
+3. `estimado_media` — contêineres reais × média geral de CO₂/contêiner
+4. `estimado_peso` — último recurso, só se nem a contagem de contêiner existir
+
+Gravar `nivelDado` em todo documento. No rodapé do módulo, uma linha de texto:
+*"X% deste número vem de dado do agente, o restante é estimativa por média."*
+
+### 8.3 Regras de ingestão
+
+- **Localizar a linha de cabeçalho pelo conteúdo**, nunca por índice fixo — ela muda de
+  posição entre abas.
+- **As colunas mudam entre abas.** Tratar coluna ausente como ausente, não como erro fatal.
+- **Há linhas de total dentro das abas de dados.** Descartar toda linha sem identificador de
+  embarque.
+- **Usar a coluna numérica de quantidade de contêineres**, mais confiável que fazer parse do
+  texto de tipo de contêiner, que vem nulo em algumas linhas.
+- **Embarques ainda não embarcados já vêm com CO₂ lançado.** É previsão, não realizado. Flag
+  própria, com opção de excluir do total.
+- **Há carga aérea de fornecedor no arquivo.** É Escopo 3 cat. 4, frete upstream. **Não
+  confundir com o módulo de viagens**, que é passageiro, cat. 6.
+- **Abas de template do sistema de origem são lixo.** Ignorar.
+- **A aba de detalhe e a de resumo usam bases de data diferentes.** Escolher uma, aplicar em
+  todo o sistema e declarar qual é na tela de método.
+- Linha cuja ordem de grandeza é incompatível com o restante **não é importada** até ser
+  conferida na origem.
+
+---
+
+## 9. Modelo de dados
+
+Firestore, coleções de topo e documentos rasos. **Nenhuma tela lê coleção direto:**
+tudo passa pela camada de consulta agregada da seção 9.9, que é onde moram o
+anonimato e a supressão de grupos pequenos.
+
+### 9.1 Princípios
+
+1. **Um documento por unidade de emissão** — um trecho, uma resposta de mobilidade,
+   um embarque. **Sem array aninhado de trechos.** Viagem com conexão vira dois
+   documentos ligados pelo mesmo `reservaId`.
+2. **Campos de filtro desnormalizados em todo documento:** `ano`, `mes`, `empresa`
+   e `modal`. É o que permite usar `where()` quando o volume crescer.
+3. **Todo documento de emissão guarda a emissão calculada E o fator usado**, com
+   versão. Fator muda todo ano e o inventário precisa ser auditável: sem essa
+   marca não dá para saber o que foi calculado com qual fator.
+4. **Data é sempre string `AAAA-MM-DD`.** Nunca `Timestamp` do Firestore — é o que
+   evita os bugs de fuso UTC/São Paulo, mesmo padrão já adotado no sistema de
+   controle de férias.
+5. **Sem contador agregado.** Neste volume a agregação é feita no servidor, lendo
+   a coleção e reduzindo em JavaScript. Contador pré-calculado desincroniza em
+   silêncio e trava a criação de cortes novos.
+6. **Saldo e total são sempre calculados, nunca armazenados.**
+7. **ID de documento é determinístico**, derivado da origem. Recarregar sobrescreve
+   em vez de duplicar — é o que substitui o índice único do modelo anterior.
+
+### 9.2 Coleções
+
+```
+funcionario/{matriculaOuChaveDeOrigem}
+mobilidade/{anoBase}_{matricula}
+viagemTrecho/{fonte}_{refOrigem}_{ordem}
+embarque/{agente}_{shipmentId}
+containerPortoMes/{ano}_{mes}_{porto}
+fatorEmissao/{categoria}__{chave}__{versao}__{vigenciaInicio}
+aeroporto/{iata}
+municipio/{codigoIbge}
+rotaCache/{chave}
+usuarioPerfil/{uid}
+```
+
+### 9.3 Por que três coleções de emissão, e não uma
+
+Mobilidade é **taxa mensal**; viagem e embarque são **eventos**. Somar os dois num
+mesmo `sum(co2)` produz número errado sem nenhum sinal de erro. Coleções separadas
+tornam a mistura impossível por descuido, e todo documento ainda carrega
+`periodicidade` (`mensal` | `evento`) para que a consolidação seja explícita.
+
+### 9.4 Envelope comum das coleções de emissão
+
+Todo documento de `mobilidade`, `viagemTrecho` e `embarque` carrega:
+
+```
+modulo          'mobilidade' | 'viagens' | 'maritimo'
+modal           'aereo' | 'terrestre' | 'maritimo'
+escopo          1 | 3
+periodicidade   'mensal' | 'evento'
+ano             number             -- 2026
+mes             'AAAA-MM' | null   -- null só onde não se aplica (ver 9.5)
+empresa         string | null      -- nulo é categoria visível, ver 9.9
+fator           { categoria, chave, versao, valor, unidade, vigenciaInicio }
+alertas         [{ tipo, descricao, severidade }]
+alertasCodigos  [string]
+atualizadoEm    'AAAA-MM-DD'
+```
+
+`alertas` guarda o detalhe e é sempre lido junto do documento. `alertasCodigos`
+existe porque **array de objeto não é indexável de forma útil no Firestore**: é ele
+que permite `array-contains` para responder "todos os trechos com suspeita de
+duplicidade" sem varrer a coleção.
+
+**Não existe campo de valor, custo, orçamento ou aprovação financeira em nenhuma
+coleção.** Isto é inventário de emissões, não controle de gastos.
+
+### 9.5 `mobilidade` — uma resposta da pesquisa
+
+```
+funcionarioId, anoBase, transporte, combustivel, distanciaKm,
+bairro, cidade, diasUteisMes, co2KgMes, excecao, motivoExcecao
+```
+
+**Sem endereço.** Ver 6.1: só distância, bairro e cidade.
+
+`periodicidade: 'mensal'` e o valor se chama `co2KgMes`, com a unidade no nome. `mes`
+é nulo: a pesquisa é anual e o valor vale para todo mês do ano-base — na série
+mensal o mesmo valor se repete nos doze meses, e isso é declarado na tela de método.
+
+### 9.6 `viagemTrecho` — um documento por trecho
+
+```
+reservaId, ordem, funcionarioId, criadoPorUid,
+tipo('aereo'|'carro'), fonte('agencia'|'formulario'), contabilizar,
+dataIda, dataVolta, origem, destino, companhia, voo, dataVoo,
+distanciaKm, faixaDistancia, passageiros, co2Kg
+aereo: classeCabine, multiplicadorClasse
+carro: propriedadeVeiculo, combustivel, ocupantes
+```
+
+`fator` carimba o fator por faixa; o multiplicador de classe é o outro termo da
+conta (§7.2) e fica em campo próprio, senão a emissão do trecho não é
+reproduzível a partir do documento.
+
+`reservaId` é o que liga os trechos da mesma viagem. `ano` e `mes` saem **da data do
+voo**, nunca da data de lançamento da passagem (§7.2). `criadoPorUid` é o que
+permite ao `colaborador` ler apenas as próprias submissões (§5.1).
+
+### 9.7 `embarque` — um embarque do relatório do agente
+
+```
+agente, empresa, shipmentId, houseRef, trans, mode,
+portoOrigem, portoDestino, navioPartida, navioTransbordo,
+etd, eta, atd, ata, pesoKg, volumeM3, containers,
+co2Kg, nivelDado, status, previsao
+```
+
+`ano` e `mes` saem da base de data escolhida na §8.3, e qual é fica declarado na
+tela de método.
+
+### 9.8 `fatorEmissao` e apoio
+
+```
+fatorEmissao   categoria, chave, valor, unidade, fonte, versao,
+               vigenciaInicio, vigenciaFim
+aeroporto      iata, nome, cidade, uf, utcOffset, latitude, longitude
+municipio      codigoIbge, nome, uf, latitude, longitude
+rotaCache      sequenciaIbge, distanciaKm, provedor, calculadoEm
+usuarioPerfil  email, papel, empresa, funcionarioId
+funcionario    matricula, nome, email, departamento, ativo, chaveOrigem
+               -- SEM endereço. Ver 6.1.
+```
+
+**Fatores ficam em coleção, com vigência — nunca hardcoded.** **Se um fator não
+estiver lá, o cálculo falha explicitamente em vez de usar um padrão.** Não inventar
+valor nem assumir número de memória. A coleção é pequena: lê-se inteira e filtra-se
+a vigência em JavaScript, sem índice composto.
+
+`usuarioPerfil.empresa` existe para o perfil `importacao`, que pode ser filtrado por
+empresa (§5).
+
+### 9.9 O que o banco não garante mais
+
+O modelo relacional recusava dado inválido. O Firestore aceita qualquer coisa, então
+estas regras passam a ser **validação obrigatória na escrita**, num único ponto por
+coleção — se não estiverem no código, não existem:
+
+- `escopo` só pode ser 1 ou 3;
+- `propriedadeVeiculo: 'frota'` obriga `escopo: 1`; `proprio` e `locado` obrigam 3;
+- `ocupantes` inteiro ≥ 1; `passageiros` inteiro ≥ 1;
+- `distanciaKm` ≥ 0;
+- `vigenciaFim`, quando existe, é posterior a `vigenciaInicio`;
+- toda data casa com `AAAA-MM-DD`;
+- `ano` e `mes` batem com a data de referência do próprio documento.
+
+Apagar documento não tem cascata, e não existe `DELETE WHERE`. Regravar um período
+acontece **nesta ordem, que não é a intuitiva**:
+
+1. gravar todos os documentos da carga nova, sobrescrevendo pelo ID determinístico;
+2. só então apagar, do mesmo escopo, o que não está na carga nova.
+
+Apagar primeiro abriria uma janela com o inventário vazio, e uma falha no meio da
+escrita deixaria o período sem dado nenhum. Nesta ordem o pior caso é sobra de
+documento antigo, que a execução seguinte limpa — nunca falta.
+
+**Carga que não produziu documento nenhum é recusada**, porque apagaria o escopo
+inteiro sem nada no lugar; quase sempre é erro de leitura do arquivo. Esvaziar de
+propósito é opção explícita.
+
+### 9.10 Agregação e camada de consulta
+
+A agregação acontece no servidor, lendo a coleção e reduzindo em JavaScript, dentro
+de **um único módulo de consulta**, em `src/server/consultas`. Nenhuma tela alcança
+a coleção por fora dele — e isso é verificado por teste, não só combinado.
+É esse módulo que garante, para as telas de inventário:
+
+- nenhum identificador de pessoa no que sai (§3.1);
+- supressão de recorte com menos de 5 pessoas, agrupado em "outros" (§3.1);
+- **nulo é categoria visível, não registro ausente.** Ao agrupar por `empresa`, os
+  documentos sem empresa aparecem como fatia própria, "Sem empresa". **O total
+  geral sempre bate com a contagem de documentos da coleção; se não bater, é bug.**
+  Inventário com registro sumindo de agregação é erro que só aparece em auditoria.
+
+---
+
+## 10. Telas
+
+**Inventário**
+
+1. **Visão geral** — total do ano em tCO₂e, faixa proporcional dos três módulos, três cartões
+   de indicador, emissão mês a mês.
+2. **Mobilidade** — kg CO₂ por funcionário/mês, total no ano, distância média, radar de onde
+   o quadro mora, emissão por modal.
+3. **Viagens** — kg CO₂ por viagem, total, mapa de rotas, destinos mais frequentes, emissão
+   por mês.
+4. **Marítimo** — kg CO₂ por contêiner, total, mapa de rotas com navios em movimento, emissão
+   por mês, contêineres por porto, tabela de corredores.
+5. **Método** — fontes, fatores com vigência, qualidade do dado, alertas e exceções.
+
+**Programa de viagens**
+
+6. **Registrar viagem** — formulário, com resultado imediato da emissão.
+7. **Emissões registradas** — registradas no período, emissão acumulada, cobertura, últimas
+   viagens, participação de avião e carro.
+
+Comportamento visual, animações e detalhe de layout: seguir o protótipo.
+
+### 10.1 Cortes que o painel oferece
+
+São quatro, e só esses:
+
+- **por período** — ano e mês;
+- **por modal** — aéreo, marítimo, terrestre;
+- **por rota ou destino**;
+- **por empresa**, nos módulos onde essa informação existe.
+
+Não há corte por centro de custo, por valor ou por qualquer dimensão financeira.
+
+Em qualquer agrupamento vale a regra da 9.10: **nulo é categoria visível.** Agrupar
+por empresa mostra "Sem empresa" como fatia própria, e o total geral bate com a
+contagem de documentos da coleção.
+
+---
+
+## 11. Segurança e LGPD
+
+O sistema fica público na Vercel. Regras não negociáveis:
+
+1. **Endereço de funcionário não entra no banco.** Só distância e localização em
+   nível de bairro e cidade.
+2. **Todo acesso a dado é server-side.** O cliente **nunca consulta o Firestore
+   diretamente**: quem lê e escreve é o Admin SDK, dentro de Server Components e
+   Route Handlers do Next.js. O cliente recebe apenas o agregado que a tela
+   desenha. Nenhuma variável `NEXT_PUBLIC_` com credencial ou dado de pessoa. A
+   service account é env var de servidor.
+3. **Autorização verificada na consulta**, junto do dado — nunca só na interface.
+   Para o `colaborador`, isso é o filtro pelo uid dele (§5.1).
+4. **Login via Firebase Auth com provedor Google**, restrito ao domínio corporativo.
+5. **Nenhum identificador de pessoa trafega para o cliente nas telas de inventário.**
+6. **Firestore Security Rules negam tudo por padrão** — leitura e escrita. Como o
+   acesso é server-side pelo Admin SDK, que passa por cima das rules, uma regra
+   aberta só existiria para ser explorada. As rules ficam versionadas no
+   repositório e são a última linha de defesa se um dia algum caminho de cliente
+   for aberto por engano.
+
+**Verificar o sistema antigo:** na versão estática, as bases iam para o build. Se o JSON de
+viagens (com nome de passageiro) ou a base de mobilidade (com CEP e logradouro) estiverem
+acessíveis pelo navegador, é vazamento ativo hoje.
+
+---
+
+## 12. Fora de escopo
+
+- Cenários de redução, simulações e projeções de qualquer tipo
+- Tela de upload de arquivo
+- Reconstrução do cálculo marítimo por tonelada-quilômetro
+- Reprocessamento do relatório bruto da agência (o JSON consolidado já é o resultado)
+- Separação de CO₂ biogênico do etanol
+- **Qualquer campo de valor, custo, orçamento ou aprovação financeira.** Isto é
+  inventário de emissões, não controle de gastos. Também não há centro de custo:
+  o corte por área não é dimensão deste sistema
+- **Firebase Storage** — não configurar, não criar regra, não adicionar dependência
+- Contador agregado, saldo armazenado ou qualquer total pré-calculado (§9.1)
+- Mecanismo de cobrança, validação cruzada ou fluxo de aprovação do registro de
+  viagem do colaborador. Assume-se que os colaboradores vão registrar
+
+---
+
+## 13. Pontos em aberto
+
+Coisas que provavelmente vão acontecer, mas não agora.
+
+- **Storage voltará junto com uma tela de admin.** Hoje a ingestão das bases é por
+  arquivo processado fora do sistema. No dia em que existir tela de administração
+  para subir a planilha da agência ou o arquivo marítimo, o Storage entra — é
+  provável que aconteça, só não agora.
+- **`empresa` nasce parcialmente preenchida.** A base marítima já traz a empresa
+  por embarque; mobilidade e viagens nascem com o campo nulo até a origem passar a
+  informar. O campo existe desde já porque acrescentar campo depois, em base
+  existente, é migração de backfill — e o nulo é tratado como categoria visível
+  (§9.10), não como registro ausente.
+- **Fatores da mobilidade** não vêm de nenhuma base do inventário: são escolha
+  metodológica de quem assina o relatório e entram por arquivo próprio.
+
+---
+
+## 14. Registro de execução
+
+**Seção mantida pelo Claude Code.** Registrar em ordem cronológica: o que foi implementado e
+quando; correções pedidas pelo Gustavo e o que mudou; bugs encontrados e como foram
+resolvidos; decisões técnicas tomadas durante a implementação que não estavam neste
+documento.
+
+**Sem dado real nas entradas** — descreva o que mudou, não os números que apareceram.
+
+### Histórico
+
+<!-- adicionar entradas abaixo -->
+
+#### 2026-09-14 — Fundação e carga de viagens
+
+Etapa de fundação e dados. Nenhuma tela construída.
+
+**Projeto**
+
+- Next.js (App Router) + TypeScript + Tailwind. Só o shell: `layout`, uma página
+  de espaço reservado e a paleta da §4 como tokens de tema. `.gitignore` não foi
+  tocado.
+- Raiz do Turbopack fixada em `next.config.ts`: existe um lockfile em diretório
+  acima e o build inferia a raiz errada.
+
+**Banco**
+
+- Schema Drizzle com as tabelas da §9 e as migrations `0000_inicial` e
+  `0001_views`. Geradas, não aplicadas.
+- `0001_views` cria as views de viagens (mensal, destino, rota, resumo, alertas)
+  e a de fatores vigentes para a tela de método. Todas agregadas, todas sem
+  identificador de pessoa, todas filtrando `contabilizar`. As views de
+  mobilidade e marítimo entram junto com a carga de cada módulo.
+- Restrições que travam regra de negócio no próprio banco: escopo só 1 ou 3;
+  carro de frota obriga escopo 1 e próprio/locado obrigam escopo 3; ocupantes
+  ≥ 1; vigência de fator coerente.
+- Colunas de CO₂ com escala 6. Com escala 3 o arredondamento por trecho
+  acumulava o bastante para a conferência do total não fechar.
+
+**Scripts**
+
+- `seed-fatores.ts` — carrega os fatores aéreos do JSON da base para
+  `fator_emissao`, com fonte, versão e vigência. Reexecutável: identifica a
+  linha por (categoria, chave, versão, início de vigência).
+- `ingest-viagens.ts` — carrega aeroportos, funcionários, viagens, trechos e
+  alertas. Cálculo por trecho, sem reaplicar uplift, agrupando por data do voo,
+  usando quem viajou e não quem aprovou. Reservas com `contabilizar: false` são
+  gravadas com a emissão calculada e ficam fora do inventário pelo próprio flag.
+  Regravação acontece dentro de transação e só apaga o que veio da agência.
+- `verificar.ts` — recalcula a partir do banco e compara com os valores de
+  conferência, imprimindo esperado, obtido e diferença; sai com 1 se não bater.
+
+**Decisões que não estavam no documento**
+
+- **De onde vêm os valores esperados da conferência.** Total de conferência é
+  dado que não se versiona (§2.1), então nenhum valor esperado está no código.
+  `verificar.ts` os lê do próprio arquivo da base, refaz a conta de forma
+  independente a partir dele e aceita um `conferencia.local.json` na raiz para
+  valores vindos de outra fonte. O nome já cai na regra `conferencia*` do
+  `.gitignore`.
+- **Duas colunas técnicas fora da §9.** `funcionario.chave_origem` e
+  `viagem.ref_origem` guardam o identificador da pessoa e da reserva no arquivo
+  de origem. Sem elas a carga não é idempotente: reprocessar duplicaria
+  funcionário e viagem. Nenhuma das duas vai para o cliente.
+- **Limites de faixa também viram linha em `fator_emissao`.** Os quilômetros que
+  separam as faixas fazem parte da definição do fator; guardados na tabela, o
+  cálculo do formulário não vai precisar de número no código.
+- **Vigência do fator é informada na carga**, por variável de ambiente ou
+  argumento. Sem vigência o script recusa a carga em vez de escolher uma data.
+- **O escopo do aéreo é gravado como 3** e o resolvido do carro sai de
+  `propriedade_veiculo`, conforme §7.3.
+- **Alerta de fonte sobreposta.** A carga marca a viagem cujo voo cai em
+  `VIAGENS_CORTE_FONTE` ou depois — período em que a fonte oficial já é o
+  formulário.
+
+**Bug encontrado durante a implementação**
+
+- Importar uma função de um script disparava a carga inteira, porque a chamada
+  do `main` estava solta no topo do módulo. Resolvido com `ehEntrada()`, que só
+  executa quando o módulo é chamado direto pela linha de comando.
+
+**Validação**
+
+- `tsc --noEmit` e `next build` passam. Nenhum servidor de desenvolvimento foi
+  subido.
+- O cálculo aéreo foi reimplementado e conferido contra o valor de conferência
+  da base antes de seguir, com um arquivo de ensaio temporário que foi apagado
+  em seguida. Bateu exatamente, em distância e em emissão, e a classificação de
+  faixa reconstruída a partir dos limites gravados reproduziu a da base em todos
+  os trechos. `seed-fatores`, `ingest-viagens` e `verificar` ainda não foram
+  executados contra um banco.
+- `git init` rodado e conferido em modo simulado: nenhuma base, nenhum `.env`,
+  nenhum arquivo de conferência e nenhum derivado entram no commit. Nada foi
+  commitado nem enviado.
+
+**Pendências desta etapa**
+
+- ~~A estrutura de pastas citada na conversa não chegou junto; foi usada a
+  convenção `src/app`, `src/db`, `src/lib`, `scripts` e `drizzle`.~~
+  Confirmada pelo Gustavo em 14/09/2026: é essa mesma.
+- `npm audit` aponta 4 alertas moderados, todos no `esbuild` que vem dentro do
+  `drizzle-kit` e restritos ao servidor de desenvolvimento dele. A correção
+  automática rebaixaria o `drizzle-kit` vários majors; ficou como está.
+
+#### 2026-09-14 — Ingestão de mobilidade
+
+**Carga**
+
+- `scripts/ingest-mobilidade.ts` — lê a planilha da pesquisa, geocodifica pelo
+  CEP, calcula a distância até a fábrica e grava distância, bairro e cidade. As
+  colunas de logradouro, número e complemento não chegam a ser lidas; o CEP
+  existe só entre a leitura da linha e a geocodificação, e não vai para o banco,
+  para log, para cache nem para arquivo temporário. Recarregar substitui o
+  ano-base inteiro, dentro de uma transação.
+- `scripts/seed-fatores-mobilidade.ts` — carrega os fatores da mobilidade de um
+  arquivo que quem assina o relatório monta com a fonte adotada. O script valida
+  a forma e recusa fator onde ele não se aplica, mas não traz valor nenhum.
+- `scripts/verificar.ts` ganhou o bloco de mobilidade: recalcula a emissão a
+  partir do que está gravado e compara com o gravado, confere que modal de
+  emissão zero não tem emissão e confronta a contagem de registros com a de
+  respostas do arquivo de origem.
+
+**Banco**
+
+- `0002_mobilidade_alerta` cria a tabela de alertas do módulo. A §9 não a
+  previu, mas a §6.2 manda sinalizar erro de entrada e a §10.5 manda mostrar —
+  sem ela o alerta não teria onde morar.
+- `0003_views_mobilidade` cria as views do módulo e a função
+  `fgv_supressao_minima()`. A supressão de grupos pequenos acontece dentro do
+  banco: recorte abaixo do limite vira "outros" antes de qualquer coisa sair
+  dali. O limite padrão é o da §3.1 e pode ser elevado por conexão, sem
+  migration.
+- A view do radar devolve só a distância, sem nenhum outro campo — é o que a
+  §3.1 pede para o ponto do funcionário.
+
+**Decisões que não estavam no documento**
+
+- **Leitura do "modal motorizado" da §6.2.** O campo de combustível passou a
+  valer para carro e moto, onde o deslocamento queima o combustível do próprio
+  respondente. Ônibus é motorizado, mas o fator é por passageiro-km e não
+  depende de combustível, então resposta preenchida ali é sinalizada como erro
+  de entrada sem tirar a linha da média. A leitura precisa aparecer na tela de
+  método.
+- **Distância rodoviária ou ortodrômica é parâmetro**, não padrão embutido: a
+  escolha muda o número do inventário e precisa ser declarada. O provedor de
+  rota é o mesmo já previsto para viagens.
+- **A data de referência do fator é a virada do ano-base.** A data da resposta
+  não é coluna da §9, então usá-la deixaria o cálculo impossível de reproduzir
+  depois — o `verificar` não teria como chegar ao mesmo número.
+- **Exceções.** Entram como exceção, fora da média e listadas no método:
+  distância acima de um limite configurável, CEP que não geocodificou, modal não
+  reconhecido e modal que depende de combustível sem combustível informado.
+  Nenhum desses casos é decidido por cidade ou por resposta específica no
+  código — todos saem de regra e de parâmetro.
+- **Normalização de cidade e bairro.** Variantes de caixa e acento são agrupadas
+  por uma chave sem acento e exibidas com a grafia mais acentuada; sem isso o
+  mesmo bairro viraria dois recortes pequenos e a supressão atuaria onde não
+  deveria.
+- **Deduplicação por matrícula** mantendo a resposta mais recente, com alerta na
+  linha mantida.
+- **Vínculo com cadastro existente.** Quando a matrícula não existe, a carga só
+  reaproveita um funcionário já cadastrado por outra base se o nome
+  normalizado identificar uma única linha ainda sem matrícula. Homônimo não é
+  fundido.
+
+**Divergência encontrada na origem**
+
+- A matrícula não tem comprimento fixo como o material de apoio descreve: há
+  valores mais curtos, mais longos e alguns com prefixo de letra. Passou a ser
+  tratada como texto opaco — sem conversão para número e sem completar com
+  zeros, que juntaria pessoas diferentes. Linha cuja matrícula vem como número
+  na planilha recebe alerta, porque nesse caso o zero à esquerda pode já ter se
+  perdido na origem.
+
+**Validação**
+
+- `tsc --noEmit` e `next build` passam. Nenhum servidor subiu.
+- A leitura da planilha, a normalização de lugar, o reconhecimento de modal e
+  combustível e a validação cruzada dos dois foram exercitadas contra o arquivo
+  real, com um ensaio temporário que foi apagado. O cabeçalho é localizado pelo
+  conteúdo, todas as respostas de transporte e todas as datas foram
+  reconhecidas, e a normalização reduziu a contagem de cidades distintas sem
+  encostar na de bairros.
+- A carga em si não rodou: depende de banco, de chave de geocodificação e do
+  arquivo de fatores.
+
+**Correção feita nesta etapa**
+
+- Um comentário de migration citava contagem da base real. Reescrito sem número:
+  §2.2 vale também para comentário.
+
+#### 2026-09-14 — Mudança de decisão arquitetural: Postgres → Firebase
+
+**Decisão do Gustavo.** O banco deixa de ser Postgres (Supabase/Neon) e passa a
+ser Firestore, com Firebase Auth. Motivo: todos os outros sistemas internos da
+empresa já rodam em Firebase, a autenticação corporativa via Google Workspace já
+está resolvida nesse ecossistema, e o volume é pequeno — ordem de centenas a
+poucos milhares de documentos por ano. Não há ganho prático em manter um banco
+relacional separado.
+
+As entradas anteriores deste log descrevem o modelo relacional e ficam como
+estão: são registro do que foi feito, não especificação vigente. A especificação
+é o corpo deste documento.
+
+**O que esta etapa mudou — só o CLAUDE.md, nenhum código**
+
+- §4: stack passa a Firestore + Firebase Auth, com a justificativa da decisão.
+  Storage declarado como não usado e não configurado.
+- §5: cinco papéis mantidos. Nova §5.1 fixa o `colaborador` como papel de menor
+  privilégio, com escopo fechado — cria e lê só o próprio, não acessa painel, e a
+  verificação é o filtro por uid na consulta.
+- §7.3: formulário do colaborador reduzido ao mínimo que calcula emissão. Saiu o
+  campo de motivo; ficam os três campos do carro, que entram na conta.
+- §9: reescrita inteira. Coleções, envelope comum, IDs determinísticos, alertas em
+  dois campos, validação na escrita e camada única de consulta agregada.
+- §10.1: os quatro cortes do painel — período, modal, rota/destino e empresa.
+- §11: segurança reescrita para Firebase, com rules negando tudo por padrão.
+- §12: entram como fora de escopo qualquer campo financeiro, centro de custo,
+  Storage, contador agregado e fluxo de aprovação do registro de viagem.
+- §13 nova, "Pontos em aberto". O log virou §14 e o ponteiro da §0 foi corrigido —
+  ele apontava para a seção errada desde o início.
+
+**Decisões de modelagem que entraram**
+
+- **Um documento por trecho**, não por viagem; conexão vira dois documentos
+  ligados pelo mesmo `reservaId`. Sem array aninhado de trechos.
+- **Campos de filtro desnormalizados** em todo documento: ano, mês, empresa e
+  modal.
+- **Todo documento guarda o fator usado, com versão.** Fator muda todo ano e o
+  inventário precisa ser auditável.
+- **Data sempre string `AAAA-MM-DD`**, nunca Timestamp, para não repetir os bugs
+  de fuso.
+- **Sem contador agregado**; agregação no servidor, reduzindo em JavaScript.
+  Total e saldo são sempre calculados.
+- **Alertas em dois campos:** `alertas` com o detalhe e `alertasCodigos` só com os
+  códigos. O segundo existe porque array de objeto não é indexável de forma útil
+  no Firestore; é ele que permite `array-contains`.
+- **`empresa` fica, `centroCusto` sai.** Empresa é dimensão ambiental legítima:
+  cada pessoa jurídica responde pelo próprio Escopo 3. Centro de custo é dimensão
+  financeira e não pertence a um inventário de emissões.
+- **Nulo é categoria visível.** Ao agrupar por empresa, os documentos sem empresa
+  formam fatia própria e o total bate com a contagem de documentos da coleção.
+  Registro que some de agregação é erro que só aparece em auditoria.
+
+**Decisões minhas, tomadas ao escrever a seção 9**
+
+- **Três coleções de emissão, não uma.** Mobilidade é taxa mensal; viagem e
+  embarque são eventos. Somar os dois num mesmo total dá número errado sem
+  nenhum sinal de erro. Coleções separadas impedem a mistura por descuido, e todo
+  documento ainda carrega `periodicidade`.
+- **`modal` e `modulo` são campos distintos.** A carga aérea de fornecedor que
+  vem no arquivo marítimo é modal aéreo dentro do módulo marítimo; sem os dois
+  campos ela se confundiria com viagem de passageiro.
+- **`mes` é nulo na mobilidade.** A pesquisa é anual e o valor vale para todo mês
+  do ano-base; na série mensal o mesmo valor se repete, e isso é declarado no
+  método.
+- **O que o banco garantia vira validação na escrita**, listada na §9.9: escopo,
+  coerência entre propriedade do veículo e escopo, ocupantes, passageiros,
+  distância não negativa, vigência coerente e formato de data. Sem isso no
+  código, essas regras deixam de existir.
+
+**Auditoria da migração, feita antes de mexer**
+
+- Nenhum script jamais rodou contra banco: não há dado a migrar. O custo da
+  troca é de código, não de dado.
+- Descartado por inteiro: schema, as quatro migrations, os snapshots, a config e
+  o cliente — cerca de 930 linhas.
+- Reescrito, com a lógica preservada: o resolvedor de fatores, o `conectar()`, os
+  blocos de gravação dos dois ingests, os upserts dos dois seeds e as agregações
+  do verificar.
+- Intocado: todo o cálculo e todo o parsing — cerca de 660 linhas já validadas,
+  incluindo a leitura de planilha, a normalização de lugar, a deduplicação e a
+  cascata de geocodificação.
+- Perda real: as garantias que o banco dava de graça. Estão convertidas em
+  validação de escrita, ID determinístico e camada única de consulta — §9.9 e
+  §9.10.
+
+**Critério de aceite da migração de código:** o `verificar` precisa fechar no
+mesmo valor de conferência que fechou no modelo relacional.
+
+#### 2026-09-14 — Migração, Fase B: infraestrutura Firebase
+
+**Entrou**
+
+- `firebase-admin` como dependência.
+- `src/server/firestore.ts` — inicialização única do Admin SDK, com as duas
+  formas de credencial previstas, e `COLECAO`, que concentra os nomes de coleção
+  num lugar só. Nome de coleção escrito à mão em cada consulta é como se cria
+  uma coleção nova, vazia, sem nenhum erro aparecer.
+- `firestore.rules` negando leitura e escrita para qualquer cliente, e
+  `firebase.json` apontando para elas. Publicação por `npm run rules:deploy`.
+- `.env.example` reescrito: credencial do Admin SDK, configuração pública do SDK
+  web e domínio corporativo. Todos os valores fictícios.
+- `.gitignore` ampliado: `serviceAccount*.json`, `firebase-adminsdk*.json` e os
+  artefatos do CLI e do emulador.
+
+**Saiu**
+
+- As quatro migrations, os snapshots do drizzle-kit, `drizzle.config.ts`, o
+  cliente Postgres e o pacote `drizzle-kit`.
+- Os scripts npm `db:generate` e `db:migrate`.
+- `DATABASE_URL` do `.env.example`.
+
+**Decisões da fase**
+
+- **`ignoreUndefinedProperties` fica desligado**, que é o padrão. Campo ausente
+  precisa ser gravado como `null` explícito: é o que mantém "sem empresa" como
+  categoria visível na agregação (§9.10) em vez de o campo simplesmente não
+  existir no documento.
+- **A configuração pública do SDK web é `NEXT_PUBLIC_`.** Ela não é credencial,
+  mas carrega o id do projeto, que a §2.1 trata como identificador de
+  infraestrutura. Fica em variável de ambiente, com valor fictício no exemplo, e
+  o cabeçalho do `.env.example` foi corrigido: a regra não é "nada é
+  NEXT_PUBLIC_", é "nenhuma credencial e nenhum dado de pessoa é NEXT_PUBLIC_".
+- **A ordem da demolição mudou, e isto foi combinado com o Gustavo.** O schema
+  antigo e os pacotes `drizzle-orm` e `postgres` continuam no repositório porque
+  são o que mantém os scripts compilando; morrem no fim da Fase E, junto com o
+  último consumidor. Derrubá-los agora deixaria a árvore quebrada por três
+  fases. `databaseUrl()` ficou marcado como transitório pelo mesmo motivo.
+
+**Validação**
+
+- `tsc --noEmit` e `next build` passam. Nenhum servidor subiu.
+- Nenhuma credencial real no repositório: a varredura só encontra os
+  placeholders fictícios do `.env.example`.
+- Os alertas do `npm audit` mudaram de origem: sumiram os do `esbuild` que vinham
+  com o `drizzle-kit`, e restam três moderados de `uuid`, que chega por baixo do
+  leitor de planilha e do cliente HTTP do Firebase. O aviso é sobre uma chamada
+  com buffer próprio, que não é o uso daqui; corrigir rebaixaria o leitor de
+  planilha em um major.
+
+**Ainda não existe**: nenhuma escrita ou leitura de Firestore. Isso é a Fase C.
+
+#### 2026-09-14 — Migração, Fase C: modelo, validação e escrita
+
+**Entrou**
+
+- `src/server/documentos/tipos.ts` — formato dos documentos das três coleções de
+  emissão e das de apoio, com o envelope comum da §9.4. `montarAlertas()` monta
+  os dois campos de alerta de uma vez, porque mantê-los em sincronia à mão é o
+  tipo de coisa que só aparece quando a consulta por código devolve menos do que
+  deveria.
+- `src/server/documentos/ids.ts` — IDs determinísticos por coleção, com limpeza
+  do que o Firestore recusa no identificador.
+- `src/server/documentos/validacao.ts` — a §9.9 inteira, em código.
+- `src/server/escrita.ts` — gravação em lote, apagamento por escopo e recarga de
+  período.
+- `src/server/documentos/validacao.test.ts` e `npm test` — 19 testes, sem
+  dependência nova: o runner é o do próprio Node.
+
+**Decisões da fase**
+
+- **A recarga grava antes de apagar, e a §9.9 foi corrigida para dizer isso.** O
+  texto anterior mandava apagar primeiro, que é o que o modelo relacional fazia
+  dentro de uma transação. Sem transação do tamanho da carga, apagar primeiro
+  abre uma janela com o período vazio, e uma falha no meio da escrita deixa o
+  inventário sem dado. Gravando primeiro e limpando o obsoleto depois, o pior
+  caso é sobra, que a execução seguinte resolve — nunca falta.
+- **Recarga sem documento nenhum é recusada.** Seria o caminho mais curto para
+  apagar um período inteiro por causa de um erro de leitura de arquivo.
+  Esvaziar de propósito continua possível, mas tem que ser pedido.
+- **ID repetido dentro da mesma carga é recusado.** Sem índice único, dois
+  documentos com o mesmo ID simplesmente se sobrescrevem e o inventário encolhe
+  sem nenhum erro.
+- **`undefined` é recusado em qualquer profundidade.** O Admin SDK também
+  recusaria, mas sem dizer qual campo; e campo ausente precisa ser `null`
+  explícito para continuar visível na agregação (§9.10).
+- **Fator nulo só passa com emissão zero**, e vice-versa. É o que separa
+  "modal que não emite por definição" de "fator que alguém esqueceu de aplicar".
+- **Ano e mês são conferidos contra a data de referência do próprio documento.**
+  Campo de filtro desnormalizado que não bate com o dado faz o corte por período
+  mentir sem nenhum sinal.
+- **Teste virou parte do projeto.** A §2.2 já previa suíte de testes ao alertar
+  sobre valor real em asserção; e desde que o banco saiu, a validação é a única
+  guarda que resta. Toda a massa dos testes é fictícia, inventada do zero.
+
+**Bug encontrado durante a implementação**
+
+- `recarregarEscopo` resolvia a conexão antes de conferir as guardas, então uma
+  carga vazia falharia reclamando de credencial em vez de dizer o que estava
+  errado. As guardas passaram para antes de qualquer acesso ao banco — é também
+  o que permite testá-las sem Firestore.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (19 testes) e `next build` passam.
+- Os testes exercitam cada regra da §9.9 pelos dois lados: documento válido
+  passa, documento inválido é recusado. A recusa exige o erro específico da
+  validação, para que um erro acidental do próprio teste não conte como
+  aprovação.
+- Nada foi escrito no Firestore: as guardas testadas rodam antes de qualquer
+  conexão.
+
+#### 2026-09-14 — Migração, Fase D: fatores, viagens e conferência
+
+**Portado para o Firestore**
+
+- `src/server/fatores.ts` — resolvedor de vigência. A coleção é lida **uma vez**
+  e a vigência é filtrada em memória; no modelo relacional cada trecho fazia a
+  própria consulta, o que aqui seriam centenas de leituras para responder sempre
+  as mesmas meia dúzia de perguntas.
+- `src/lib/calculo/categorias.ts` — as categorias de fator saíram do resolvedor
+  para um módulo sem dependência de banco, porque são usadas dos dois lados: por
+  quem grava o fator e por quem calcula com ele.
+- `scripts/seed-fatores.ts` e `scripts/seed-fatores-mobilidade.ts` — gravam por
+  ID determinístico, com validação antes da escrita.
+- `scripts/ingest-viagens.ts` — um documento por trecho, ligado pelo
+  `reservaId`. A recarga usa o escopo `fonte = agencia`, então regravar o
+  histórico não enxerga nem apaga o que vier do formulário.
+- `scripts/verificar.ts` — agrega lendo a coleção e reduzindo em JavaScript.
+
+**Decisões da fase**
+
+- **Os alertas da reserva são copiados para cada trecho dela.** O documento
+  agora é o trecho, e é nele que a consulta por código de alerta vai procurar.
+- **O multiplicador de classe ganhou campo próprio no trecho.** O cálculo aéreo
+  tem dois termos, e o envelope carimba um só. Com o fator por faixa em `fator`
+  e a cabine com o multiplicador ao lado, a emissão do trecho volta a ser
+  reproduzível a partir do próprio documento. A §9.6 foi atualizada.
+- **Três conferências novas**, que substituem o que o banco garantia: trecho sem
+  fator carimbado, ordem repetida dentro da mesma reserva e mês diferente do mês
+  da data do voo. Na mobilidade entrou também a comparação entre o fator
+  carimbado no documento e o fator vigente — é o que denuncia carga que ficou
+  para trás de uma troca de fator.
+
+**Divergência encontrada na base, que teria virado falha falsa**
+
+- O cadastro de pessoas da base é maior que o número de pessoas que viajaram: a
+  diferença aparece **apenas como aprovador de passagem**. A conferência de
+  pessoas comparava contra o total declarado e teria acusado erro numa carga
+  correta. Agora ela compara contra a recontagem dos passageiros, e o script
+  imprime uma nota explicando a diferença quando ela existe. A regra da §7.2 —
+  para emissão vale quem viajou, não quem aprovou — já estava no cálculo; o que
+  estava errado era a conferência.
+
+**Critério de aceite: cumprido**
+
+A cadeia inteira foi refeita com os módulos de produção — montagem dos fatores,
+resolvedor de vigência, cálculo do trecho e validação de escrita — trocando
+apenas o Firestore por um duplo em memória, e comparada com o valor de
+conferência da própria base. **Distância e emissão bateram exatamente**, com o
+mesmo número de trechos, de reservas contabilizáveis e de meses do modelo
+relacional. Todos os IDs saíram únicos. O ensaio era temporário e foi apagado.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (20 testes) e `next build` passam.
+- Nada foi escrito no Firestore: falta banco provisionado e credencial.
+
+**Restam ligados ao Postgres**: `scripts/ingest-mobilidade.ts`, o
+`src/lib/calculo/fatores.ts` antigo, `src/db/schema.ts` e os pacotes
+`drizzle-orm` e `postgres`. Todos morrem na Fase E.
+
+#### 2026-09-14 — Migração, Fase E: mobilidade e demolição do Postgres
+
+**Portado**
+
+- `scripts/ingest-mobilidade.ts` — um documento por resposta, recarga pelo
+  escopo `anoBase`. A leitura da planilha, a geocodificação, o descarte do
+  endereço, a normalização de lugar e a deduplicação por matrícula não mudaram
+  uma linha: a migração nunca encostou na parte que já estava conferida contra o
+  arquivo real.
+- Os alertas viraram os dois campos do documento, com severidade por tipo: erro
+  no que impede o cálculo, atenção no que merece revisão, informativo no resto.
+- O fator aplicado passou a ser carimbado no registro, como nas viagens.
+
+**Demolido**
+
+- `src/db/schema.ts`, `src/lib/calculo/fatores.ts`, a `conectar()` antiga e
+  `databaseUrl()`.
+- Os pacotes `drizzle-orm` e `postgres`. **Não sobrou nenhuma referência a
+  Postgres no repositório** fora deste log, que é registro histórico.
+
+**Decisão da fase**
+
+- **O vínculo de funcionário entre bases sobreviveu à troca de banco.** Quem tem
+  matrícula ganha ID próprio; quem já existia por outra base, sem matrícula,
+  é reaproveitado quando o nome normalizado identifica um documento só — e o
+  documento existente é atualizado no lugar, mantendo o ID que as viagens já
+  apontam. Homônimo continua não sendo fundido.
+
+**Conferência**
+
+- Os documentos de mobilidade foram montados a partir do arquivo real com os
+  módulos de produção — leitura, deduplicação, normalização, ID e validação de
+  escrita — trocando apenas a distância, que dependeria de rede, por um valor
+  fixo. **Todas as respostas viraram documento válido, com ID único**, e a
+  contagem de cidades, de bairros e de modais de emissão zero ficou idêntica à
+  apurada quando o módulo foi escrito. O ensaio era temporário e foi apagado.
+- Para permitir essa conferência sem rede e sem banco, a leitura da planilha e a
+  deduplicação passaram a ser exportadas.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (20 testes) e `next build` passam, agora sem
+  nenhuma dependência de banco relacional.
+- Nada foi escrito no Firestore: falta projeto provisionado e credencial.
+
+**Migração encerrada.** O que falta para o inventário rodar de ponta a ponta não
+é código de migração: é o projeto no Firebase, a service account, o arquivo de
+fatores da mobilidade e a execução das cargas.
+
+#### 2026-09-14 — Fase F: camada de consulta agregada
+
+Última fase da migração. Nenhuma tela construída.
+
+**Entrou — `src/server/consultas/`**
+
+- `agregacao.ts` — primitivos puros, sem Firestore: agrupamento com supressão,
+  série mensal, somas e a conversão de taxa mensal para total anual.
+- `acesso.ts` — autorização por perfil, conferida antes de qualquer leitura.
+- `inventario.ts` — mobilidade, viagens, marítimo, visão geral e método.
+- `programa.ts` — submissões do próprio viajante e visão de adesão.
+- `agregacao.test.ts` e `porta-unica.test.ts` — 13 testes novos; 33 no total.
+
+**As três garantias, agora em código testado**
+
+- **Supressão conta pessoas, não documentos.** Um destino com dez viagens de uma
+  pessoa só continua identificando essa pessoa. O balde de suprimidos não
+  carrega rótulo de lugar nenhum: é a soma de recortes distintos e, por
+  construção, não diz onde ninguém mora.
+- **Nulo é fatia própria.** "Sem empresa", "Sem bairro", "Sem cidade" aparecem
+  com rótulo em vez de sumirem.
+- **O total bate com a contagem de documentos.** A soma dos grupos é conferida
+  contra o que entrou e **estoura erro** se divergir. Era a regra escrita na
+  §9.10; virou invariante executável.
+
+**Decisões da fase**
+
+- **A mobilidade não entra na série mensal da visão geral.** Ela é taxa mensal
+  do ano-base (§9.3); somada à série de eventos, apareceria como se tivesse
+  acontecido doze vezes num mês qualquer. Entra no total anual, com a conversão
+  explícita, e a resposta da consulta carrega a observação para a tela declarar.
+- **O identificador de pessoa é lido e morre na camada.** Ele serve para contar
+  pessoas distintas na supressão e nunca entra no que é devolvido. A única
+  exceção é o programa de viagens, onde o nome sai — e só para quem pode.
+- **Para o `gestor`, o nome nem é lido.** A coleção de funcionários só é
+  consultada quando o perfil pode ver quem registrou; não é filtro depois da
+  leitura.
+- **Nenhum índice composto foi criado.** Todas as consultas são de igualdade
+  pura, que o Firestore atende com os índices automáticos. Índice especulativo
+  custa escrita e armazenamento sem contrapartida; se algum dia uma consulta
+  precisar de um, o próprio erro do Firestore traz o link para criá-lo.
+
+**Guarda arquitetural**
+
+A regra "nenhuma tela lê coleção por fora da camada" passou a ser testada: o
+teste varre as telas procurando acesso direto ao banco. Foi conferido que ele
+**falha** quando a violação existe e passa quando não existe — guarda que não
+morde não é guarda.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (33 testes) e `next build` passam.
+- Nada foi lido ou escrito no Firestore: os testes da camada são sobre funções
+  puras e sobre arquivos.
+
+**Migração concluída.** O código está inteiro em Firestore, com as garantias de
+privacidade e de integridade em código testado. O que falta para o inventário
+existir de verdade é infraestrutura e dado: projeto no Firebase, service account,
+arquivo de fatores da mobilidade e execução das cargas.

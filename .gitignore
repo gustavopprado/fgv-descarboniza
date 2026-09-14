@@ -1,0 +1,76 @@
+# ---------------------------------------------------------------
+# Repositório PÚBLICO. Nada de dado real, credencial ou nome
+# de empresa/pessoa pode ser versionado. Ver CLAUDE.md seção 2.
+# ---------------------------------------------------------------
+
+# Contexto sensível dos dados
+CONTEXTO.md
+CLAUDE.local.md
+
+# Bases reais e qualquer derivado
+/data/
+/dados/
+/bases/
+/private/
+*.xls
+*.xlsx
+*.xlsm
+*.csv
+*.tsv
+base_viagens*.json
+mobilidade_*.json
+Rel__CO2*
+RELATORIO_VIAGENS*
+mobilidade_*
+
+# Saídas de processamento e conferência
+/out/
+/output/
+/exports/
+/tmp/
+*.dump
+*.sql.gz
+*.bak
+conferencia*
+*_conferencia.*
+
+# Ambiente e credenciais
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+service-account*.json
+serviceAccount*.json
+credentials*.json
+gcp-*.json
+firebase-adminsdk*.json
+
+# Firebase (CLI, emulador e artefatos locais)
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+.runtimeconfig.json
+
+# Next / Node
+/node_modules
+/.next
+/out
+/build
+/coverage
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Sistema
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json

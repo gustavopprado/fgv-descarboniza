@@ -1,0 +1,23 @@
+rules_version = '2';
+
+// FGV Descarboniza — CLAUDE.md §11.6.
+//
+// Nega tudo, de propósito.
+//
+// Todo acesso a dado acontece no servidor, pelo Admin SDK, que passa por cima
+// destas regras. Nenhum caminho de cliente é autorizado a ler ou escrever no
+// Firestore. Uma regra aberta aqui não serviria à aplicação — serviria só para
+// ser explorada.
+//
+// Isto é a última linha de defesa: se um dia algum SDK de cliente for ligado por
+// engano, ele não lê nem escreve nada.
+//
+// Publicar com:  firebase deploy --only firestore:rules
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

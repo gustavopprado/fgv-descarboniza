@@ -1,0 +1,403 @@
+/**
+ * Testes da validação de escrita, dos IDs determinísticos e das guardas de
+ * recarga.
+ *
+ * Desde que o banco relacional saiu, estas regras são a única coisa que impede
+ * dado inválido de entrar no inventário (§9.9). Por isso elas têm teste.
+ *
+ * **Toda a massa aqui é fictícia, inventada do zero** (§2.2): nenhum nome,
+ * código, data ou valor sai de base real.
+ */
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+
+import { recarregarEscopo } from '../escrita'
+import {
+  idFatorEmissao,
+  idFuncionario,
+  idMobilidade,
+  idViagemTrecho,
+  sanitizarSegmento,
+} from './ids'
+import { montarAlertas } from './tipos'
+import type {
+  DocEmbarque,
+  DocFatorEmissao,
+  DocMobilidade,
+  DocViagemTrecho,
+} from './tipos'
+import {
+  DocumentoInvalidoError,
+  ehDataIso,
+  validarEmbarque,
+  validarFatorEmissao,
+  validarMobilidade,
+  validarViagemTrecho,
+} from './validacao'
+
+/** Recusa esperada da validação, e não um erro qualquer vindo do teste. */
+function recusa(acao: () => unknown): void {
+  assert.throws(acao, DocumentoInvalidoError)
+}
+
+/* ------------------------------------------------------------------- IDs */
+
+test('ID de documento é determinístico e seguro para o Firestore', () => {
+  assert.equal(idFuncionario({ matricula: 'X99' }), 'mat_X99')
+  assert.equal(idFuncionario({ chaveOrigem: 'pessoa-ficticia' }), 'org_pessoa-ficticia')
+  assert.throws(() => idFuncionario({}), Error)
+
+  assert.equal(idMobilidade(2031, '0042'), '2031_0042')
+  assert.equal(idViagemTrecho('agencia', 'ZZ001', 2), 'agencia_ZZ001_2')
+  assert.equal(
+    idFatorEmissao('exemplo_faixa', 'curta', 'FICT-2031', '2031-01-01'),
+    'exemplo_faixa__curta__FICT-2031__2031-01-01',
+  )
+
+  // A barra é proibida no ID e vira hífen; o separador de campos é "_", que a
+  // limpeza nunca produz — então duas origens diferentes não colapsam no mesmo
+  // documento.
+  assert.equal(sanitizarSegmento('a/b'), 'a-b')
+  assert.equal(sanitizarSegmento('a b'), 'a-b')
+  assert.notEqual(sanitizarSegmento('a/b'), sanitizarSegmento('a_b'))
+
+  assert.throws(() => sanitizarSegmento('   '), Error)
+  assert.throws(() => sanitizarSegmento('__interno'), Error)
+})
+
+/* ----------------------------------------------------------------- datas */
+
+test('data é AAAA-MM-DD e o calendário é conferido', () => {
+  assert.ok(ehDataIso('2031-02-28'))
+  assert.ok(!ehDataIso('2031-02-31'))
+  assert.ok(!ehDataIso('2031-13-01'))
+  assert.ok(!ehDataIso('01/01/2031'))
+  assert.ok(!ehDataIso(''))
+})
+
+/* ------------------------------------------------------------ mobilidade */
+
+function mobilidade(): DocMobilidade {
+  return {
+    modulo: 'mobilidade',
+    modal: 'terrestre',
+    escopo: 3,
+    periodicidade: 'mensal',
+    ano: 2031,
+    mes: null,
+    empresa: null,
+    fator: {
+      categoria: 'mobilidade_carro',
+      chave: 'gasolina',
+      versao: 'FICT-2031',
+      valor: 0.2,
+      unidade: 'kg CO2e por km',
+      vigenciaInicio: '2031-01-01',
+    },
+    ...montarAlertas([]),
+    atualizadoEm: '2031-06-01',
+    funcionarioId: 'mat_0042',
+    anoBase: 2031,
+    transporte: 'carro',
+    combustivel: 'gasolina',
+    distanciaKm: 10,
+    bairro: 'Bairro Fictício',
+    cidade: 'Cidade Fictícia',
+    diasUteisMes: 20,
+    co2KgMes: 80,
+    excecao: false,
+    motivoExcecao: null,
+  }
+}
+
+test('mobilidade válida passa, inclusive com emissão zero por definição', () => {
+  validarMobilidade('2031_0042', mobilidade())
+
+  // Bicicleta, a pé e "outro" não têm fator: têm regra (§6.2).
+  validarMobilidade('x', {
+    ...mobilidade(),
+    transporte: 'bicicleta',
+    combustivel: null,
+    fator: null,
+    co2KgMes: 0,
+  })
+})
+
+test('mobilidade recusa o que o banco recusava', () => {
+  // O tipo já proíbe `mes` na mobilidade; o cast existe para provar que a
+  // validação também recusa, caso o documento venha de fora do TypeScript.
+  recusa(() =>
+    validarMobilidade('x', {
+      ...mobilidade(),
+      mes: '2031-06',
+    } as unknown as DocMobilidade),
+  )
+  recusa(() =>
+    validarMobilidade('x', { ...mobilidade(), escopo: 2 } as unknown as DocMobilidade),
+  )
+  recusa(() => validarMobilidade('x', { ...mobilidade(), anoBase: 2030 }))
+  recusa(() => validarMobilidade('x', { ...mobilidade(), distanciaKm: -1 }))
+  recusa(() => validarMobilidade('x', { ...mobilidade(), diasUteisMes: 0 }))
+})
+
+test('mobilidade exige motivo quando é exceção, e só quando é', () => {
+  recusa(() => validarMobilidade('x', { ...mobilidade(), excecao: true }))
+  recusa(() => validarMobilidade('x', { ...mobilidade(), motivoExcecao: 'qualquer' }))
+  validarMobilidade('x', {
+    ...mobilidade(),
+    excecao: true,
+    motivoExcecao: 'motivo fictício',
+  })
+})
+
+test('campo ausente precisa ser null explícito, nunca undefined', () => {
+  recusa(() =>
+    validarMobilidade('x', {
+      ...mobilidade(),
+      bairro: undefined,
+    } as unknown as DocMobilidade),
+  )
+})
+
+test('fator nulo só se sustenta com emissão zero', () => {
+  recusa(() => validarMobilidade('x', { ...mobilidade(), fator: null }))
+  recusa(() =>
+    validarMobilidade('x', {
+      ...mobilidade(),
+      fator: { ...mobilidade().fator!, versao: '' },
+    }),
+  )
+})
+
+test('alertasCodigos precisa refletir alertas', () => {
+  recusa(() =>
+    validarMobilidade('x', {
+      ...mobilidade(),
+      alertas: [{ tipo: 'exemplo_ficticio', descricao: 'texto', severidade: 'atencao' }],
+      alertasCodigos: [],
+    }),
+  )
+  validarMobilidade('x', {
+    ...mobilidade(),
+    ...montarAlertas([
+      { tipo: 'exemplo_ficticio', descricao: 'texto', severidade: 'atencao' },
+      { tipo: 'exemplo_ficticio', descricao: 'outro texto', severidade: 'informativo' },
+    ]),
+  })
+})
+
+/* --------------------------------------------------------------- viagens */
+
+function trecho(): DocViagemTrecho {
+  return {
+    modulo: 'viagens',
+    modal: 'aereo',
+    escopo: 3,
+    periodicidade: 'evento',
+    ano: 2031,
+    mes: '2031-03',
+    empresa: null,
+    fator: {
+      categoria: 'viagem_aerea_faixa',
+      chave: 'curta',
+      versao: 'FICT-2031',
+      valor: 0.2,
+      unidade: 'kg CO2e por passageiro-km',
+      vigenciaInicio: '2031-01-01',
+    },
+    ...montarAlertas([]),
+    atualizadoEm: '2031-06-01',
+    reservaId: 'ZZ001',
+    ordem: 1,
+    funcionarioId: 'org_pessoa-ficticia',
+    criadoPorUid: null,
+    tipo: 'aereo',
+    fonte: 'agencia',
+    contabilizar: true,
+    dataIda: '2031-03-10',
+    dataVolta: '2031-03-12',
+    origem: 'AAA',
+    destino: 'BBB',
+    companhia: 'ZZ',
+    voo: 'ZZ0001',
+    dataVoo: '2031-03-10',
+    distanciaKm: 100,
+    faixaDistancia: 'curta',
+    passageiros: 1,
+    co2Kg: 20,
+    classeCabine: 'economica',
+    multiplicadorClasse: 1,
+    propriedadeVeiculo: null,
+    combustivel: null,
+    ocupantes: null,
+  }
+}
+
+function trechoDeCarro(): DocViagemTrecho {
+  return {
+    ...trecho(),
+    tipo: 'carro',
+    modal: 'terrestre',
+    dataVoo: null,
+    faixaDistancia: null,
+    companhia: null,
+    voo: null,
+    classeCabine: null,
+    multiplicadorClasse: null,
+    propriedadeVeiculo: 'proprio',
+    combustivel: 'flex',
+    ocupantes: 2,
+  }
+}
+
+test('trecho aéreo e trecho de carro válidos passam', () => {
+  validarViagemTrecho('agencia_ZZ001_1', trecho())
+  validarViagemTrecho('formulario_ZZ002_1', trechoDeCarro())
+  validarViagemTrecho('formulario_ZZ003_1', {
+    ...trechoDeCarro(),
+    propriedadeVeiculo: 'frota',
+    escopo: 1,
+  })
+})
+
+test('ano e mês têm que bater com a data de referência do documento', () => {
+  recusa(() => validarViagemTrecho('x', { ...trecho(), mes: '2031-04' }))
+  recusa(() => validarViagemTrecho('x', { ...trecho(), ano: 2030, mes: '2030-03' }))
+})
+
+test('aéreo sem data do voo é recusado — é ela que define o mês', () => {
+  recusa(() => validarViagemTrecho('x', { ...trecho(), dataVoo: null }))
+})
+
+test('modal precisa corresponder ao tipo da viagem', () => {
+  recusa(() => validarViagemTrecho('x', { ...trecho(), tipo: 'carro' }))
+})
+
+test('frota é Escopo 1; próprio e locado são Escopo 3', () => {
+  recusa(() =>
+    validarViagemTrecho('x', { ...trechoDeCarro(), propriedadeVeiculo: 'frota', escopo: 3 }),
+  )
+  recusa(() =>
+    validarViagemTrecho('x', { ...trechoDeCarro(), propriedadeVeiculo: 'proprio', escopo: 1 }),
+  )
+  recusa(() =>
+    validarViagemTrecho('x', { ...trechoDeCarro(), propriedadeVeiculo: 'locado', escopo: 1 }),
+  )
+})
+
+test('aéreo com emissão precisa carimbar o multiplicador de classe', () => {
+  // `fator` guarda o fator por faixa; sem o multiplicador, a conta do trecho
+  // não é reproduzível a partir do documento (§9.6).
+  recusa(() => validarViagemTrecho('x', { ...trecho(), multiplicadorClasse: null }))
+  recusa(() => validarViagemTrecho('x', { ...trecho(), classeCabine: null }))
+  recusa(() => validarViagemTrecho('x', { ...trecho(), multiplicadorClasse: 0 }))
+})
+
+test('ocupantes e passageiros são inteiros positivos', () => {
+  recusa(() => validarViagemTrecho('x', { ...trechoDeCarro(), ocupantes: 0 }))
+  recusa(() => validarViagemTrecho('x', { ...trechoDeCarro(), ocupantes: 1.5 }))
+  recusa(() => validarViagemTrecho('x', { ...trecho(), passageiros: 0 }))
+})
+
+/* -------------------------------------------------------------- marítimo */
+
+function embarque(): DocEmbarque {
+  return {
+    modulo: 'maritimo',
+    modal: 'maritimo',
+    escopo: 3,
+    periodicidade: 'evento',
+    ano: 2031,
+    mes: '2031-05',
+    empresa: 'Empresa Fictícia',
+    fator: null,
+    ...montarAlertas([]),
+    atualizadoEm: '2031-06-01',
+    agente: 'Agente Fictício',
+    shipmentId: 'SHP-FICT-0001',
+    houseRef: null,
+    trans: null,
+    mode: null,
+    portoOrigem: 'Porto Fictício A',
+    portoDestino: 'Porto Fictício B',
+    navioPartida: null,
+    navioTransbordo: null,
+    etd: '2031-05-04',
+    eta: '2031-06-20',
+    atd: null,
+    ata: null,
+    pesoKg: 1000,
+    volumeM3: 10,
+    containers: 1,
+    co2Kg: 0,
+    nivelDado: 'medido',
+    status: null,
+    previsao: false,
+  }
+}
+
+test('embarque válido passa, inclusive com carga aérea de fornecedor', () => {
+  validarEmbarque('agente_SHP-FICT-0001', embarque())
+  // Frete aéreo upstream: modal aéreo dentro do módulo marítimo (§8.3).
+  validarEmbarque('x', { ...embarque(), modal: 'aereo' })
+})
+
+test('embarque recusa identificador vazio e número negativo', () => {
+  recusa(() => validarEmbarque('x', { ...embarque(), shipmentId: '' }))
+  recusa(() => validarEmbarque('x', { ...embarque(), agente: '' }))
+  recusa(() => validarEmbarque('x', { ...embarque(), containers: -1 }))
+  recusa(() => validarEmbarque('x', { ...embarque(), etd: '2031-05-32' }))
+  recusa(() =>
+    validarEmbarque('x', { ...embarque(), modal: 'terrestre' } as unknown as DocEmbarque),
+  )
+})
+
+/* --------------------------------------------------------------- fatores */
+
+function fator(): DocFatorEmissao {
+  return {
+    categoria: 'exemplo_categoria',
+    chave: 'curta',
+    valor: 0.2,
+    unidade: 'kg CO2e por km',
+    fonte: 'fonte fictícia',
+    versao: 'FICT-2031',
+    vigenciaInicio: '2031-01-01',
+    vigenciaFim: null,
+  }
+}
+
+test('fator exige versão, unidade e vigência coerente', () => {
+  validarFatorEmissao('x', fator())
+  validarFatorEmissao('x', { ...fator(), vigenciaFim: '2031-12-31' })
+  recusa(() => validarFatorEmissao('x', { ...fator(), vigenciaFim: '2030-12-31' }))
+  recusa(() => validarFatorEmissao('x', { ...fator(), versao: '' }))
+  recusa(() => validarFatorEmissao('x', { ...fator(), unidade: '' }))
+  recusa(() => validarFatorEmissao('x', { ...fator(), valor: -1 }))
+})
+
+/* ---------------------------------------------------- guardas da recarga */
+
+test('recarga vazia é recusada antes de encostar no banco', async () => {
+  // Uma carga sem documento nenhum é quase sempre erro de leitura do arquivo, e
+  // apagaria o escopo inteiro sem nada no lugar.
+  await assert.rejects(
+    () => recarregarEscopo({ colecao: 'mobilidade', escopo: [], documentos: [] }),
+    /não produziu nenhum documento/,
+  )
+})
+
+test('ID repetido na mesma carga é recusado', async () => {
+  await assert.rejects(
+    () =>
+      recarregarEscopo({
+        colecao: 'mobilidade',
+        escopo: [],
+        documentos: [
+          { id: 'a', dados: { x: 1 } },
+          { id: 'a', dados: { x: 2 } },
+        ],
+      }),
+    /ID repetido/,
+  )
+})

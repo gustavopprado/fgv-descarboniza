@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+/* Identidade visual — CLAUDE.md §4.
+   O verde da FGV fica reservado para marca, item ativo de menu e elementos vivos. */
+@theme {
+  --color-folha-900: #618264;
+  --color-folha-700: #79AC78;
+  --color-folha-500: #B0D9B1;
+  --color-folha-300: #D0E7D2;
+  --color-fgv: #7BC258;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background: #ffffff;
+  color: var(--color-folha-900);
+}
