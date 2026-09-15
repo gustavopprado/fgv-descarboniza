@@ -18,10 +18,9 @@
  */
 import type { Firestore, Query } from 'firebase-admin/firestore'
 
-import { supressaoMinima } from '@/lib/env'
+import { corteFonteViagensOuNulo, supressaoMinima } from '@/lib/env'
 import type {
   DocEmbarque,
-  DocFatorEmissao,
   DocMobilidade,
   DocViagemTrecho,
 } from '../documentos/tipos'
@@ -35,7 +34,12 @@ import {
   somar,
   type Grupo,
 } from './agregacao'
-import { exigirModulo, exigirPainel, limiteDeEmpresa, type ContextoDeAcesso } from './acesso'
+import {
+  exigirModulo,
+  exigirVisaoGeral,
+  limiteDeEmpresa,
+  type ContextoDeAcesso,
+} from './acesso'
 
 const ROTULO_SEM_EMPRESA = 'Sem empresa'
 const ROTULO_SEM_BAIRRO = 'Sem bairro'
@@ -161,6 +165,15 @@ export type ResumoDeViagens = {
   alertas: { tipo: string; ocorrencias: number }[]
   /** Onde a série troca de fonte, para a tela marcar a virada (§7). */
   mesesPorFonte: { mes: string; agencia: number; formulario: number }[]
+  /**
+   * A data de corte entre agência e formulário, ou `null` enquanto ela não
+   * estiver definida (§7).
+   *
+   * Vem daqui, e não da própria série, porque nos primeiros meses do programa
+   * ainda não há submissão nenhuma: sem a data, a tela não teria onde marcar a
+   * virada justamente no período em que a marca mais importa.
+   */
+  corteFonte: string | null
 }
 
 export async function consultarViagens(
@@ -243,6 +256,7 @@ export async function consultarViagens(
     mesesPorFonte: [...porFonte.entries()]
       .map(([mes, v]) => ({ mes, ...v }))
       .sort((a, b) => a.mes.localeCompare(b.mes)),
+    corteFonte: corteFonteViagensOuNulo(),
   }
 }
 
@@ -343,7 +357,9 @@ export async function consultarVisaoGeral(
   filtros: { ano: number },
   db: Firestore = firestore(),
 ): Promise<VisaoGeral> {
-  exigirPainel(ctx)
+  // A visão geral é mais estreita que o inventário: quem vê um módulo só não
+  // vê o consolidado, porque o consolidado dele não seria o consolidado (§5).
+  exigirVisaoGeral(ctx)
 
   const [mobilidade, viagens, maritimo] = await Promise.all([
     consultarMobilidade(ctx, { anoBase: filtros.ano }, db),
@@ -379,45 +395,5 @@ export async function consultarVisaoGeral(
     observacaoDaSerie:
       'A série mensal cobre viagens e marítimo. Mobilidade é taxa mensal do ' +
       'ano-base e entra no total anual, não na série.',
-  }
-}
-
-/* ------------------------------------------------------------------ método */
-
-export type Metodo = {
-  fatores: {
-    categoria: string
-    chave: string
-    valor: number
-    unidade: string
-    fonte: string
-    versao: string
-    vigenciaInicio: string
-    vigenciaFim: string | null
-    vigenteHoje: boolean
-  }[]
-}
-
-export async function consultarMetodo(
-  ctx: ContextoDeAcesso,
-  db: Firestore = firestore(),
-): Promise<Metodo> {
-  exigirPainel(ctx)
-
-  const instantaneo = await db.collection(COLECAO.fatorEmissao).get()
-  const hoje = new Date().toISOString().slice(0, 10)
-
-  return {
-    fatores: instantaneo.docs
-      .map((d) => d.data() as DocFatorEmissao)
-      .map((f) => ({
-        ...f,
-        vigenteHoje:
-          f.vigenciaInicio <= hoje && (f.vigenciaFim === null || f.vigenciaFim >= hoje),
-      }))
-      .sort(
-        (a, b) =>
-          a.categoria.localeCompare(b.categoria) || a.chave.localeCompare(b.chave),
-      ),
   }
 }

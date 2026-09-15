@@ -166,6 +166,11 @@ Quatro papéis consultam o painel. O quinto não consulta nada — só alimenta.
 | `importacao` | Somente módulo marítimo, podendo ser filtrado por empresa (Importação/Suprimentos) |
 | `colaborador` | Somente registrar a própria viagem e ler as próprias submissões |
 
+**`importacao` não vê a visão geral.** "Somente módulo marítimo" inclui o consolidado:
+um total que soma um módulo só seria um número menor que o inventário apresentado como se
+fosse o inventário — o erro que a §9.10 existe para impedir. A navegação não oferece a tela
+e a consulta recusa quem chegar pela URL. Recusar ali é o comportamento correto, não um bug.
+
 ### 5.1 `colaborador` é o papel de menor privilégio
 
 É o único perfil usado por gente de fora da equipe do inventário, e por isso o
@@ -216,16 +221,22 @@ Cobre **aéreo** e **carro**, com duas fontes separadas por data.
 
 | Período | Fonte | Situação |
 |---|---|---|
-| Até 30/09/2026 | Relatório da agência | Histórico congelado, carga única, **imutável** |
-| A partir de 01/10/2026 | Formulário do viajante | Fonte oficial |
+| Até a data de corte | Relatório da agência | Histórico congelado, carga única, **imutável** |
+| A partir da data de corte | Formulário do viajante | Fonte oficial |
+
+**A data de corte ainda não está definida.** O `30/09/2026` que circulou em versões
+anteriores deste documento era exemplo, não compromisso. Enquanto a data real não for
+decidida, ela é **parâmetro de ambiente**, nunca constante no código nem literal em teste —
+o mesmo tratamento dado à coordenada da fábrica. Quem define é o Gustavo, junto com o
+anúncio do programa aos colaboradores.
 
 **O corte é pela data do voo ou da viagem, não pela data de preenchimento nem pela data de
-lançamento da passagem.** O formulário recusa viagem com partida anterior a 01/10/2026.
+lançamento da passagem.** O formulário recusa viagem com partida anterior à data de corte.
 
 Toda viagem carrega `fonte` (`agencia` | `formulario`).
 
-**Na série mensal, marcar visualmente a troca de fonte em outubro de 2026.** Nos primeiros
-meses a adesão será parcial e a emissão vai parecer cair sem ter caído.
+**Na série mensal, marcar visualmente a troca de fonte no mês da data de corte.** Nos
+primeiros meses a adesão será parcial e a emissão vai parecer cair sem ter caído.
 
 ### 7.1 Base histórica
 
@@ -297,7 +308,12 @@ do formulário mínimo:
 Distância **rodoviária**, nunca ortodrômica. Em trajetos regionais a diferença passa de 25%,
 é irregular e não se corrige com fator fixo.
 
-- Provedor: **Google Routes API** ou **OpenRouteService** (decidir; volume é baixo).
+- Provedor: **Google Routes API**, decidido em 15/09/2026. O OpenRouteService foi testado
+  contra a base real e reprovado: a cota diária do plano gratuito não suporta recarregar a
+  pesquisa mais de uma vez no mesmo dia, e cota esgotada derruba a carga. Geocodificação
+  também é do Google, pelo mesmo teste — o provedor gratuito devolve a coordenada do
+  município para a maioria dos CEPs. **A troca de provedor muda o número**, por isso está
+  declarada na tela de método (§10) e não é tratada como detalhe de infraestrutura.
 - **Cachear toda rota no banco**, com chave = sequência ordenada de códigos IBGE. As rotas
   da empresa se repetem muito.
 - Seleção de município via **lista do IBGE embarcada na aplicação** (5.570 registros), não
@@ -567,6 +583,12 @@ a coleção por fora dele — e isso é verificado por teste, não só combinado
    por mês, contêineres por porto, tabela de corredores.
 5. **Método** — fontes, fatores com vigência, qualidade do dado, alertas e exceções.
 
+A tela de Método é onde cada escolha que muda o número fica registrada. No mínimo:
+provedor de geocodificação e de roteamento (§7.4), base de data escolhida no marítimo
+(§8.3), classe econômica assumida no aéreo (§7.2), um ocupante por carro e por moto na
+mobilidade (§6.2), repetição do valor anual da mobilidade nos doze meses (§9.5), fatores
+com fonte e vigência, e a lista de exceções com motivo.
+
 **Programa de viagens**
 
 6. **Registrar viagem** — formulário, com resultado imediato da emissão.
@@ -613,6 +635,16 @@ O sistema fica público na Vercel. Regras não negociáveis:
    repositório e são a última linha de defesa se um dia algum caminho de cliente
    for aberto por engano.
 
+7. **Credencial exposta é credencial rotacionada**, mesmo sem commit. Chave que passou
+   por arquivo versionado, por log ou por mensagem, ainda que nada tenha subido, conta
+   como comprometida: não há como provar por onde mais ela passou — backup do editor,
+   índice de busca, extensão, pasta sincronizada. Rotacionar é barato; auditar o que não
+   deixa rastro, não.
+8. **Chave de provedor pago é restrita na origem.** As chaves do Google usadas em
+   geocodificação e roteamento ficam limitadas por API e, onde o IP de origem for estável,
+   por IP. Onde não for, o controle é teto de faturamento com alerta. Chave de API paga
+   sem restrição não é só risco de privacidade: é conta a pagar.
+
 **Verificar o sistema antigo:** na versão estática, as bases iam para o build. Se o JSON de
 viagens (com nome de passageiro) ou a base de mobilidade (com CEP e logradouro) estiverem
 acessíveis pelo navegador, é vazamento ativo hoje.
@@ -651,6 +683,24 @@ Coisas que provavelmente vão acontecer, mas não agora.
   (§9.10), não como registro ausente.
 - **Fatores da mobilidade** não vêm de nenhuma base do inventário: são escolha
   metodológica de quem assina o relatório e entram por arquivo próprio.
+- **Data de corte entre agência e formulário** (§7) — ainda não decidida. Depende do
+  anúncio do programa aos colaboradores, não do código.
+- **Módulo marítimo não começou.** É o que falta para o painel consolidado deixar de ser
+  parcial.
+- **Chaves do Google separadas por função e por destino** (§11.8). Já estão separadas por
+  API — uma para geocodificação, outra para roteamento —, porque restringir uma chave única
+  a uma API derrubaria a chamada da outra ponta. Falta a separação por **destino**: a chave
+  usada nas cargas roda da máquina de quem opera e admite restrição por IP; a que o
+  formulário vai usar sairá da Vercel, cujo IP de saída não é estável, e nessa ponta o
+  controle é restrição por API mais teto de faturamento com alerta. Nada disso é código:
+  é configuração no console do Google, e entra quando o formulário existir.
+- **O provedor de rota não fica carimbado no documento.** O documento de emissão carimba o
+  fator (§9.1), não o provedor de geocodificação nem o de roteamento — então a tela de
+  método declara a configuração **atual** do ambiente, e não necessariamente a que produziu
+  a carga que está no banco. Enquanto a carga for manual e rara, a diferença é teórica;
+  quando deixar de ser, o caminho é carimbar o provedor junto do fator.
+- **Nenhuma tela foi construída.** A camada de consulta da §9.10 existe e está testada, mas
+  nada a consome ainda.
 
 ---
 
@@ -1437,6 +1487,20 @@ não devolve erro, devolve zero — e zero passa em quase todo teste de limite.
 dois motivos acumulados — geocodificação grosseira, que exige trocar de provedor,
 e cota de rota esgotada, que exige esperar a renovação ou outro plano.
 
+#### 2026-09-15 — Atualização da especificação (Gustavo)
+
+Sem código. Quatro pontos fechados no documento:
+
+- **§7: a data de corte não está definida.** O `30/09/2026` era exemplo, não compromisso, e
+  estava sendo lido como prazo real. Passa a ser parâmetro de ambiente até o Gustavo
+  decidir, junto do anúncio do programa aos colaboradores.
+- **§7.4: provedor de rota decidido — Google.** Junto com a geocodificação, pelo motivo já
+  registrado no log de 15/09. A decisão que estava pendente no texto foi fechada.
+- **§10: a tela de Método ganhou lista mínima** do que precisa declarar. A troca de
+  provedor muda o número e não podia continuar existindo só no log.
+- **§11: duas regras novas de credencial** — exposição sem commit ainda exige rotação, e
+  chave de provedor pago é restrita por API e por IP ou compensada com teto de faturamento.
+
 #### 2026-09-15 — Troca de provedor e mobilidade válida pela primeira vez
 
 **Decisão metodológica do Gustavo:** geocodificação e roteamento passam a ser do
@@ -1478,3 +1542,128 @@ o módulo de mobilidade passa por elas.
 
 **Estado do inventário:** viagens e mobilidade válidos e conferidos. Marítimo não
 começou; o painel consolidado segue parcial até ele existir.
+
+#### 2026-09-15 — Fatia 1: sessão real e tela de Método
+
+Primeira tela do sistema. A ordem foi escolhida pelo Gustavo: Método antes da Visão
+geral, porque é a tela que consome o que a camada já entrega, é onde as escolhas que
+mudam o número ficam registradas, e é a única tela do inventário que não exibe recorte
+de pessoa nenhum — o lugar certo para estrear a camada de consulta sem que um erro de
+supressão vire vazamento.
+
+**Sessão — e não o atalho**
+
+Foi oferecido um contexto de desenvolvimento travado por `NODE_ENV`, para abrir a tela
+no navegador antes da autenticação existir. **O Gustavo recusou**, com três motivos que
+ficam registrados porque valem para a próxima decisão parecida: o custo é o mesmo em
+qualquer ordem, já que auth é pré-requisito das sete telas; trabalho adiado em projeto
+de uma pessoa só tende a não acontecer; e um bypass guardado por uma única guarda é o
+tipo de coisa que sobrevive mais do que devia.
+
+- `src/server/sessao.ts` — o navegador entra por Firebase Auth com provedor Google e
+  troca o ID token por um **cookie de sessão httpOnly** emitido no servidor. O SDK web é
+  encerrado logo depois: sem isso o navegador guardaria um refresh token de longa duração
+  que não serve para nada aqui.
+- Três recusas antes de existir cookie: provedor diferente de Google, e-mail não
+  verificado e domínio fora do Workspace corporativo.
+- **O papel nunca vem do token.** Ele é lido de `usuarioPerfil/{uid}` a cada requisição,
+  com `checkRevoked`. Token não carrega papel de propósito: token velho continuaria
+  valendo depois de o acesso ter sido revogado.
+- **Conta sem documento de perfil não recebe papel nenhum** — não há padrão, não há
+  "colaborador por enquanto". Quem entra sem perfil vê um aviso e não vê dado. Perfil
+  implícito é privilégio concedido por descuido.
+- `scripts/definir-perfil.ts` (`npm run perfil`) é o único caminho para conceder acesso,
+  e roda fora da aplicação, como as cargas.
+
+**Correção do perfil `importacao`, decidida pelo Gustavo**
+
+A proposta era fazer a visão geral não quebrar para esse perfil. **Foi recusada, e com
+razão:** uma visão geral que soma um módulo e chama de total é exatamente o erro que a
+§9.10 existe para impedir — total que não bate com o que existe, sem nenhum sinal.
+
+A correção certa é de autorização, não de tolerância: `importacao` não recebe a visão
+geral. A `acesso.ts` passou a ter três portas distintas — inventário, módulo e visão
+geral —, a navegação não oferece a tela e a consulta recusa quem chegar pela URL.
+`AcessoNegadoError` ali é o comportamento correto. A §5 foi atualizada.
+
+**Tela de Método**
+
+- `src/server/consultas/metodo.ts` — o que existia devolvia só a lista de fatores, um
+  sétimo do que a §10 passou a exigir. Agora declara fontes, parâmetros, qualidade do
+  dado, exceções com motivo, alertas por tipo e fatores com vigência, **tudo recortado
+  pelo que o perfil pode ver**: para `importacao` a coleção de mobilidade nem chega a ser
+  lida, não é filtro depois da leitura.
+- **Decisão pendente é declarada, não deixada em branco.** Parâmetro sem valor aparece
+  como "não definida", marcado, com a observação dizendo de que a decisão depende. Campo
+  vazio parece bug ou dado perdido.
+- **Descrição de alerta não chega ao cliente.** A descrição gravada na carga cita valor
+  da linha — distância, matrícula, combinação recusada — e atravessaria a anonimização da
+  §3.1 por uma porta lateral. A tela mostra tipo, severidade e quantos registros.
+- A contagem de alerta é por **documento afetado**, não por ocorrência: é a pergunta que
+  alguém realmente faz ao abrir a tela.
+
+**Data de corte**
+
+Nenhum literal em código, teste ou fixture: já era `VIAGENS_CORTE_FONTE`. O literal
+estava no `.env.example`, que é versionado — o mesmo mecanismo pelo qual a data virou
+compromisso. Agora vem vazia, com o motivo escrito ao lado.
+
+A consulta de viagens passou a devolver `corteFonte`, lido do ambiente. Sem isso a tela
+não teria como marcar a virada de fonte na série mensal nos primeiros meses do programa,
+justamente quando a adesão é parcial e a marca mais importa: a série sozinha só mostra a
+virada depois que existir submissão de formulário.
+
+**`.env.example` varrido**
+
+A regra que saiu do caso da coordenada da fábrica: **placeholder plausível é pior que
+vazio.** Onde um valor de exemplo passaria por valor real e produziria número errado em
+silêncio, o exemplo passou a ser vazio e o código recusa rodar sem o valor. Entraram
+nessa regra a coordenada da fábrica, a data de corte, o ano-base da mobilidade, a
+vigência dos fatores e a base de data do marítimo. `src/server/ambiente.test.ts` vigia
+essa lista — placeholder plausível não volta por distração.
+
+Saiu também `AUTH_SESSION_SECRET`, que nunca foi lido por ninguém: o cookie de sessão é
+assinado pelo próprio Firebase. Segredo sem uso é credencial a mais para administrar.
+
+**Decisões que não estavam no documento**
+
+- **A camada de sessão lê `usuarioPerfil` fora de `src/server/consultas`.** Ela é
+  anterior à camada de consulta, não uma exceção a ela: é quem produz o contexto que toda
+  consulta exige, e depender da camada que depende dela seria circular. Ela lê o perfil de
+  quem está pedindo, e nada mais.
+- **A navegação é derivada do papel, e é promessa, não controle.** O controle está na
+  consulta (§11.3). O menu apenas não oferece o que a consulta vai recusar: menu que
+  mostra porta fechada ensina que existe porta. Tela ainda não construída aparece apagada,
+  para o mapa do sistema ficar visível sem prometer link que não abre.
+- **A raiz manda cada perfil para a primeira tela que ele pode abrir.** Mandar alguém
+  para uma rota que vai recusá-lo transformaria autorização correta em erro aparente.
+- **Os testes de autorização saíram de `agregacao.test.ts` para `acesso.test.ts`**, que é
+  onde a regra agora mora.
+
+**Bug encontrado durante a implementação**
+
+- O ajudante que troca variáveis de ambiente nos testes restaurava o ambiente **antes** de
+  a consulta assíncrona terminar, porque não esperava a promessa. O teste da data de corte
+  definida lia o ambiente de fora e passava por acidente; o da data não definida passava
+  pelo mesmo acidente, com o sinal invertido. Corrigido esperando a tarefa. Mesmo padrão
+  das lições anteriores: indicador calculado sobre o conjunto errado não devolve erro.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (62 testes, 22 novos) e `next build` passam. Nenhum servidor
+  de desenvolvimento foi subido.
+- A consulta de método foi exercitada contra o Firestore carregado, com um ensaio
+  temporário que foi apagado em seguida: os três módulos respondem, os fatores voltam com
+  vigência, os alertas voltam por tipo e severidade, e a checagem confirmou que nenhum
+  identificador de pessoa e nenhuma descrição de alerta saem na resposta.
+- Os testes novos cobrem a recusa da visão geral para `importacao`, a leitura que não
+  acontece para o módulo que o perfil não vê, o parâmetro declarado como não definido, a
+  exceção que sai como motivo e contagem, e o alerta que sai sem descrição.
+
+**Pendência de operação, não de código**
+
+O `.env` local tem valor preenchido em `VIAGENS_CORTE_FONTE`. Enquanto ele estiver lá, a
+tela de Método vai declarar uma data de corte como se ela estivesse decidida. Se for o
+valor de exemplo antigo, o certo é esvaziar a variável: a tela então diz "não definida",
+que é o estado verdadeiro.
+

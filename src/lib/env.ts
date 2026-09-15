@@ -100,9 +100,49 @@ export function supressaoMinima(): number {
 /**
  * Data em que a fonte oficial das viagens passa da agência para o formulário
  * (§7). O corte é pela data do voo, não pela data de lançamento.
+ *
+ * **A data ainda não está decidida** e por isso não tem padrão: quem carrega
+ * base precisa informá-la, e o script para se ela faltar. Nunca há um valor
+ * assumido — o mesmo tratamento dado à coordenada da fábrica (§6.2).
  */
 export function corteFonteViagens(): string {
   return obrigatoria('VIAGENS_CORTE_FONTE')
+}
+
+/**
+ * O corte como a tela precisa dele: `null` enquanto não estiver definido.
+ *
+ * A tela de método declara "não definida" nesse caso. Campo em branco parece
+ * bug ou dado perdido; a ausência aqui é uma decisão pendente, e a tela diz isso
+ * com todas as letras.
+ */
+export function corteFonteViagensOuNulo(): string | null {
+  return opcional('VIAGENS_CORTE_FONTE') ?? null
+}
+
+/**
+ * Parâmetros que a tela de método declara (§10).
+ *
+ * Todos são lidos como opcionais: a tela de método precisa abrir mesmo com
+ * ambiente incompleto, justamente para mostrar o que falta. Quem calcula é que
+ * exige — e quem exige falha alto.
+ */
+export function parametrosDeclarados(): {
+  geocodeProvedor: string | null
+  rotasProvedor: string | null
+  mobilidadeDistanciaModo: string | null
+  mobilidadeDistanciaMaximaKm: string | null
+  mobilidadeAnoBase: string | null
+  corteFonteViagens: string | null
+} {
+  return {
+    geocodeProvedor: opcional('GEOCODE_PROVEDOR') ?? null,
+    rotasProvedor: opcional('ROTAS_PROVEDOR') ?? null,
+    mobilidadeDistanciaModo: opcional('MOBILIDADE_DISTANCIA_MODO') ?? null,
+    mobilidadeDistanciaMaximaKm: opcional('MOBILIDADE_DISTANCIA_MAXIMA_KM') ?? null,
+    mobilidadeAnoBase: opcional('MOBILIDADE_ANO_BASE') ?? null,
+    corteFonteViagens: corteFonteViagensOuNulo(),
+  }
 }
 
 /** Domínio do Workspace autorizado a entrar (§11.4). */

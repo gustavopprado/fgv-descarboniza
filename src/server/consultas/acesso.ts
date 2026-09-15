@@ -7,6 +7,17 @@
  *
  * O contexto vem da sessão verificada no servidor. Nada aqui aceita papel vindo
  * do cliente.
+ *
+ * Há três portas distintas, e a diferença entre elas importa:
+ *
+ *  - **inventário** — quem pode abrir alguma tela do inventário;
+ *  - **módulo** — quem pode ver mobilidade, viagens ou marítimo;
+ *  - **visão geral** — quem pode ver o total consolidado.
+ *
+ * A terceira é mais estreita que a primeira de propósito. `importacao` vê
+ * somente o módulo marítimo (§5), e um total que soma um módulo só seria um
+ * número menor que o inventário apresentado como se fosse o inventário — o erro
+ * que a §9.10 existe para impedir, agora no rosto da tela.
  */
 import type { Papel } from '../documentos/tipos'
 
@@ -27,12 +38,24 @@ export class AcessoNegadoError extends Error {
   }
 }
 
-/** Quem pode abrir o painel do inventário. */
+/** Quem pode abrir alguma tela do inventário. */
 const VE_INVENTARIO: ReadonlySet<Papel> = new Set([
   'admin',
   'sustentabilidade',
   'gestor',
   'importacao',
+])
+
+/**
+ * Quem pode ver o total consolidado.
+ *
+ * `importacao` fica de fora: ele enxerga um módulo só, e o consolidado que ele
+ * poderia ver não seria o consolidado.
+ */
+const VE_VISAO_GERAL: ReadonlySet<Papel> = new Set([
+  'admin',
+  'sustentabilidade',
+  'gestor',
 ])
 
 /** Quem pode ver cada módulo do inventário. */
@@ -42,22 +65,39 @@ const VE_MODULO: Record<Modulo, ReadonlySet<Papel>> = {
   maritimo: new Set(['admin', 'sustentabilidade', 'gestor', 'importacao']),
 }
 
+export const MODULOS: readonly Modulo[] = ['mobilidade', 'viagens', 'maritimo']
+
 /**
- * `colaborador` não consulta nada: não abre o painel, não vê dado de terceiro e
- * não vê agregado (§5.1). O acesso dele é só às próprias submissões, por outra
- * porta.
+ * `colaborador` não consulta nada do inventário: não abre painel, não vê dado
+ * de terceiro e não vê agregado (§5.1). O acesso dele é só às próprias
+ * submissões, por outra porta.
  */
-export function exigirPainel(ctx: ContextoDeAcesso): void {
+export function exigirInventario(ctx: ContextoDeAcesso): void {
   if (!VE_INVENTARIO.has(ctx.papel)) {
-    throw new AcessoNegadoError(ctx.papel, 'ao painel do inventário')
+    throw new AcessoNegadoError(ctx.papel, 'ao inventário')
   }
 }
 
+export function exigirVisaoGeral(ctx: ContextoDeAcesso): void {
+  if (!VE_VISAO_GERAL.has(ctx.papel)) {
+    throw new AcessoNegadoError(ctx.papel, 'à visão geral do inventário')
+  }
+}
+
+export function podeVerModulo(ctx: ContextoDeAcesso, modulo: Modulo): boolean {
+  return VE_INVENTARIO.has(ctx.papel) && VE_MODULO[modulo].has(ctx.papel)
+}
+
 export function exigirModulo(ctx: ContextoDeAcesso, modulo: Modulo): void {
-  exigirPainel(ctx)
+  exigirInventario(ctx)
   if (!VE_MODULO[modulo].has(ctx.papel)) {
     throw new AcessoNegadoError(ctx.papel, `ao módulo de ${modulo}`)
   }
+}
+
+/** Os módulos que este perfil enxerga, na ordem das telas (§10). */
+export function modulosVisiveis(ctx: ContextoDeAcesso): Modulo[] {
+  return MODULOS.filter((modulo) => podeVerModulo(ctx, modulo))
 }
 
 /**

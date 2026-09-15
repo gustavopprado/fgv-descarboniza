@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test \"src/**/*.test.ts\"",
     "rules:deploy": "tsx scripts/rules-deploy.ts",
+    "perfil": "tsx scripts/definir-perfil.ts",
     "seed:fatores": "tsx scripts/seed-fatores.ts",
     "seed:fatores-mobilidade": "tsx scripts/seed-fatores-mobilidade.ts",
     "ingest:viagens": "tsx scripts/ingest-viagens.ts",
@@ -16,6 +17,7 @@
     "verificar": "tsx scripts/verificar.ts"
   },
   "dependencies": {
+    "firebase": "^12.19.0",
     "firebase-admin": "^14.4.0",
     "next": "^16.3.5",
     "react": "^19.3.0",

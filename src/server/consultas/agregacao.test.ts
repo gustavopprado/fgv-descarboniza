@@ -10,16 +10,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import {
-  AcessoNegadoError,
-  exigirModulo,
-  exigirPainel,
-  limiteDeEmpresa,
-  podeVerQuemRegistrou,
-  type ContextoDeAcesso,
-} from './acesso'
 import { agrupar, emToneladas, media, serieMensal, somar } from './agregacao'
-import type { Papel } from '../documentos/tipos'
 
 type Registro = { bairro: string | null; empresa: string | null; pessoa: string; co2: number }
 
@@ -142,38 +133,7 @@ test('soma, média e conversão para toneladas', () => {
   assert.equal(media([] as { v: number }[], (i) => i.v), 0)
   assert.equal(emToneladas(2500), 2.5)
 })
-
-/* ------------------------------------------------------------ autorização */
-
-function contexto(papel: Papel, empresa: string | null = null): ContextoDeAcesso {
-  return { uid: 'uid-ficticio', email: 'pessoa@exemplo.invalid', papel, empresa }
-}
-
-test('colaborador não abre o painel nem módulo nenhum', () => {
-  assert.throws(() => exigirPainel(contexto('colaborador')), AcessoNegadoError)
-  assert.throws(() => exigirModulo(contexto('colaborador'), 'viagens'), AcessoNegadoError)
-  assert.throws(() => exigirModulo(contexto('colaborador'), 'maritimo'), AcessoNegadoError)
-})
-
-test('importacao só alcança o módulo marítimo', () => {
-  exigirModulo(contexto('importacao'), 'maritimo')
-  assert.throws(() => exigirModulo(contexto('importacao'), 'mobilidade'), AcessoNegadoError)
-  assert.throws(() => exigirModulo(contexto('importacao'), 'viagens'), AcessoNegadoError)
-})
-
-test('importacao pode ser limitado por empresa; os outros veem todas', () => {
-  assert.equal(limiteDeEmpresa(contexto('importacao', 'Empresa Fictícia')), 'Empresa Fictícia')
-  assert.equal(limiteDeEmpresa(contexto('importacao', null)), null)
-  assert.equal(limiteDeEmpresa(contexto('admin', 'Empresa Fictícia')), null)
-  assert.equal(limiteDeEmpresa(contexto('gestor', 'Empresa Fictícia')), null)
-})
-
-test('gestor vê o inventário inteiro, mas nunca quem registrou', () => {
-  exigirModulo(contexto('gestor'), 'mobilidade')
-  exigirModulo(contexto('gestor'), 'viagens')
-  exigirModulo(contexto('gestor'), 'maritimo')
-  assert.equal(podeVerQuemRegistrou(contexto('gestor')), false)
-  assert.equal(podeVerQuemRegistrou(contexto('admin')), true)
-  assert.equal(podeVerQuemRegistrou(contexto('sustentabilidade')), true)
-  assert.equal(podeVerQuemRegistrou(contexto('colaborador')), false)
-})
+/*
+ * A autorização saiu daqui: ela ganhou arquivo próprio em `acesso.test.ts`
+ * quando a visão geral passou a ser mais estreita que o inventário (§5).
+ */
