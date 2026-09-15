@@ -2243,3 +2243,59 @@ voada por uma pessoa aponta para ela —, mas agora o custo de exibição ficou 
   repetido por extenso que não pode virar escala, separador irregular, bloco sem data e
   bloco com dois nomes.
 
+#### 2026-09-15 — Conferência de cobertura, e a lição da fonte única
+
+**A lição, que o Gustavo pediu para ficar registrada junto das outras.**
+
+> **Fonte única não autoriza afirmação sobre o todo.** Eu olhei a única base carregada e
+> concluí "não existe viagem intercontinental". A frase verdadeira era "não existe na base
+> da agência", seguida de uma pergunta: existe outra fonte? A diferença entre as duas
+> frases foi um quarto da emissão de viagens ficando fora do inventário — e quem percebeu
+> foi o Gustavo, por acaso, notando que faltava China.
+
+Ela se soma às duas anteriores, e as três são a mesma família:
+
+- **coerência** responde "a conta fecha?" — e passou enquanto a distância estava errada;
+- **plausibilidade** responde "o insumo é crível?" — e passou sobre um conjunto vazio;
+- **cobertura** responde "chegou tudo?" — e é a que faltava.
+
+**A conferência nova**
+
+`verificar.ts` ganhou o bloco de cobertura: para cada fonte de viagens, **conta os trechos
+no arquivo de origem e compara com o que está no banco**. Divergência falha, com esperado,
+obtido e diferença.
+
+Duas decisões dentro dela, que é onde mora o valor:
+
+- **Ela imprime a lista das fontes que conhece.** Nenhuma conferência pode acusar um
+  arquivo de que nunca ouviu falar; mas pode deixar visível o que cobre, para a ausência
+  saltar aos olhos de quem lê. Foi exatamente por não existir essa lista que uma fonte
+  inteira passou despercebida.
+- **Fonte gravada no banco sem conferência que a cubra vira aviso.** É o mesmo ponto cego
+  do outro lado: dado que entrou e não tem quem o confronte com a origem.
+
+Arquivo de origem ausente não falha — diz quantos trechos ficaram sem conferência, porque
+a máquina de quem roda nem sempre tem todos os arquivos.
+
+**Conferido pelos dois lados:** com as duas fontes no lugar, as contagens batem. Com uma
+linha removida de uma cópia da planilha, a conferência **falhou e o script saiu com
+código 1**, apontando a diferença. Guarda que não morde não é guarda.
+
+**Medição do corredor, pedida antes de implementar**
+
+O Gustavo pediu para trocar a unidade do mapa de rota par-a-par para corredor por região,
+e pediu os números antes. Medidos contra a base:
+
+| Unidade | Grupos | Passam a supressão | Emissão visível |
+|---|---|---|---|
+| Rota par-a-par | 70 | 7 | 35% |
+| Corredor por região | 12 | 5 | 66% |
+
+**O corredor quase dobra a emissão visível, e mesmo assim não resolve o internacional.**
+Os corredores para fora do país têm **uma pessoa cada**; agregando todos num único
+"Brasil ↔ Exterior" dá duas. A restrição não é a granularidade do recorte — é que duas
+pessoas na empresa inteira viajaram para fora no período. Agregar geografia não cria gente.
+
+Nada disso foi implementado: a decisão é do Gustavo, e ficou registrada a alternativa que
+não vaza — declarar o peso que não pode ser desenhado como número, sem lugar.
+

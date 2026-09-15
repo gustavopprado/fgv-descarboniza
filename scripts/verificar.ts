@@ -42,10 +42,12 @@ import {
   emissaoMensal,
   emiteZero,
 } from '../src/lib/calculo/mobilidade'
+import { lerCartao } from '../src/lib/cartao'
 import { chaveNormalizada } from '../src/lib/texto'
 import type { DocMobilidade, DocViagemTrecho } from '../src/server/documentos/tipos'
 import { carregarFatores } from '../src/server/fatores'
 import { COLECAO } from '../src/server/firestore'
+import { lerPlanilha } from './ingest-cartao'
 import {
   caminhoDaBase,
   conectarFirestore,
@@ -433,6 +435,104 @@ async function contarRespondentes(caminho: string): Promise<number> {
 
 /* ------------------------------------------------------------------ main */
 
+/**
+ * Conferência de **cobertura**: a origem tem N trechos, o banco tem N?
+ *
+ * Esta é a conferência que faltava, e é de outra natureza que todas as outras.
+ * As demais perguntam "a conta fecha?" — coerência — ou "o insumo é crível?" —
+ * plausibilidade. Esta pergunta **"chegou tudo?"**, e é a única que pega uma
+ * fonte inteira que ficou de fora. Duas vezes o inventário ficou coerente por
+ * dentro e errado por fora; nas duas, foi gente olhando que percebeu.
+ *
+ * Ela também **imprime a lista das fontes que conhece**. Nenhuma conferência
+ * pode acusar um arquivo de que nunca ouviu falar — mas pode deixar visível o
+ * que ela cobre, para a ausência de uma fonte saltar aos olhos de quem lê. Foi
+ * exatamente assim que a planilha do cartão passou despercebida.
+ */
+async function conferirCoberturaDasFontes(
+  db: Firestore,
+  conferencias: Conferencia[],
+): Promise<void> {
+  const inteiro = { tolerancia: 0, casas: 0 }
+
+  const fontes: {
+    fonte: string
+    rotulo: string
+    caminho: string
+    contarNaOrigem: (caminho: string) => Promise<number>
+  }[] = [
+    {
+      fonte: 'agencia',
+      rotulo: 'trechos do relatório da agência',
+      caminho: caminhoDaBase(
+        argumentoPosicional(),
+        'BASE_VIAGENS_PATH',
+        'dados/base_viagens.json',
+      ),
+      contarNaOrigem: async (caminho) => {
+        const base = lerJson<BaseViagens>(caminho)
+        return base.reservas.reduce((s, r) => s + r.trechos.length, 0)
+      },
+    },
+    {
+      fonte: 'cartao',
+      rotulo: 'trechos da planilha do cartão',
+      caminho: caminhoDaBase(
+        undefined,
+        'BASE_CARTAO_PATH',
+        'dados/cartao-viagens.xlsx',
+      ),
+      contarNaOrigem: async (caminho) => {
+        const { trechos } = lerCartao(await lerPlanilha(caminho))
+        return trechos.length
+      },
+    },
+  ]
+
+  tituloDaEtapa('Conferência — cobertura das fontes')
+  console.log('  Fontes conferidas; uma fonte que não esteja nesta lista não é vista por')
+  console.log('  conferência nenhuma.')
+
+  const conhecidas = new Set(fontes.map((f) => f.fonte))
+
+  for (const f of fontes) {
+    const carregados = (
+      await db.collection(COLECAO.viagemTrecho).where('fonte', '==', f.fonte).select().get()
+    ).size
+
+    if (!existsSync(f.caminho)) {
+      console.log(
+        `  ${f.rotulo}: arquivo de origem não encontrado; ` +
+          `${carregados} trecho(s) no banco não puderam ser conferidos.`,
+      )
+      continue
+    }
+
+    conferencias.push({
+      item: f.rotulo,
+      esperado: await f.contarNaOrigem(f.caminho),
+      obtido: carregados,
+      origem: 'origem × banco',
+      ...inteiro,
+    })
+  }
+
+  // Fonte gravada no banco que ninguém confere é o mesmo ponto cego, do outro
+  // lado: dado que entrou e não tem quem o confronte com a origem.
+  const todas = (await db.collection(COLECAO.viagemTrecho).select('fonte').get()).docs
+  const semConferencia = new Set(
+    todas
+      .map((d) => String((d.data() as { fonte?: string }).fonte ?? ''))
+      .filter((f) => f !== '' && !conhecidas.has(f)),
+  )
+  for (const fonte of semConferencia) {
+    console.log(
+      `  ATENÇÃO: há trechos com fonte "${fonte}" no banco, e nenhuma conferência ` +
+        'sabe de onde eles vieram.',
+    )
+  }
+}
+
 async function principal(): Promise<void> {
   const caminho = caminhoDaBase(
     argumentoPosicional(),
@@ -586,6 +686,8 @@ async function principal(): Promise<void> {
       origem: 'integridade',
       ...inteiro,
     })
+
+    await conferirCoberturaDasFontes(db, conferencias)
 
     tituloDaEtapa('Conferência — viagens (agência)')
     if (declarado.pessoas !== undefined && declarado.pessoas !== recalculado.pessoas) {
