@@ -9,7 +9,7 @@
  * viagem pelo formulário, a série sozinha não teria como mostrar a virada — que
  * é justamente quando ela mais importa.
  */
-import { numero } from '@/lib/formato'
+import { GraficoDeBarras } from '../grafico-de-barras'
 
 const NOME_DO_MES = [
   'jan', 'fev', 'mar', 'abr', 'mai', 'jun',
@@ -30,43 +30,22 @@ export function SerieMensal({
 }) {
   if (serie.length === 0) return null
 
-  const maior = serie.reduce((m, p) => Math.max(m, p.co2Kg), 0)
   const mesDoCorte = corteFonte === null ? null : corteFonte.slice(0, 7)
   const corteNaSerie = mesDoCorte !== null && serie.some((p) => p.mes === mesDoCorte)
 
   return (
     <div>
-      <div className="flex items-end gap-1 overflow-x-auto pb-2">
-        {serie.map((ponto) => {
-          const daVirada = ponto.mes === mesDoCorte
-          return (
-            <div key={ponto.mes} className="flex w-10 shrink-0 flex-col items-center">
-              <div className="flex h-40 w-full items-end">
-                <div
-                  className={
-                    daVirada
-                      ? 'crescer w-full rounded-t bg-[var(--color-fgv)]'
-                      : 'crescer w-full rounded-t bg-[var(--color-folha-700)]'
-                  }
-                  style={{
-                    height: `${maior > 0 ? Math.max((ponto.co2Kg / maior) * 100, ponto.co2Kg > 0 ? 2 : 0) : 0}%`,
-                  }}
-                  title={`${rotuloDoMes(ponto.mes)}: ${numero(ponto.co2Kg)} kg CO₂`}
-                />
-              </div>
-              <span
-                className={
-                  daVirada
-                    ? 'mt-1 text-[10px] font-semibold text-[var(--color-tinta)]'
-                    : 'mt-1 text-[10px] text-[var(--color-apoio)]'
-                }
-              >
-                {rotuloDoMes(ponto.mes)}
-              </span>
-            </div>
-          )
-        })}
-      </div>
+      <GraficoDeBarras
+        barras={serie.map((ponto) => ({
+          rotulo: rotuloDoMes(ponto.mes),
+          valor: ponto.co2Kg,
+          destaque: ponto.mes === mesDoCorte,
+        }))}
+        unidade="kg CO₂"
+        casas={0}
+        largura={Math.max(420, serie.length * 54)}
+        altura={240}
+      />
 
       <p className="mt-3 max-w-[80ch] border-t border-[var(--color-linha)] pt-3 text-[12px] text-[var(--color-apoio)]">
         Mês sem viagem aparece com barra zerada, não sumido: mês ausente esconderia

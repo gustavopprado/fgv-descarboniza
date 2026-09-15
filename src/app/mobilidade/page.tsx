@@ -24,6 +24,7 @@ import {
   Revelar,
   Vazio,
 } from '../componentes'
+import { GraficoDeBarras } from '../grafico-de-barras'
 import { Radar } from './radar'
 
 export const dynamic = 'force-dynamic'
@@ -119,11 +120,27 @@ export default async function Page({
                 titulo="Emissão por modal"
                 descricao="kg CO₂ por funcionário por mês, somado no modal."
               >
-                <ListaDeGrupos grupos={dados.porModal} />
+                <GraficoDeBarras
+                  barras={dados.porModal.map((g) => ({
+                    rotulo: g.rotulo,
+                    valor: g.co2Kg,
+                    atenuada: g.agrupadoPorSupressao,
+                  }))}
+                  unidade="kg CO₂"
+                  largura={340}
+                  altura={280}
+                />
                 <Nota>
                   Bicicleta e deslocamento a pé não emitem. O ônibus usa fator por
                   passageiro-quilômetro, e por isso emite bem menos por pessoa que o
                   transporte individual.
+                  {dados.porModal.some((g) => g.agrupadoPorSupressao) && (
+                    <>
+                      {' '}
+                      A barra mais clara reúne os modais com poucas pessoas, que não
+                      podem aparecer separados sem identificar quem respondeu.
+                    </>
+                  )}
                 </Nota>
               </Painel>
             </Grade>
