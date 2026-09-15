@@ -14,8 +14,10 @@
     "gerar:contorno": "tsx scripts/gerar-contorno.ts",
     "seed:fatores": "tsx scripts/seed-fatores.ts",
     "seed:fatores-mobilidade": "tsx scripts/seed-fatores-mobilidade.ts",
+    "seed:aeroportos": "tsx scripts/seed-aeroportos.ts",
     "ingest:viagens": "tsx scripts/ingest-viagens.ts",
     "ingest:mobilidade": "tsx scripts/ingest-mobilidade.ts",
+    "ingest:cartao": "tsx scripts/ingest-cartao.ts",
     "verificar": "tsx scripts/verificar.ts"
   },
   "dependencies": {

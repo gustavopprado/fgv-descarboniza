@@ -22,6 +22,7 @@ import { corteFonteViagensOuNulo, supressaoMinima } from '@/lib/env'
 import { coordenadaValida } from '@/lib/mapa'
 import type {
   DocAeroporto,
+  FonteDaViagem,
   DocEmbarque,
   DocMobilidade,
   DocViagemTrecho,
@@ -195,7 +196,7 @@ export type ResumoDeViagens = {
   porModal: Grupo[]
   alertas: { tipo: string; ocorrencias: number }[]
   /** Onde a série troca de fonte, para a tela marcar a virada (§7). */
-  mesesPorFonte: { mes: string; agencia: number; formulario: number }[]
+  mesesPorFonte: { mes: string; agencia: number; formulario: number; cartao: number }[]
   /** Rotas aéreas desenháveis, já suprimidas e com coordenada (§10.3). */
   mapa: MapaDeRotas
   /**
@@ -241,10 +242,10 @@ export async function consultarViagens(
 
   const mapa = await montarMapaDeRotas(db, trechos, limite, valor, pessoa)
 
-  const porFonte = new Map<string, { agencia: number; formulario: number }>()
+  const porFonte = new Map<string, Record<FonteDaViagem, number>>()
   for (const t of trechos) {
     if (!t.mes) continue
-    const atual = porFonte.get(t.mes) ?? { agencia: 0, formulario: 0 }
+    const atual = porFonte.get(t.mes) ?? { agencia: 0, formulario: 0, cartao: 0 }
     atual[t.fonte] += t.co2Kg
     porFonte.set(t.mes, atual)
   }

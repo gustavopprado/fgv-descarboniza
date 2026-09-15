@@ -235,7 +235,27 @@ Cobre **aéreo** e **carro**, com duas fontes separadas por data.
 | Período | Fonte | Situação |
 |---|---|---|
 | Até a data de corte | Relatório da agência | Histórico congelado, carga única, **imutável** |
+| Até a data de corte | Planilha do cartão empresarial | Viagem que não passa pela agência |
 | A partir da data de corte | Formulário do viajante | Fonte oficial |
+
+**A planilha do cartão é uma terceira fonte, não um complemento da agência.** São
+viagens pagas no cartão empresarial, que por isso não aparecem no relatório da agência —
+foi assim que as viagens intercontinentais entraram no inventário. Ela tem escopo de recarga
+próprio (`fonte = cartao`), então regravá-la não enxerga nem apaga o que veio das outras
+duas fontes.
+
+Três coisas dela mudam o número e ficam declaradas na tela de método:
+
+- **a distância é calculada na carga**, pela ortodrômica entre os aeroportos com o uplift
+  aplicado, porque a planilha não traz distância — ao contrário da base da agência, em que
+  ela já vem pronta e com o uplift embutido (§7.2);
+- **a data vale para o bloco inteiro.** A planilha traz data só na primeira linha de cada
+  viagem, e os demais trechos herdam. Para o total do ano não muda nada; para a série
+  mensal, um trecho de volta pode cair no mês seguinte e ser contado no anterior;
+- **o viajante vem só pelo primeiro nome.** Nome de uma palavra não identifica ninguém, e
+  vincular pelo palpite atribuiria a viagem à pessoa errada e estragaria a contagem de
+  pessoas distintas que sustenta a supressão (§3.1). Quem não casa com o cadastro entra como
+  registro próprio desta fonte, com alerta no trecho.
 
 **A data de corte ainda não está definida.** O `30/09/2026` que circulou em versões
 anteriores deste documento era exemplo, não compromisso. Enquanto a data real não for
@@ -2169,4 +2189,57 @@ pode estar.
 **Sobre as três, a mesma observação de método:** nenhuma seria pega por `tsc`, por teste ou
 por build. Origem de transformação e ordem de pintura só existem quando há navegador
 pintando, e quem pinta é quem abre a tela.
+
+#### 2026-09-15 — Terceira fonte de viagens: a planilha do cartão
+
+O Gustavo trouxe uma planilha de viagens pagas no cartão empresarial, suspeitando que não
+estivessem na base. Estavam fora mesmo — e **eram justamente as viagens intercontinentais
+que eu havia afirmado não existir**. A afirmação estava certa sobre o relatório da agência e
+errada sobre a empresa: viagem paga no cartão não passa pela agência.
+
+**A correção do meu erro de leitura:** eu concluí "não há rota intercontinental" olhando a
+única fonte carregada. O certo seria dizer "não há na base da agência" — e perguntar se
+existia outra fonte. Fonte única não autoriza afirmação sobre o todo.
+
+**O que entrou**
+
+- `src/lib/cartao.ts` — leitura da planilha, pura e testada. Ela é digitada à mão: código
+  IATA e nome de cidade na mesma célula, erro de digitação, separador irregular, e data só
+  na primeira linha de cada bloco. O módulo lê ao pé da letra e **sinaliza o que não
+  entende**; linha ilegível é descartada com motivo, nunca em silêncio.
+- `scripts/seed-aeroportos.ts` — quatro aeroportos internacionais não existiam no cadastro,
+  e sem coordenada não há distância. O script resolve a coordenada por geocodificação, com o
+  provedor já declarado no método, **imprime o que encontrou e não grava sem `--gravar`**:
+  código mal resolvido põe o aeroporto do outro lado do mundo e a distância sai errada em
+  silêncio. Digitar coordenada de memória seria inventar dado.
+- `scripts/ingest-cartao.ts` — carga com escopo próprio, simulação por padrão.
+- `FonteDaViagem` ganhou `cartao`, e a §7 passou a descrever as três fontes.
+
+**Decisões da carga**
+
+- **Bloco separado por linha em branco vira a viagem.** É a única estrutura que a planilha
+  tem de fato. O efeito colateral está registrado: uma viagem partida em três blocos conta
+  como três viagens, e isso puxa para baixo o indicador de emissão por viagem.
+- **Nome de uma palavra não vincula ao cadastro.** Mesma regra da mobilidade: homônimo não é
+  fundido. Vincular pelo palpite atribuiria a viagem à pessoa errada e estragaria a contagem
+  de pessoas distintas que sustenta a supressão.
+- **O uplift É aplicado aqui**, ao contrário da carga da agência — a distância é calculada
+  do zero, então a regra da §7.2 vale no sentido inverso.
+
+**O que a carga revelou, e é decisão do Gustavo**
+
+Dezesseis trechos acrescentaram cerca de **um quarto da emissão total de viagens**. E, por
+serem voados por uma pessoa cada, **todos caem na supressão**: as rotas que mais pesam no
+inventário são exatamente as que o mapa não pode desenhar. A regra está certa — uma rota
+voada por uma pessoa aponta para ela —, mas agora o custo de exibição ficou concreto.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (117 testes, 15 novos) e `next build` passam.
+- A carga rodou primeiro em simulação, trecho a trecho, e só depois gravou. As distâncias
+  conferem com a ordem de grandeza esperada para cada par de aeroportos.
+- Os testes novos cobrem o que a planilha tem de traiçoeiro: nome de lugar que precisa vir
+  antes do código de três letras — senão "BOA VISTA" vira um código inexistente —, lugar
+  repetido por extenso que não pode virar escala, separador irregular, bloco sem data e
+  bloco com dois nomes.
 

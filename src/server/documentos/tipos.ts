@@ -32,7 +32,15 @@ export type Papel =
   | 'importacao'
   | 'colaborador'
 
-export type FonteDaViagem = 'agencia' | 'formulario'
+/**
+ * De onde o trecho veio (§7).
+ *
+ * `agencia` é o relatório da agência, histórico e congelado. `formulario` é o
+ * viajante, a partir da data de corte. `cartao` é a planilha do cartão
+ * empresarial: viagem que não passa pela agência e por isso não está na base
+ * histórica — fonte separada, recarregável sem encostar nas outras duas.
+ */
+export type FonteDaViagem = 'agencia' | 'formulario' | 'cartao'
 export type TipoDeViagem = 'aereo' | 'carro'
 export type PropriedadeVeiculo = 'frota' | 'proprio' | 'locado'
 export type NivelDado =
