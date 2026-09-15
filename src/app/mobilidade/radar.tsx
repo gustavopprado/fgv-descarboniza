@@ -6,68 +6,72 @@
  * calculadas, e o que produz as coordenadas (`src/lib/radar.ts`) só conhece
  * distâncias.
  *
- * O ângulo não significa nada e a legenda diz isso. Sem esse aviso, um radar
- * convida a leitura de mapa — e a pesquisa não coleta direção nenhuma.
+ * Duas diferenças em relação ao protótipo, e as duas são a mesma decisão:
+ *
+ *  - o ângulo não significa nada, e a legenda diz isso (§3.1);
+ *  - **não há raios partindo do centro.** O protótipo desenha oito, e eles são
+ *    enfeite — mas enfeite que sugere rosa dos ventos, e uma rosa dos ventos
+ *    convida exatamente a leitura de direção que esta tela não pode oferecer.
+ *    Os anéis ficam, porque eles medem distância, que é o que há.
  */
 import { numero } from '@/lib/formato'
 import { montarRadar } from '@/lib/radar'
 
-const RAIO = 120
-const MARGEM = 16
+const RAIO = 150
+const MARGEM = 22
 const LADO = (RAIO + MARGEM) * 2
 
 export function Radar({ distanciasKm }: { distanciasKm: number[] }) {
   const { pontos, aneis, distanciaMaximaKm } = montarRadar(distanciasKm, {
     raio: RAIO,
-    aneis: 3,
+    aneis: 4,
   })
 
   return (
     <figure className="m-0">
-      <svg
-        viewBox={`0 0 ${LADO} ${LADO}`}
-        className="h-auto w-full max-w-sm"
-        role="img"
-        aria-label={`Radar de distância: ${pontos.length} pontos, um por pessoa, do centro até ${numero(distanciaMaximaKm)} quilômetros.`}
-      >
-        <g transform={`translate(${LADO / 2} ${LADO / 2})`}>
-          {aneis.map((anel) => (
-            <g key={anel.raio}>
+      <div className="overflow-hidden rounded-xl bg-[var(--color-escuro-2)] p-1.5">
+        <svg
+          viewBox={`0 0 ${LADO} ${LADO}`}
+          className="block h-auto w-full"
+          role="img"
+          aria-label={`Radar de distância: ${pontos.length} pontos, um por pessoa, do centro até ${numero(distanciaMaximaKm)} quilômetros.`}
+        >
+          <g transform={`translate(${LADO / 2} ${LADO / 2})`}>
+            {aneis.map((anel) => (
+              <g key={anel.raio}>
+                <circle r={anel.raio} fill="none" stroke="#4E7049" strokeWidth={0.8} />
+                <text x={4} y={-anel.raio + 11} fill="#9FBB9B" fontSize={9}>
+                  {numero(anel.distanciaKm, 0)} km
+                </text>
+              </g>
+            ))}
+
+            {pontos.map((ponto, i) => (
               <circle
-                r={anel.raio}
-                fill="none"
-                stroke="var(--color-folha-300)"
-                strokeWidth={1}
+                key={i}
+                cx={ponto.x}
+                cy={ponto.y}
+                r={2.4}
+                fill="#B0D9B1"
+                fillOpacity={0.85}
               />
-              <text
-                x={4}
-                y={-anel.raio + 12}
-                className="fill-[var(--color-folha-900)] text-[9px] opacity-45"
-              >
-                {numero(anel.distanciaKm, 0)} km
-              </text>
-            </g>
-          ))}
+            ))}
 
-          {/* A fábrica, origem de toda distância. */}
-          <circle r={3.5} fill="var(--color-fgv)" />
+            {/* A fábrica, origem de toda distância. */}
+            <circle r={5} fill="var(--color-fgv)" />
+            <text x={11} y={4} fill="#9FBB9B" fontSize={10}>
+              Fábrica
+            </text>
+          </g>
+        </svg>
+      </div>
 
-          {pontos.map((ponto, i) => (
-            <circle
-              key={i}
-              cx={ponto.x}
-              cy={ponto.y}
-              r={3}
-              fill="var(--color-folha-700)"
-              fillOpacity={0.75}
-            />
-          ))}
-        </g>
-      </svg>
-
-      <figcaption className="mt-3 max-w-sm text-xs text-[var(--color-folha-900)]/55">
+      <figcaption className="mt-3 text-[12px] text-[var(--color-apoio)]">
         Cada ponto é uma pessoa e a distância até o centro é o deslocamento até a
-        fábrica. <strong className="font-medium">A direção não significa nada</strong>
+        fábrica.{' '}
+        <strong className="font-medium text-[var(--color-tinta)]">
+          A direção não significa nada
+        </strong>
         : a pesquisa não coleta o sentido do trajeto, e o ângulo serve só para os
         pontos não se empilharem. Nenhum ponto carrega informação de quem é.
       </figcaption>

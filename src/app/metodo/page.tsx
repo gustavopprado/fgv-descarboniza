@@ -5,9 +5,11 @@
  * número fica registrada, e é a única tela do inventário que não exibe recorte
  * de pessoa nenhum. Tudo que aparece aqui vem da camada de consulta (§9.10);
  * esta página não sabe o que é uma coleção.
+ *
+ * O protótipo desenha esta tela com três painéis, mas é anterior à lista mínima
+ * que a §10 passou a exigir. **O conteúdo daqui é o da §10**; do protótipo vem a
+ * linguagem visual, não o recorte do que declarar.
  */
-import { Casca } from '../casca'
-import { Secao, Vazio } from '../componentes'
 import { AcessoNegadoError } from '@/server/consultas/acesso'
 import { consultarMetodo, NAO_DEFINIDO } from '@/server/consultas/metodo'
 import type {
@@ -16,6 +18,16 @@ import type {
   Metodo,
 } from '@/server/consultas/metodo'
 import { exigirSessao } from '@/server/sessao'
+import { Casca } from '../casca'
+import {
+  Cabecalho,
+  Etiqueta,
+  Grade,
+  Painel,
+  Revelar,
+  TABELA,
+  Vazio,
+} from '../componentes'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,8 +39,8 @@ const NOME_DO_ESCOPO: Record<EscopoDoParametro, string> = {
 }
 
 const CORES_DA_SEVERIDADE: Record<AlertaDeclarado['severidade'], string> = {
-  erro: 'bg-red-100 text-red-900',
-  atencao: 'bg-amber-100 text-amber-900',
+  erro: 'bg-[#F7DDDA] text-[#8A2018]',
+  atencao: 'bg-[#FBEED3] text-[#8A6A1C]',
   informativo: 'bg-[var(--color-folha-300)] text-[var(--color-folha-900)]',
 }
 
@@ -44,31 +56,29 @@ function Parametros({ metodo }: { metodo: Metodo }) {
   )
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-7">
       {escopos.map((escopo) => (
         <div key={escopo}>
-          <h3 className="text-xs font-semibold tracking-wide text-[var(--color-folha-900)]/50 uppercase">
+          <h3 className="text-[11px] font-semibold tracking-[0.02em] text-[var(--color-apoio)] uppercase">
             {NOME_DO_ESCOPO[escopo]}
           </h3>
-          <dl className="mt-3 divide-y divide-[var(--color-folha-300)] border-t border-[var(--color-folha-300)]">
+          <dl className="mt-2 divide-y divide-[#EDF2EB] border-t border-[var(--color-linha)]">
             {metodo.parametros
               .filter((p) => p.escopo === escopo)
               .map((p) => (
-                <div key={p.rotulo} className="grid gap-1 py-3 md:grid-cols-[18rem_1fr]">
-                  <dt className="text-sm font-medium text-[var(--color-folha-900)]">
+                <div key={p.rotulo} className="grid gap-1 py-3 md:grid-cols-[19rem_1fr]">
+                  <dt className="text-[13px] font-medium text-[var(--color-tinta)]">
                     {p.rotulo}
                   </dt>
                   <dd>
-                    <span
-                      className={
-                        p.definido
-                          ? 'text-sm text-[var(--color-folha-900)]'
-                          : 'rounded bg-amber-100 px-2 py-0.5 text-sm font-medium text-amber-900'
-                      }
-                    >
-                      {p.valor}
-                    </span>
-                    <p className="mt-1 max-w-3xl text-xs text-[var(--color-folha-900)]/60">
+                    {p.definido ? (
+                      <span className="text-[13px] text-[var(--color-tinta)]">
+                        {p.valor}
+                      </span>
+                    ) : (
+                      <Etiqueta tom="atencao">{p.valor}</Etiqueta>
+                    )}
+                    <p className="mt-1 max-w-[70ch] text-[12px] text-[var(--color-apoio)]">
                       {p.observacao}
                     </p>
                   </dd>
@@ -91,8 +101,7 @@ export default async function Page() {
     if (erro instanceof AcessoNegadoError) {
       return (
         <Casca ctx={ctx} atual="/metodo">
-          <h1 className="text-xl font-semibold">Sem acesso</h1>
-          <p className="mt-2 text-sm text-[var(--color-folha-900)]/70">{erro.message}</p>
+          <Cabecalho titulo="Sem acesso" descricao={erro.message} />
         </Casca>
       )
     }
@@ -103,215 +112,230 @@ export default async function Page() {
 
   return (
     <Casca ctx={ctx} atual="/metodo">
-      <header>
-        <h1 className="text-2xl font-semibold text-[var(--color-folha-900)]">Método</h1>
-        <p className="mt-2 max-w-3xl text-sm text-[var(--color-folha-900)]/70">
-          As fontes, os parâmetros e os fatores que produzem os números deste
-          inventário. Trocar qualquer um deles muda o resultado — por isso cada um
-          está declarado aqui, e não só no código.
-        </p>
-        <p className="mt-2 text-xs text-[var(--color-folha-900)]/50">
-          Consultado em {metodo.geradoEm}.
-        </p>
-      </header>
+      <Cabecalho
+        titulo="Método"
+        descricao="As fontes, os parâmetros e os fatores que produzem os números deste inventário. Trocar qualquer um deles muda o resultado — por isso cada um está declarado aqui, e não só no código."
+      />
 
       {pendentes.length > 0 && (
-        <p className="mt-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          {pendentes.length === 1
-            ? 'Uma decisão de método ainda não foi tomada'
-            : `${pendentes.length} decisões de método ainda não foram tomadas`}
-          : {pendentes.map((p) => p.rotulo.toLowerCase()).join('; ')}. Elas aparecem
-          abaixo marcadas como {NAO_DEFINIDO}.
-        </p>
+        <Revelar ordem={0} className="mb-4">
+          <p className="rounded-[var(--radius-painel)] border border-[#F0E0BC] bg-[#FBEED3]/50 px-[22px] py-4 text-[13px] text-[#8A6A1C]">
+            {pendentes.length === 1
+              ? 'Uma decisão de método ainda não foi tomada'
+              : `${pendentes.length} decisões de método ainda não foram tomadas`}
+            : {pendentes.map((p) => p.rotulo.toLowerCase()).join('; ')}. Elas aparecem
+            abaixo marcadas como {NAO_DEFINIDO}.
+          </p>
+        </Revelar>
       )}
 
-      <Secao
-        titulo="Fontes"
-        descricao="De onde vem o dado de cada módulo e em que situação ele está."
-      >
-        {metodo.fontes.length === 0 ? (
-          <Vazio>Nenhum módulo disponível para o seu perfil.</Vazio>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-3">
-            {metodo.fontes.map((f) => (
-              <article
-                key={f.modulo}
-                className="rounded-md border border-[var(--color-folha-300)] p-4"
-              >
-                <h3 className="text-sm font-semibold text-[var(--color-folha-900)]">
-                  {NOME_DO_ESCOPO[f.modulo]}
-                </h3>
-                <p className="mt-2 text-sm text-[var(--color-folha-900)]/75">
-                  {f.descricao}
-                </p>
-                <p className="mt-2 text-xs text-[var(--color-folha-900)]/55">
-                  {f.situacao}
-                </p>
-              </article>
-            ))}
-          </div>
-        )}
-      </Secao>
-
-      <Secao
-        titulo="Parâmetros e escolhas"
-        descricao="Cada linha é uma decisão que altera o número. O que ainda não foi decidido aparece marcado, nunca em branco."
-      >
-        <Parametros metodo={metodo} />
-      </Secao>
-
-      <Secao
-        titulo="Qualidade do dado"
-        descricao="Quanto de cada módulo está carregado, e quanto ficou fora da média."
-      >
-        {metodo.qualidade.length === 0 ? (
-          <Vazio>Nenhum módulo disponível para o seu perfil.</Vazio>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-3">
-            {metodo.qualidade.map((q) => (
-              <article
-                key={q.modulo}
-                className="rounded-md border border-[var(--color-folha-300)] p-4"
-              >
-                <h3 className="text-sm font-semibold text-[var(--color-folha-900)]">
-                  {NOME_DO_ESCOPO[q.modulo]}
-                </h3>
-                {q.registros === 0 ? (
-                  <p className="mt-2 text-sm text-[var(--color-folha-900)]/55">
-                    Nada carregado.
-                  </p>
-                ) : (
-                  <dl className="mt-2 space-y-1">
-                    {q.itens.map((i) => (
-                      <div key={i.rotulo} className="flex justify-between gap-3 text-sm">
-                        <dt className="text-[var(--color-folha-900)]/65">{i.rotulo}</dt>
-                        <dd className="font-medium text-[var(--color-folha-900)]">
-                          {i.valor}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
-              </article>
-            ))}
-          </div>
-        )}
-      </Secao>
-
-      <Secao
-        titulo="Exceções"
-        descricao="Respostas que ficam fora da média, com o motivo. Elas não são descartadas: continuam no banco e aparecem aqui."
-      >
-        {metodo.excecoes.length === 0 ? (
-          <Vazio>Nenhuma exceção registrada.</Vazio>
-        ) : (
-          <table className="w-full border-t border-[var(--color-folha-300)] text-sm">
-            <thead>
-              <tr className="text-left text-xs tracking-wide text-[var(--color-folha-900)]/50 uppercase">
-                <th className="py-2 font-semibold">Módulo</th>
-                <th className="py-2 font-semibold">Motivo</th>
-                <th className="py-2 text-right font-semibold">Registros</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--color-folha-300)]">
-              {metodo.excecoes.map((e) => (
-                <tr key={`${e.modulo}-${e.motivo}`}>
-                  <td className="py-2 text-[var(--color-folha-900)]/70">
-                    {NOME_DO_ESCOPO[e.modulo]}
-                  </td>
-                  <td className="py-2">{e.motivo}</td>
-                  <td className="py-2 text-right font-medium">{e.registros}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Secao>
-
-      <Secao
-        titulo="Alertas"
-        descricao="Sinalizações levantadas durante a carga, por tipo. A descrição de cada ocorrência fica no banco: ela cita valores da linha e não chega a esta tela."
-      >
-        {metodo.alertas.length === 0 ? (
-          <Vazio>Nenhum alerta registrado.</Vazio>
-        ) : (
-          <table className="w-full border-t border-[var(--color-folha-300)] text-sm">
-            <thead>
-              <tr className="text-left text-xs tracking-wide text-[var(--color-folha-900)]/50 uppercase">
-                <th className="py-2 font-semibold">Módulo</th>
-                <th className="py-2 font-semibold">Tipo</th>
-                <th className="py-2 font-semibold">Severidade</th>
-                <th className="py-2 text-right font-semibold">Registros</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--color-folha-300)]">
-              {metodo.alertas.map((a) => (
-                <tr key={`${a.modulo}-${a.tipo}-${a.severidade}`}>
-                  <td className="py-2 text-[var(--color-folha-900)]/70">
-                    {NOME_DO_ESCOPO[a.modulo]}
-                  </td>
-                  <td className="py-2 font-mono text-xs">{a.tipo}</td>
-                  <td className="py-2">
-                    <span
-                      className={`rounded px-2 py-0.5 text-xs font-medium ${CORES_DA_SEVERIDADE[a.severidade]}`}
-                    >
-                      {NOME_DA_SEVERIDADE[a.severidade]}
+      <Revelar ordem={1}>
+        <Painel
+          titulo="Fontes"
+          descricao="De onde vem o dado de cada módulo e em que situação ele está."
+        >
+          {metodo.fontes.length === 0 ? (
+            <Vazio>Nenhum módulo disponível para o seu perfil.</Vazio>
+          ) : (
+            <dl className="grid gap-x-6 gap-y-4 md:grid-cols-3">
+              {metodo.fontes.map((f) => (
+                <div key={f.modulo}>
+                  <dt className="text-[13px] font-semibold text-[var(--color-tinta)]">
+                    {NOME_DO_ESCOPO[f.modulo]}
+                  </dt>
+                  <dd className="mt-1 text-[13px] text-[var(--color-apoio)]">
+                    {f.descricao}
+                    <span className="mt-1.5 block text-[12px] text-[var(--color-apoio)]/80">
+                      {f.situacao}
                     </span>
-                  </td>
-                  <td className="py-2 text-right font-medium">{a.ocorrencias}</td>
-                </tr>
+                  </dd>
+                </div>
               ))}
-            </tbody>
-          </table>
-        )}
-      </Secao>
+            </dl>
+          )}
+        </Painel>
+      </Revelar>
 
-      <Secao
-        titulo="Fatores de emissão"
-        descricao="Com fonte, versão e vigência. Fator muda de ano para ano, e todo documento de emissão guarda o que foi usado no cálculo."
-      >
-        {metodo.fatores.length === 0 ? (
-          <Vazio>
-            Nenhum fator carregado. Sem fator vigente o cálculo falha
-            explicitamente, em vez de assumir um valor.
-          </Vazio>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-t border-[var(--color-folha-300)] text-sm">
-              <thead>
-                <tr className="text-left text-xs tracking-wide text-[var(--color-folha-900)]/50 uppercase">
-                  <th className="py-2 font-semibold">Categoria</th>
-                  <th className="py-2 font-semibold">Chave</th>
-                  <th className="py-2 text-right font-semibold">Valor</th>
-                  <th className="py-2 font-semibold">Unidade</th>
-                  <th className="py-2 font-semibold">Fonte</th>
-                  <th className="py-2 font-semibold">Versão</th>
-                  <th className="py-2 font-semibold">Vigência</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--color-folha-300)]">
-                {metodo.fatores.map((f) => (
-                  <tr
-                    key={`${f.categoria}-${f.chave}-${f.versao}-${f.vigenciaInicio}`}
-                    className={f.vigenteHoje ? '' : 'text-[var(--color-folha-900)]/45'}
-                  >
-                    <td className="py-2 font-mono text-xs">{f.categoria}</td>
-                    <td className="py-2 font-mono text-xs">{f.chave}</td>
-                    <td className="py-2 text-right tabular-nums">{f.valor}</td>
-                    <td className="py-2 text-xs">{f.unidade}</td>
-                    <td className="py-2 text-xs">{f.fonte}</td>
-                    <td className="py-2 text-xs">{f.versao}</td>
-                    <td className="py-2 text-xs whitespace-nowrap">
-                      {f.vigenciaInicio} → {f.vigenciaFim ?? 'sem fim'}
-                      {!f.vigenteHoje && ' (fora de vigência)'}
-                    </td>
+      <Revelar ordem={2} className="mt-4">
+        <Painel
+          titulo="Parâmetros e escolhas"
+          descricao="Cada linha é uma decisão que altera o número. O que ainda não foi decidido aparece marcado, nunca em branco."
+        >
+          <Parametros metodo={metodo} />
+        </Painel>
+      </Revelar>
+
+      <Revelar ordem={3} className="mt-4">
+        <Painel
+          titulo="Qualidade do dado"
+          descricao="Quanto de cada módulo está carregado, e quanto ficou fora da média."
+        >
+          {metodo.qualidade.length === 0 ? (
+            <Vazio>Nenhum módulo disponível para o seu perfil.</Vazio>
+          ) : (
+            <div className="grid gap-x-6 gap-y-5 md:grid-cols-3">
+              {metodo.qualidade.map((q) => (
+                <div key={q.modulo}>
+                  <h3 className="text-[13px] font-semibold text-[var(--color-tinta)]">
+                    {NOME_DO_ESCOPO[q.modulo]}
+                  </h3>
+                  {q.registros === 0 ? (
+                    <p className="mt-1.5 text-[13px] text-[var(--color-apoio)]">
+                      Nada carregado.
+                    </p>
+                  ) : (
+                    <dl className="mt-1.5 space-y-1">
+                      {q.itens.map((i) => (
+                        <div
+                          key={i.rotulo}
+                          className="flex justify-between gap-3 text-[12.5px]"
+                        >
+                          <dt className="text-[var(--color-apoio)]">{i.rotulo}</dt>
+                          <dd className="font-medium text-[var(--color-tinta)] tabular-nums">
+                            {i.valor}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </Painel>
+      </Revelar>
+
+      <Grade tipo="duas" className="mt-4">
+        <Revelar ordem={4}>
+          <Painel
+            titulo="Exceções"
+            descricao="Respostas que ficam fora da média, com o motivo. Elas não são descartadas: continuam no banco e aparecem aqui."
+          >
+            {metodo.excecoes.length === 0 ? (
+              <Vazio>Nenhuma exceção registrada.</Vazio>
+            ) : (
+              <table className={TABELA.tabela}>
+                <thead>
+                  <tr>
+                    <th className={TABELA.th}>Módulo</th>
+                    <th className={TABELA.th}>Motivo</th>
+                    <th className={TABELA.thNum}>Registros</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Secao>
+                </thead>
+                <tbody>
+                  {metodo.excecoes.map((e) => (
+                    <tr key={`${e.modulo}-${e.motivo}`}>
+                      <td className={`${TABELA.td} text-[var(--color-apoio)]`}>
+                        {NOME_DO_ESCOPO[e.modulo]}
+                      </td>
+                      <td className={TABELA.td}>{e.motivo}</td>
+                      <td className={TABELA.tdNum}>{e.registros}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Painel>
+        </Revelar>
+
+        <Revelar ordem={5}>
+          <Painel
+            titulo="Alertas"
+            descricao="Sinalizações levantadas durante a carga, por tipo. A descrição de cada ocorrência fica no banco: ela cita valores da linha e não chega a esta tela."
+          >
+            {metodo.alertas.length === 0 ? (
+              <Vazio>Nenhum alerta registrado.</Vazio>
+            ) : (
+              <table className={TABELA.tabela}>
+                <thead>
+                  <tr>
+                    <th className={TABELA.th}>Tipo</th>
+                    <th className={TABELA.th}>Severidade</th>
+                    <th className={TABELA.thNum}>Registros</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metodo.alertas.map((a) => (
+                    <tr key={`${a.modulo}-${a.tipo}-${a.severidade}`}>
+                      <td className={TABELA.td}>
+                        <span className="font-mono text-[11.5px]">{a.tipo}</span>
+                        <span className="mt-0.5 block text-[11.5px] text-[var(--color-apoio)]">
+                          {NOME_DO_ESCOPO[a.modulo]}
+                        </span>
+                      </td>
+                      <td className={TABELA.td}>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CORES_DA_SEVERIDADE[a.severidade]}`}
+                        >
+                          {NOME_DA_SEVERIDADE[a.severidade]}
+                        </span>
+                      </td>
+                      <td className={TABELA.tdNum}>{a.ocorrencias}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Painel>
+        </Revelar>
+      </Grade>
+
+      <Revelar ordem={6} className="mt-4">
+        <Painel
+          titulo="Fatores de emissão"
+          descricao="Com fonte, versão e vigência. Fator muda de ano para ano, e todo documento de emissão guarda o que foi usado no cálculo."
+        >
+          {metodo.fatores.length === 0 ? (
+            <Vazio>
+              Nenhum fator carregado. Sem fator vigente o cálculo falha
+              explicitamente, em vez de assumir um valor.
+            </Vazio>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className={TABELA.tabela}>
+                <thead>
+                  <tr>
+                    <th className={TABELA.th}>Categoria</th>
+                    <th className={TABELA.th}>Chave</th>
+                    <th className={TABELA.thNum}>Valor</th>
+                    <th className={TABELA.th}>Unidade</th>
+                    <th className={TABELA.th}>Fonte</th>
+                    <th className={TABELA.th}>Versão</th>
+                    <th className={TABELA.th}>Vigência</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metodo.fatores.map((f) => (
+                    <tr
+                      key={`${f.categoria}-${f.chave}-${f.versao}-${f.vigenciaInicio}`}
+                      className={f.vigenteHoje ? '' : 'text-[var(--color-apoio)]/60'}
+                    >
+                      <td className={`${TABELA.td} font-mono text-[11.5px]`}>
+                        {f.categoria}
+                      </td>
+                      <td className={`${TABELA.td} font-mono text-[11.5px]`}>
+                        {f.chave}
+                      </td>
+                      <td className={TABELA.tdNum}>{f.valor}</td>
+                      <td className={`${TABELA.td} text-[12px]`}>{f.unidade}</td>
+                      <td className={`${TABELA.td} text-[12px]`}>{f.fonte}</td>
+                      <td className={`${TABELA.td} text-[12px]`}>{f.versao}</td>
+                      <td className={`${TABELA.td} text-[12px] whitespace-nowrap`}>
+                        {f.vigenciaInicio} → {f.vigenciaFim ?? 'sem fim'}
+                        {!f.vigenteHoje && ' (fora de vigência)'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Painel>
+      </Revelar>
+
+      <p className="mt-6 text-[12px] text-[var(--color-apoio)]/80">
+        Consultado em {metodo.geradoEm}.
+      </p>
     </Casca>
   )
 }

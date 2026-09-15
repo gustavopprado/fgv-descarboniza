@@ -45,8 +45,8 @@ export function SerieMensal({
                 <div
                   className={
                     daVirada
-                      ? 'w-full rounded-t bg-[var(--color-fgv)]'
-                      : 'w-full rounded-t bg-[var(--color-folha-700)]'
+                      ? 'crescer w-full rounded-t bg-[var(--color-fgv)]'
+                      : 'crescer w-full rounded-t bg-[var(--color-folha-700)]'
                   }
                   style={{
                     height: `${maior > 0 ? Math.max((ponto.co2Kg / maior) * 100, ponto.co2Kg > 0 ? 2 : 0) : 0}%`,
@@ -57,8 +57,8 @@ export function SerieMensal({
               <span
                 className={
                   daVirada
-                    ? 'mt-1 text-[10px] font-semibold text-[var(--color-folha-900)]'
-                    : 'mt-1 text-[10px] text-[var(--color-folha-900)]/55'
+                    ? 'mt-1 text-[10px] font-semibold text-[var(--color-tinta)]'
+                    : 'mt-1 text-[10px] text-[var(--color-apoio)]'
                 }
               >
                 {rotuloDoMes(ponto.mes)}
@@ -68,7 +68,7 @@ export function SerieMensal({
         })}
       </div>
 
-      <p className="mt-2 max-w-3xl text-xs text-[var(--color-folha-900)]/55">
+      <p className="mt-3 max-w-[80ch] border-t border-[var(--color-linha)] pt-3 text-[12px] text-[var(--color-apoio)]">
         Mês sem viagem aparece com barra zerada, não sumido: mês ausente esconderia
         a queda que houve.{' '}
         {corteFonte === null ? (
