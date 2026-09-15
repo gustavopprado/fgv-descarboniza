@@ -65,13 +65,13 @@ export function Entrada({ destino }: { destino: string }) {
         type="button"
         onClick={entrar}
         disabled={entrando}
-        className="w-full rounded-md bg-[var(--color-folha-900)] px-4 py-3 text-sm font-medium text-white transition hover:bg-[var(--color-folha-700)] disabled:opacity-60"
+        className="w-full rounded-[11px] bg-[var(--color-folha-900)] px-4 py-3.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#4F6D52] disabled:opacity-60"
       >
         {entrando ? 'Entrando…' : 'Entrar com a conta corporativa'}
       </button>
 
       {erro !== null && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-[13px] text-red-700">
           {erro}
         </p>
       )}

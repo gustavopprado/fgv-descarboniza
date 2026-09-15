@@ -1,13 +1,43 @@
 @import "tailwindcss";
 
-/* Identidade visual — CLAUDE.md §4.
-   O verde da FGV fica reservado para marca, item ativo de menu e elementos vivos. */
+/* Identidade visual — CLAUDE.md §4, com a paleta completa do protótipo.
+
+   A §4 lista os quatro verdes de folha e o verde da FGV, reservado para marca,
+   item ativo de menu e elementos vivos. O protótipo usa, além desses, seis
+   cores estruturais que a §4 não nomeia e sem as quais nada fica parecido: o
+   fundo esverdeado da página, a tinta do texto, o cinza de apoio, a cor de
+   linha e dois verdes escuros que sustentam o menu, o bloco de destaque e o
+   fundo dos mapas. Elas entram aqui como token, não soltas nas telas. */
 @theme {
+  /* Paleta da §4 */
   --color-folha-900: #618264;
-  --color-folha-700: #79AC78;
-  --color-folha-500: #B0D9B1;
-  --color-folha-300: #D0E7D2;
-  --color-fgv: #7BC258;
+  --color-folha-700: #79ac78;
+  --color-folha-500: #b0d9b1;
+  --color-folha-300: #d0e7d2;
+  --color-fgv: #7bc258;
+
+  /* Estruturais, do protótipo */
+  --color-fundo: #eef3ec;
+  --color-superficie: #ffffff;
+  --color-tinta: #1c2a1e;
+  --color-apoio: #5e6f5f;
+  --color-linha: #dce6da;
+  --color-escuro: #22331f;
+  --color-escuro-2: #2e4a2c;
+
+  /* Sobre o verde escuro do menu e do destaque */
+  --color-escuro-texto: #d5e4d2;
+  --color-escuro-apoio: #8fa98c;
+  --color-escuro-forte: #c2d6bf;
+
+  --radius-painel: 14px;
+
+  /* As duas famílias vêm de next/font, em layout.tsx: Archivo nos títulos e
+     números grandes, Inter no corpo. */
+  --font-titulo: var(--fonte-titulo), ui-sans-serif, system-ui, sans-serif;
+  --font-corpo: var(--fonte-corpo), ui-sans-serif, system-ui, sans-serif;
+
+  --ease-suave: cubic-bezier(0.22, 0.8, 0.3, 1);
 }
 
 :root {
@@ -15,6 +45,53 @@
 }
 
 body {
-  background: #ffffff;
-  color: var(--color-folha-900);
+  background: var(--color-fundo);
+  color: var(--color-tinta);
+  font-family: var(--font-corpo);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-titulo);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+/* Entrada em cascata (§10, "seguir o protótipo").
+
+   O estado inicial fica no CSS e não no JavaScript: assim o bloco já nasce
+   deslocado no HTML do servidor, e não há o salto de quem vê o conteúdo
+   posicionado antes de a animação começar. */
+.revelar {
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+.revelar-visivel {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.6s var(--ease-suave),
+    transform 0.6s var(--ease-suave);
+}
+
+/* Quem pediu menos movimento recebe menos movimento — e recebe o conteúdo
+   inteiro, nunca um bloco que ficou invisível esperando animação. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  .revelar {
+    opacity: 1;
+    transform: none;
+  }
 }

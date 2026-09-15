@@ -1,16 +1,22 @@
 /**
  * Casca das telas autenticadas — CLAUDE.md §1.1, §4 e §10.
  *
- * A separação entre inventário e programa de viagens é visível na navegação
- * porque é conceitual: a primeira parte relata o que já aconteceu, a segunda
- * começa a medir daqui para a frente.
+ * Segue o protótipo: menu lateral fixo em verde escuro, com as duas partes do
+ * sistema rotuladas e separadas, ícone por item e barra no verde da FGV no item
+ * ativo. A separação entre inventário e programa é visível porque é conceitual
+ * — a primeira parte relata o que já aconteceu, a segunda começa a medir daqui
+ * para a frente.
  *
- * O verde da FGV fica reservado para marca e item ativo de menu (§4).
+ * **Uma divergência deliberada do protótipo:** lá o menu simplesmente desaparece
+ * abaixo de 1000px, o que deixaria quem abre no celular sem navegação nenhuma.
+ * Aqui ele vira uma barra horizontal rolável no topo. O protótipo é referência
+ * visual, não especificação de comportamento em tela pequena.
  */
 import Link from 'next/link'
 
 import type { ContextoDeAcesso } from '@/server/consultas/acesso'
 import { navegacaoPara, type ItemDeNavegacao } from '@/server/consultas/navegacao'
+import { IconeDaRota } from './icones'
 import { Sair } from './sair'
 
 const TITULO_DA_SECAO = {
@@ -18,13 +24,25 @@ const TITULO_DA_SECAO = {
   programa: 'Programa de viagens',
 } as const
 
+const NOME_DO_PAPEL: Record<ContextoDeAcesso['papel'], string> = {
+  admin: 'Administrador',
+  sustentabilidade: 'Sustentabilidade',
+  gestor: 'Gestor de área',
+  importacao: 'Importação',
+  colaborador: 'Colaborador',
+}
+
 function Item({ item, ativo }: { item: ItemDeNavegacao; ativo: boolean }) {
+  const base =
+    'flex shrink-0 items-center gap-2.5 border-l-[3px] py-2.5 pr-5 pl-[19px] text-[13.5px] transition-colors duration-150 max-md:border-l-0 max-md:border-b-[3px] max-md:px-4 max-md:py-3'
+
   if (!item.construida) {
     return (
       <span
-        className="block cursor-default rounded px-3 py-2 text-sm text-[var(--color-folha-900)]/35"
+        className={`${base} cursor-default border-transparent text-[var(--color-escuro-apoio)]/60`}
         title="Tela ainda não construída"
       >
+        <IconeDaRota href={item.href} className="size-4 shrink-0 opacity-60" />
         {item.rotulo}
       </span>
     )
@@ -36,10 +54,11 @@ function Item({ item, ativo }: { item: ItemDeNavegacao; ativo: boolean }) {
       aria-current={ativo ? 'page' : undefined}
       className={
         ativo
-          ? 'block rounded bg-[var(--color-fgv)]/15 px-3 py-2 text-sm font-medium text-[var(--color-folha-900)]'
-          : 'block rounded px-3 py-2 text-sm text-[var(--color-folha-900)]/80 hover:bg-[var(--color-folha-300)]/50'
+          ? `${base} border-[var(--color-fgv)] bg-[var(--color-fgv)]/14 font-medium text-white`
+          : `${base} border-transparent text-[var(--color-escuro-forte)] hover:bg-white/5 hover:text-white`
       }
     >
+      <IconeDaRota href={item.href} className="size-4 shrink-0 opacity-85" />
       {item.rotulo}
     </Link>
   )
@@ -61,36 +80,62 @@ export function Casca({
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
-      <aside className="shrink-0 border-b border-[var(--color-folha-300)] bg-[var(--color-folha-300)]/25 px-4 py-6 md:w-64 md:border-r md:border-b-0">
-        <p className="px-3 text-base font-semibold text-[var(--color-fgv)]">
-          FGV Descarboniza
-        </p>
+      <nav className="shrink-0 bg-[var(--color-escuro)] text-[var(--color-escuro-texto)] md:sticky md:top-0 md:h-screen md:w-[232px] md:flex-none md:flex-col md:overflow-y-auto md:pt-[22px] md:pb-[18px] flex flex-col">
+        <div className="px-5 pt-4 pb-4 md:pb-5">
+          <p className="font-[family-name:var(--font-titulo)] text-base font-semibold tracking-[-0.01em] text-white">
+            Descarboniza
+          </p>
+          <p className="text-[11px] text-[var(--color-escuro-apoio)]">
+            Inventário de emissões
+          </p>
+        </div>
 
-        <nav className="mt-6 space-y-6">
-          {secoes.map((secao) => (
-            <div key={secao}>
-              <p className="px-3 pb-1 text-[11px] font-semibold tracking-wide text-[var(--color-folha-900)]/50 uppercase">
+        {/* Em tela estreita as duas seções viram uma faixa rolável: rótulo de
+            seção como divisor inline, para não gastar altura. */}
+        <div className="max-md:flex max-md:overflow-x-auto">
+          {secoes.map((secao, indice) => (
+            <div
+              key={secao}
+              className={
+                indice > 0
+                  ? 'md:mt-3 md:border-t md:border-white/10 md:pt-3'
+                  : undefined
+              }
+            >
+              <p className="px-[22px] pt-3.5 pb-1.5 text-[11px] tracking-[0.02em] text-[var(--color-escuro-apoio)] max-md:hidden">
                 {TITULO_DA_SECAO[secao]}
               </p>
-              {itens
-                .filter((i) => i.secao === secao)
-                .map((i) => (
-                  <Item key={i.href} item={i} ativo={i.href === atual} />
-                ))}
+              <div className="max-md:flex">
+                {itens
+                  .filter((i) => i.secao === secao)
+                  .map((i) => (
+                    <Item key={i.href} item={i} ativo={i.href === atual} />
+                  ))}
+              </div>
             </div>
           ))}
-        </nav>
+        </div>
 
-        <div className="mt-8 border-t border-[var(--color-folha-300)] px-3 pt-4">
-          <p className="text-xs break-all text-[var(--color-folha-900)]/60">
+        <div className="mt-auto border-t border-white/10 px-[22px] pt-3.5 text-[11.5px] text-[var(--color-escuro-apoio)] max-md:hidden">
+          <b className="block truncate font-medium text-[var(--color-escuro-forte)]">
             {ctx.email}
-          </p>
-          <p className="mt-1 text-xs text-[var(--color-folha-900)]/45">{ctx.papel}</p>
+          </b>
+          {NOME_DO_PAPEL[ctx.papel]}
           <Sair />
         </div>
-      </aside>
+      </nav>
 
-      <main className="min-w-0 flex-1 px-6 py-8 md:px-10">{children}</main>
+      <main className="min-w-0 max-w-[1180px] flex-1 px-[18px] pt-[22px] pb-[60px] md:px-10 md:pt-[30px] md:pb-[70px]">
+        {children}
+
+        {/* Em tela estreita a identificação e a saída ficam no fim da página:
+            a faixa do topo é só navegação. */}
+        <div className="mt-10 border-t border-[var(--color-linha)] pt-4 text-[11.5px] text-[var(--color-apoio)] md:hidden">
+          <b className="block font-medium text-[var(--color-tinta)]">{ctx.email}</b>
+          {NOME_DO_PAPEL[ctx.papel]}
+          <Sair />
+        </div>
+      </main>
     </div>
   )
 }
