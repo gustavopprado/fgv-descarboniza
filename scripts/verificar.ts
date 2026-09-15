@@ -560,7 +560,19 @@ async function principal(): Promise<void> {
 
   try {
     const viagens = await agregarViagens(db)
-    const aeroportos = (await db.collection(COLECAO.aeroporto).select().get()).size
+    // A coleção de aeroportos deixou de ser alimentada por uma fonte só: a
+    // planilha do cartão trouxe aeroportos internacionais que a base da agência
+    // não tem. Conferir o TAMANHO da coleção passou a acusar erro numa carga
+    // correta — o que importa é que nenhum aeroporto da base da agência tenha
+    // ficado de fora.
+    const cadastrados = new Set(
+      (await db.collection(COLECAO.aeroporto).get()).docs.map(
+        (d) => (d.data() as { iata?: string }).iata ?? d.id,
+      ),
+    )
+    const aeroportosDaBaseAusentes = Object.keys(base.aeroportos).filter(
+      (iata) => !cadastrados.has(iata),
+    ).length
 
     const inteiro = { tolerancia: 0, casas: 0 }
 
@@ -618,13 +630,10 @@ async function principal(): Promise<void> {
     })
 
     conferencias.push({
-      item: 'aeroportos',
-      esperado:
-        esperadoLocal.aeroportos ??
-        declarado.aeroportos ??
-        Object.keys(base.aeroportos).length,
-      obtido: aeroportos,
-      origem: esperadoLocal.aeroportos ? 'conferencia.local.json' : 'base',
+      item: 'aeroportos da base ausentes',
+      esperado: 0,
+      obtido: aeroportosDaBaseAusentes,
+      origem: 'base × cadastro',
       ...inteiro,
     })
 

@@ -81,7 +81,7 @@ async function idsNoEscopo(
   return instantaneo.docs.map((d) => d.id)
 }
 
-async function apagarIds(
+export async function apagarIds(
   colecao: NomeDeColecao,
   ids: string[],
   db: Firestore,

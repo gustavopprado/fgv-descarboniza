@@ -34,6 +34,14 @@ export type TrechoDoCartao = {
   bloco: number
   ordem: number
   usuario: string
+  /**
+   * A companhia aérea, quando a planilha a traz.
+   *
+   * Ela aparece como um **segundo nome dentro do bloco**, logo abaixo do nome
+   * do viajante — e era exatamente isso que fazia a leitura anterior atribuir a
+   * viagem à companhia, porque o nome mais recente vencia.
+   */
+  companhia: string | null
   data: string
   origem: string
   destino: string
@@ -51,7 +59,14 @@ export type LeituraDoCartao = {
 export const ALERTA_CODIGO_POR_APELIDO = 'codigo_resolvido_por_apelido'
 export const ALERTA_DATA_HERDADA = 'data_herdada_do_bloco'
 export const ALERTA_SEQUENCIA_QUEBRADA = 'sequencia_de_trechos_quebrada'
-export const ALERTA_BLOCO_COM_VARIOS_NOMES = 'bloco_com_mais_de_um_nome'
+/**
+ * Um segundo nome apareceu no bloco e foi tratado como companhia aérea.
+ *
+ * É o caso normal desta planilha, não um defeito — mas fica sinalizado porque a
+ * regra é posicional, e num bloco que de fato tivesse dois viajantes ela
+ * silenciaria o segundo. O alerta é o que torna essa suposição visível.
+ */
+export const ALERTA_NOME_COMO_COMPANHIA = 'segundo_nome_tratado_como_companhia'
 
 /**
  * Nome de cidade ou aeroporto para código IATA.
@@ -157,10 +172,11 @@ export function lerCartao(linhas: LinhaDoCartao[]): LeituraDoCartao {
   let bloco = 0
   let blocoAberto = false
   let usuario = ''
+  let companhia: string | null = null
   let data: string | null = null
-  let nomesDoBloco = new Set<string>()
   let ordem = 0
   let ultimoDestino: string | null = null
+  let segundoNome = false
 
   linhas.forEach((linha, i) => {
     const numero = i + 1
@@ -175,16 +191,26 @@ export function lerCartao(linhas: LinhaDoCartao[]): LeituraDoCartao {
       blocoAberto = true
       ordem = 0
       ultimoDestino = null
-      nomesDoBloco = new Set()
+      segundoNome = false
       // Nome e data não atravessam a linha em branco: bloco novo recomeça do
       // que estiver escrito nele.
       usuario = ''
+      companhia = null
       data = null
     }
 
     if (linha.usuario !== '') {
-      usuario = linha.usuario
-      nomesDoBloco.add(chaveNormalizada(linha.usuario))
+      // **O primeiro nome do bloco é o viajante, e não é sobrescrito.** O que
+      // vem depois, dentro do mesmo bloco, é a companhia aérea. A leitura
+      // anterior deixava o nome mais recente vencer, e com isso atribuía a
+      // viagem à companhia — foi assim que uma viagem inteira ficou lançada no
+      // nome de uma empresa aérea.
+      if (usuario === '') {
+        usuario = linha.usuario
+      } else if (chaveNormalizada(linha.usuario) !== chaveNormalizada(usuario)) {
+        companhia = linha.usuario
+        segundoNome = true
+      }
     }
     if (linha.data !== null) data = linha.data
 
@@ -239,10 +265,11 @@ export function lerCartao(linhas: LinhaDoCartao[]): LeituraDoCartao {
         descricao: 'o trecho não começa onde o anterior terminou',
       })
     }
-    if (nomesDoBloco.size > 1) {
+    if (segundoNome) {
       alertas.push({
-        tipo: ALERTA_BLOCO_COM_VARIOS_NOMES,
-        descricao: 'o bloco tem mais de um nome; a atribuição pode estar errada',
+        tipo: ALERTA_NOME_COMO_COMPANHIA,
+        descricao:
+          'um segundo nome apareceu no bloco e foi lido como companhia aérea, não como viajante',
       })
     }
 
@@ -250,6 +277,7 @@ export function lerCartao(linhas: LinhaDoCartao[]): LeituraDoCartao {
       bloco,
       ordem,
       usuario,
+      companhia,
       data,
       origem: separada.origem,
       destino: separada.destino,

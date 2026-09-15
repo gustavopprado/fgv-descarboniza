@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import {
-  ALERTA_BLOCO_COM_VARIOS_NOMES,
+  ALERTA_NOME_COMO_COMPANHIA,
   ALERTA_CODIGO_POR_APELIDO,
   ALERTA_DATA_HERDADA,
   ALERTA_SEQUENCIA_QUEBRADA,
@@ -153,18 +153,40 @@ test('data herdada, apelido e sequência quebrada viram alerta', () => {
   )
 })
 
-test('bloco com dois nomes é sinalizado, não resolvido no chute', () => {
+test('o primeiro nome do bloco é o viajante; o segundo é a companhia', () => {
+  // Foi este caso que atribuiu uma viagem inteira a uma empresa aérea: o nome
+  // mais recente vencia, e o nome mais recente era o da companhia.
   const { trechos } = lerCartao([
     linha({ usuario: 'Pessoa Fictícia', data: '2031-03-01', rota: 'CWB- GRU' }),
-    linha({ usuario: 'Outra Pessoa', rota: 'GRU- BSB' }),
+    linha({ usuario: 'Companhia Fictícia', rota: 'GRU- BSB' }),
+    linha({ rota: 'BSB- CWB' }),
   ])
 
-  assert.equal(trechos[0].usuario, 'Pessoa Fictícia')
-  assert.equal(trechos[1].usuario, 'Outra Pessoa')
-  assert.ok(
-    trechos[1].alertas.some((a) => a.tipo === ALERTA_BLOCO_COM_VARIOS_NOMES),
-    'a troca de nome dentro do bloco precisa aparecer',
+  assert.deepEqual(
+    trechos.map((t) => t.usuario),
+    ['Pessoa Fictícia', 'Pessoa Fictícia', 'Pessoa Fictícia'],
   )
+  assert.equal(trechos[0].companhia, null)
+  assert.equal(trechos[1].companhia, 'Companhia Fictícia')
+  assert.equal(trechos[2].companhia, 'Companhia Fictícia')
+  assert.ok(
+    trechos[1].alertas.some((a) => a.tipo === ALERTA_NOME_COMO_COMPANHIA),
+    'a suposição de que o segundo nome é companhia precisa ficar visível',
+  )
+})
+
+test('o viajante do bloco não vaza para o bloco seguinte', () => {
+  const { trechos, descartadas } = lerCartao([
+    linha({ usuario: 'Pessoa Fictícia', data: '2031-03-01', rota: 'CWB- GRU' }),
+    linha({ vazia: true }),
+    linha({ usuario: 'Outra Pessoa', data: '2031-04-01', rota: 'CWB- BSB' }),
+  ])
+
+  assert.deepEqual(
+    trechos.map((t) => t.usuario),
+    ['Pessoa Fictícia', 'Outra Pessoa'],
+  )
+  assert.equal(descartadas.length, 0)
 })
 
 test('linha ilegível é descartada com motivo, não some', () => {

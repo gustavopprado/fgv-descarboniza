@@ -26,6 +26,8 @@
  *   npx tsx scripts/ingest-cartao.ts [caminho.xlsx] --gravar
  */
 import 'dotenv/config'
+import { existsSync } from 'node:fs'
+
 import ExcelJS from 'exceljs'
 
 import { aplicarUplift, emissaoTrechoAereo, faixaPorDistancia } from '../src/lib/calculo/aereo'
@@ -52,10 +54,18 @@ import {
   type Severidade,
 } from '../src/server/documentos/tipos'
 import { validarViagemTrecho } from '../src/server/documentos/validacao'
-import { gravarCadastro, recarregarEscopo } from '../src/server/escrita'
+import { apagarIds, recarregarEscopo } from '../src/server/escrita'
 import { carregarFatores } from '../src/server/fatores'
 import { COLECAO } from '../src/server/firestore'
-import { caminhoDaBase, conectarFirestore, ehEntrada, executar, n, tituloDaEtapa } from './_comum'
+import {
+  caminhoDaBase,
+  conectarFirestore,
+  ehEntrada,
+  executar,
+  lerJson,
+  n,
+  tituloDaEtapa,
+} from './_comum'
 
 const FONTE = 'cartao' as const
 const ESCOPO_VIAGEM_AEREA = 3
@@ -152,6 +162,12 @@ async function principal(): Promise<void> {
     'dados/cartao-viagens.xlsx',
   )
 
+  const caminhoDoMapa = caminhoDaBase(
+    undefined,
+    'BASE_CARTAO_VIAJANTES_PATH',
+    'dados/cartao-viajantes.json',
+  )
+
   tituloDaEtapa(gravar ? 'Viagens do cartão' : 'Viagens do cartão (simulação)')
 
   const linhas = await lerPlanilha(caminho)
@@ -193,47 +209,50 @@ async function principal(): Promise<void> {
       )
     }
 
-    // O viajante da planilha vem só com o nome. Quando ele não casa com o
-    // cadastro, entra como pessoa própria desta fonte — e o trecho carrega o
-    // alerta. Fundir por nome parcial juntaria gente diferente, e a contagem de
-    // pessoas distintas é o que sustenta a supressão (§3.1).
+    // **O viajante e vinculado ao cadastro, nunca criado por esta carga.**
+    // A planilha traz so o primeiro nome, que nao identifica ninguem sozinho:
+    // "Ana" casa com qualquer Ana do cadastro. A ponte e um mapa de apelido
+    // para nome completo, que mora fora do repositorio porque nome real nao se
+    // versiona. Sem o mapa, ou com um nome que nao exista no cadastro, a carga
+    // **para e diz quem falta** - criar pessoa a partir de planilha e como uma
+    // linha de companhia aerea vira funcionario.
+    const mapa: Record<string, string> = existsSync(caminhoDoMapa)
+      ? lerJson<Record<string, string>>(caminhoDoMapa)
+      : {}
+    const nomeCompleto = new Map<string, string>()
+    for (const [apelido, completo] of Object.entries(mapa)) {
+      nomeCompleto.set(chaveNormalizada(apelido), completo)
+    }
+
     const porNome = new Map<string, string>()
     for (const doc of (await db.collection(COLECAO.funcionario).get()).docs) {
       porNome.set(chaveNormalizada((doc.data() as DocFuncionario).nome), doc.id)
     }
 
-    const funcionariosNovos: { id: string; dados: DocFuncionario }[] = []
-    const idPorUsuario = new Map<string, { id: string; vinculado: boolean }>()
+    const idPorUsuario = new Map<string, string>()
+    const semVinculo: string[] = []
     for (const t of trechos) {
       const chave = chaveNormalizada(t.usuario)
       if (idPorUsuario.has(chave)) continue
 
-      // Nome de uma palavra só não identifica ninguém: "Ana" casa com qualquer
-      // Ana do cadastro, e vincular errado atribui a viagem à pessoa errada e
-      // estraga a contagem de pessoas distintas que sustenta a supressão
-      // (§3.1). Vale a mesma regra da mobilidade: homônimo não é fundido.
-      const tokens = chave.split(/\s+/).filter((t) => t !== '')
-      const existente = tokens.length >= 2 ? porNome.get(chave) : undefined
-      if (existente !== undefined) {
-        idPorUsuario.set(chave, { id: existente, vinculado: true })
+      const completo = nomeCompleto.get(chave) ?? t.usuario
+      const existente = porNome.get(chaveNormalizada(completo))
+      if (existente === undefined) {
+        semVinculo.push(t.usuario)
         continue
       }
-      const id = idFuncionario({ chaveOrigem: `${FONTE}:${chave}` })
-      idPorUsuario.set(chave, { id, vinculado: false })
-      funcionariosNovos.push({
-        id,
-        dados: {
-          matricula: null,
-          nome: t.usuario,
-          email: null,
-          departamento: null,
-          ativo: true,
-          chaveOrigem: `${FONTE}:${chave}`,
-        },
-      })
+      idPorUsuario.set(chave, existente)
     }
 
-    // A chave do uplift é a mesma que o seed grava a partir do arquivo da base.
+    if (semVinculo.length > 0) {
+      throw new Error(
+        `Viajante sem correspondencia no cadastro: ${semVinculo.join(', ')}.
+` +
+          `  Acrescente o nome completo em ${caminhoDoMapa} e confira se a pessoa ` +
+          'existe na colecao de funcionarios. Esta carga nao cria pessoa.',
+      )
+    }
+
     const uplift = fatores.vigente(CATEGORIA_AEREO_UPLIFT, 'gcd', trechos[0].data)
 
     const documentos: { id: string; dados: DocViagemTrecho }[] = []
@@ -261,20 +280,12 @@ async function principal(): Promise<void> {
         passageiros: PASSAGEIROS_POR_TRECHO,
       })
 
-      const pessoa = idPorUsuario.get(chaveNormalizada(t.usuario))!
+      const funcionarioId = idPorUsuario.get(chaveNormalizada(t.usuario))!
       const alertas: Alerta[] = t.alertas.map((a) => ({
         tipo: a.tipo,
         descricao: a.descricao,
         severidade: severidadeDe(a.tipo),
       }))
-      if (!pessoa.vinculado) {
-        alertas.push({
-          tipo: 'viajante_fora_do_cadastro',
-          descricao:
-            'o nome da planilha não casa com o cadastro; a pessoa entrou como registro próprio desta fonte',
-          severidade: 'atencao',
-        })
-      }
 
       const reservaId = `${FONTE}-${t.data}-${t.bloco}`
       const id = idViagemTrecho(FONTE, `${t.data}_${t.bloco}`, t.ordem)
@@ -292,7 +303,7 @@ async function principal(): Promise<void> {
         atualizadoEm: hojeIso(),
         reservaId,
         ordem: t.ordem,
-        funcionarioId: pessoa.id,
+        funcionarioId,
         criadoPorUid: null,
         tipo: 'aereo',
         fonte: FONTE,
@@ -301,7 +312,7 @@ async function principal(): Promise<void> {
         dataVolta: null,
         origem: t.origem,
         destino: t.destino,
-        companhia: null,
+        companhia: t.companhia,
         voo: null,
         dataVoo: t.data,
         distanciaKm,
@@ -326,7 +337,7 @@ async function principal(): Promise<void> {
       `  ${viagens} viagens, ${documentos.length} trechos, ` +
         `${n(distanciaTotal)} km, ${n(emissaoTotal)} kg CO₂e.`,
     )
-    console.log(`  ${funcionariosNovos.length} viajante(s) sem correspondência no cadastro.`)
+    console.log(`  ${idPorUsuario.size} viajante(s), todos vinculados ao cadastro.`)
 
     console.log('\n  reconstrução, trecho a trecho:')
     for (const { dados } of documentos) {
@@ -342,9 +353,6 @@ async function principal(): Promise<void> {
       return
     }
 
-    if (funcionariosNovos.length > 0) {
-      await gravarCadastro(COLECAO.funcionario, funcionariosNovos, db)
-    }
     const resultado = await recarregarEscopo({
       colecao: COLECAO.viagemTrecho,
       escopo: [{ campo: 'fonte', valor: FONTE }],
@@ -354,6 +362,31 @@ async function principal(): Promise<void> {
     console.log(
       `\n  Gravados ${resultado.gravados} trechos; ${resultado.removidos} obsoletos removidos.`,
     )
+
+    // Cargas anteriores criavam pessoa a partir da planilha, e a leitura antiga
+    // chegou a transformar linha de companhia aérea em funcionário. A varredura
+    // acontece **depois** da gravação, e só remove o que não é mais apontado por
+    // trecho nenhum — mesma ordem da recarga, pelo mesmo motivo (§9.9).
+    const orfaos: string[] = []
+    for (const doc of (await db.collection(COLECAO.funcionario).get()).docs) {
+      const f = doc.data() as DocFuncionario
+      if (!(f.chaveOrigem ?? '').startsWith(`${FONTE}:`)) continue
+      const usos = (
+        await db
+          .collection(COLECAO.viagemTrecho)
+          .where('funcionarioId', '==', doc.id)
+          .select()
+          .get()
+      ).size
+      if (usos === 0) orfaos.push(doc.id)
+    }
+    if (orfaos.length > 0) {
+      await apagarIds(COLECAO.funcionario, orfaos, db)
+      console.log(
+        `  ${orfaos.length} registro(s) de pessoa criados por carga anterior desta fonte ` +
+          'foram removidos: nenhum trecho aponta mais para eles.',
+      )
+    }
   } finally {
     await encerrar()
   }

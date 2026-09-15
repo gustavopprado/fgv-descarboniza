@@ -2299,3 +2299,53 @@ pessoas na empresa inteira viajaram para fora no período. Agregar geografia nã
 Nada disso foi implementado: a decisão é do Gustavo, e ficou registrada a alternativa que
 não vaza — declarar o peso que não pode ser desenhado como número, sem lugar.
 
+#### 2026-09-15 — Recarga do cartão: o viajante era o primeiro nome, não o último
+
+O Gustavo identificou os dois viajantes e apontou o que eu tinha lido errado: **o texto
+abaixo do nome, dentro do bloco, é a companhia aérea, não outra pessoa.**
+
+**O defeito.** A leitura deixava o nome mais recente vencer dentro do bloco. Como a
+companhia aparece logo abaixo do viajante, **a viagem inteira ficava lançada no nome da
+empresa aérea** — e a carga anterior chegou a criar dois funcionários que eram companhias.
+A regra passou a ser posicional e explícita: o primeiro nome do bloco é o viajante e não é
+sobrescrito; um segundo nome é companhia, gravada no campo que já existia para isso.
+
+A suposição fica **sinalizada em alerta**, porque a regra é posicional: um bloco que de
+fato tivesse dois viajantes silenciaria o segundo, e o alerta é o que torna isso visível.
+
+**Duas mudanças de política na carga**
+
+- **A carga não cria pessoa.** Antes, viajante sem correspondência virava registro próprio
+  — foi assim que uma companhia aérea virou funcionário. Agora a carga **para e diz quem
+  falta**. Criar pessoa a partir de planilha é barato de fazer e caro de desfazer: infla o
+  quadro, e a contagem de pessoas distintas é o que sustenta a supressão (§3.1).
+- **A ponte entre o primeiro nome e o cadastro é um mapa fora do repositório.** A planilha
+  traz só o primeiro nome, que não identifica ninguém; o mapa de apelido para nome completo
+  mora em `dados/`, que é ignorado pelo git, porque nome real não se versiona (§2.1).
+
+**Limpeza.** Os registros de pessoa criados pela carga anterior desta fonte são varridos
+**depois** da gravação, e só sai o que nenhum trecho aponta — mesma ordem da recarga, pelo
+mesmo motivo (§9.9). Os três criados antes foram removidos.
+
+**Uma conferência antiga quebrou, e quebrar foi o certo**
+
+A conferência de aeroportos comparava o **tamanho** da coleção com o da base da agência.
+Com a segunda fonte trazendo aeroportos internacionais, ela passou a acusar erro numa carga
+correta. A premissa embutida era "esta coleção vem de uma fonte só" — a mesma premissa que
+originou o erro da fonte única. Passou a conferir o que importa: **nenhum aeroporto da base
+da agência ficou de fora do cadastro**.
+
+**As duas lições, como o Gustavo pediu que ficassem registradas**
+
+> **Fonte única não autoriza afirmação sobre o todo.** Concluí "não existe viagem
+> intercontinental" olhando a única base carregada. A frase verdadeira era "não existe na
+> base da agência", seguida de uma pergunta. E a premissa não fica só na frase: ela se
+> esconde em conferência que compara total de coleção com total de uma fonte.
+
+> **Agregação não resolve população.** Ao pedir corredor em vez de rota, a hipótese era que
+> o recorte fino escondia o peso. Medido: o corredor quase dobra a emissão visível no
+> doméstico e **não torna o internacional desenhável**, porque duas pessoas na empresa
+> inteira viajaram para fora no período. Agregar geografia não cria gente. Quando a
+> supressão morde, a pergunta certa é quantas pessoas existem no recorte — não quão grosso
+> ele é.
+
