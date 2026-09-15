@@ -85,6 +85,12 @@ O repositório é público no GitHub. Trate tudo que segue como segredo.
 - **Comentários de código.** Não documente a base real dentro do código.
 - **Mensagens de commit.** Não cite nome de empresa, de agente ou valor de emissão.
 - **Snapshots e arquivos de saída de teste.**
+- **Rótulo de interface.** É a via que ninguém revisa: dado real disfarçado de texto de
+  UI. No protótipo, o nome de um agente de carga real aparece dentro de uma etiqueta de
+  estado, e nomes de pessoas aparecem como conteúdo de tabela — coisas que passam por
+  "texto da tela" numa revisão e entram no repositório público como constante. Título,
+  etiqueta, legenda, subtítulo, placeholder e mensagem de erro seguem a mesma regra dos
+  seeds: se o valor veio da base real, não entra.
 - **README e documentação.** Descreva o sistema, não os dados.
 
 ### 2.3 `.gitignore`
@@ -115,6 +121,13 @@ Nas telas de Mobilidade, Viagens (histórico) e Marítimo:
   ao cliente**. O agregado sai pronto do servidor.
 - No radar de mobilidade, cada ponto é um funcionário **sem nenhum dado associado**. Sem
   tooltip, sem clique, sem nada que permita isolar um indivíduo.
+- **O ângulo do radar não tem significado, e isso é uma decisão de privacidade, não
+  preguiça de implementação.** O protótipo posiciona cada ponto por distância *e direção*
+  em relação à fábrica. Raio e direção reais, juntos, formam um localizador quase único:
+  apontam para uma casa mesmo sem nome, sem bairro e sem tooltip — é reidentificação por
+  geometria. Direção também não é dado que o sistema possa ter, porque a §6.1 só permite
+  persistir distância, bairro e cidade. O ângulo serve apenas para os pontos não se
+  empilharem, e a tela declara isso em texto para ninguém ler um mapa onde não há mapa.
 - **Supressão de grupos pequenos:** não exibir recorte com menos de 5 pessoas. Um bairro com
   um respondente identifica esse respondente mesmo sem o nome dele. Agrupe o que ficar
   abaixo do limite em "outros".
@@ -1866,4 +1879,51 @@ Nenhuma mudança de comportamento do sistema; as duas correções são de opera�
   `suppressHydrationWarning`, que vale só para os atributos dele e não para a árvore
   abaixo: divergência dentro da aplicação continua sendo reportada. A supressão foi
   mantida estreita de propósito — cada uma delas é um pedaço a menos de diagnóstico.
+
+#### 2026-09-15 — Levantamento do protótipo (sem aplicar nada)
+
+**Lição sobre levantamento de repositório.** As três primeiras telas foram construídas sem
+o protótipo, usando só a paleta da §4. O arquivo estava em `dados/`, que é ignorado pelo
+git, e a varredura inicial procurou por extensão de **código** — `.ts`, `.tsx`, `.json` —,
+não incluiu `.html`, e eu concluí que o protótipo não existia no repositório. A conclusão
+errada entrou no plano e foi lida como fato verificado.
+
+A regra que fica: **levantamento de repositório inclui os arquivos de referência, não só os
+de código.** Protótipo, planilha de apoio, documento de especificação e diagrama moram fora
+da árvore de código e às vezes dentro de pasta ignorada — pasta ignorada pelo git não é
+pasta irrelevante para o trabalho. Quando o documento cita um arquivo pelo nome, o certo é
+procurar aquele nome, não uma extensão que eu supus.
+
+**Conflitos entre o protótipo e esta especificação.** O protótipo é referência visual, não
+autoridade sobre o sistema: onde ele contradiz o documento, o documento vence. Foram
+encontrados, e nenhum foi seguido:
+
+- **Radar com direção.** O protótipo posiciona cada ponto por distância **e direção** em
+  relação à fábrica. Direção não é dado que o sistema tenha — a §6.1 só permite persistir
+  distância, bairro e cidade — e um ponto com raio e ângulo reais é um localizador quase
+  único, o que a §3.1 proíbe justamente por permitir isolar um indivíduo. O radar
+  construído usa ângulo sem significado, declarado na legenda.
+- **Campo de motivo da viagem no formulário.** A §7.3 pede o mínimo que calcula emissão e
+  diz explicitamente para não pedir justificativa; o campo já havia sido retirado na
+  migração.
+- **Métricas fora da lista da §10.** O protótipo tem cartões de "viagem mais longa" e
+  "corredor mais pesado", que são registros extremos: além de não estarem na §10.3 nem na
+  §10.4, um extremo isolado é um recorte de uma viagem só, contra a §3.1.
+- **Equivalência em árvores** no indicador principal. Não é corte previsto na §10.1 e
+  dependeria de um fator de conversão sem fonte na coleção de fatores — a §9.8 não admite
+  fator embutido no código.
+- **Alternância "Todos / Só as minhas"** na tela do programa. Em tela que mostra nome de
+  viajante, "todos" só existe para `admin` e `sustentabilidade`; `gestor` não vê nome nem
+  ali (§3.2), e `colaborador` só vê o próprio (§5.1). A alternância precisa nascer
+  recortada por papel, não oferecida a todos.
+- **Data de corte escrita como texto fixo** em dois lugares do protótipo. É a data de
+  exemplo que a §7 retirou.
+
+**Rótulos de interface que são dado de exemplo disfarçado.** A varredura pedida encontrou,
+além de todos os números: o nome de um agente de carga real dentro de uma etiqueta de
+estado; nomes de pessoas na lista de últimas viagens e no rodapé do menu; e uma lista de
+portos e destinos nomeados em tabelas e nos mapas. Nada disso pode ser copiado como texto
+de interface — §2.2 vale para rótulo igual vale para constante.
+
+Nenhuma linha de tela foi alterada nesta etapa.
 

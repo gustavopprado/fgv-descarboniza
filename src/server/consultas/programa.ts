@@ -100,7 +100,15 @@ export type ResumoDoPrograma = {
   trechos: number
   co2Kg: number
   co2Toneladas: number
-  /** Quantos do quadro já registraram alguma viagem. */
+  /**
+   * **Adesão ao programa:** quantos do quadro já registraram alguma viagem.
+   *
+   * O rótulo na tela precisa dizer isso — "do quadro já registrou" —, e não um
+   * "cobertura" solto. O protótipo usava a mesma palavra para outra conta (o
+   * quanto do que a agência registrou no período já foi coberto pelo
+   * formulário), e indicador com rótulo ambíguo é o começo de discussão longa
+   * em reunião. A conta daqui é a de adesão.
+   */
   cobertura: { registraram: number; funcionarios: number; proporcao: number }
   porMes: { mes: string; co2Kg: number; documentos: number }[]
   porTipo: { tipo: string; viagens: number; co2Kg: number; proporcao: number }[]
