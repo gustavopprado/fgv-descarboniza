@@ -10,7 +10,7 @@
  */
 import Link from 'next/link'
 
-import { inteiro, numero, plural } from '@/lib/formato'
+import { plural } from '@/lib/formato'
 import { AcessoNegadoError } from '@/server/consultas/acesso'
 import { consultarViagens } from '@/server/consultas/inventario'
 import { exigirSessao } from '@/server/sessao'
@@ -107,18 +107,20 @@ export default async function Page({
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             <Cartao
               rotulo="Por viagem"
-              valor={numero(dados.co2KgPorViagem)}
+              valor={dados.co2KgPorViagem}
               unidade="kg CO₂"
               nota={`${plural(dados.viagens, 'viagem', 'viagens')}, somando ${plural(dados.trechos, 'trecho', 'trechos')}.`}
             />
             <Cartao
               rotulo={ano === undefined ? 'Total do período' : `Total de ${ano}`}
-              valor={numero(dados.co2ToneladasAno, 2)}
+              valor={dados.co2ToneladasAno}
+              casas={2}
               unidade="t CO₂e"
             />
             <Cartao
               rotulo="Emissão total"
-              valor={inteiro(dados.co2Kg)}
+              valor={dados.co2Kg}
+              casas={0}
               unidade="kg CO₂"
               nota="Reserva duplicada no relatório da agência fica gravada e fora deste total."
             />

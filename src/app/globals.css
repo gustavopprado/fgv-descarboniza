@@ -63,20 +63,41 @@ h3 {
 
 /* Entrada em cascata (§10, "seguir o protótipo").
 
-   O estado inicial fica no CSS e não no JavaScript: assim o bloco já nasce
-   deslocado no HTML do servidor, e não há o salto de quem vê o conteúdo
-   posicionado antes de a animação começar. */
-.revelar {
-  opacity: 0;
-  transform: translateY(14px);
+   É **animação**, não transição disparada por JavaScript, e a diferença
+   importa: animação roda sozinha e termina no estado final. Se o script não
+   rodar — script bloqueado, erro de hidratação, navegador antigo —, o bloco
+   termina visível de todo jeito. Com transição dependente de classe adicionada
+   pelo cliente, o mesmo cenário deixaria a tela permanentemente em branco, com
+   o conteúdo presente no HTML e invisível. O atraso de cada bloco vem do
+   servidor, em `animation-delay`. */
+@keyframes revelar {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-.revelar-visivel {
-  opacity: 1;
-  transform: none;
-  transition:
-    opacity 0.6s var(--ease-suave),
-    transform 0.6s var(--ease-suave);
+.revelar {
+  animation: revelar 0.6s var(--ease-suave) both;
+}
+
+/* Crescimento da barra do gráfico, na mesma curva. */
+@keyframes crescer {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.crescer {
+  transform-origin: bottom;
+  animation: crescer 0.9s var(--ease-suave) both;
 }
 
 /* Quem pediu menos movimento recebe menos movimento — e recebe o conteúdo
@@ -90,8 +111,11 @@ h3 {
     transition-duration: 0.001ms !important;
   }
 
-  .revelar {
-    opacity: 1;
-    transform: none;
+  /* Com movimento reduzido a animação é praticamente instantânea, mas continua
+     rodando: é ela que leva o bloco ao estado final. Desligá-la deixaria o
+     conteúdo parado no quadro inicial, invisível. */
+  .revelar,
+  .crescer {
+    animation-duration: 0.001ms !important;
   }
 }

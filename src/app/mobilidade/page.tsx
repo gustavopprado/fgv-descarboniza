@@ -9,7 +9,7 @@
  * com supressão de grupo pequeno, e o radar recebe só distâncias.
  */
 import { opcional } from '@/lib/env'
-import { inteiro, numero, plural } from '@/lib/formato'
+import { inteiro, plural } from '@/lib/formato'
 import { AcessoNegadoError } from '@/server/consultas/acesso'
 import { consultarMobilidade } from '@/server/consultas/inventario'
 import { exigirSessao } from '@/server/sessao'
@@ -90,19 +90,20 @@ export default async function Page({
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             <Cartao
               rotulo="Por funcionário, por mês"
-              valor={numero(dados.co2KgMesPorFuncionario)}
+              valor={dados.co2KgMesPorFuncionario}
               unidade="kg CO₂"
               nota={`Média de ${plural(dados.respondentes, 'resposta', 'respostas')} na média, com ${inteiro(dados.diasUteisMes)} dias úteis no mês.`}
             />
             <Cartao
               rotulo="Total no ano"
-              valor={numero(dados.co2ToneladasAno, 2)}
+              valor={dados.co2ToneladasAno}
+              casas={2}
               unidade="t CO₂e"
               nota="A taxa mensal do quadro, repetida nos doze meses do ano-base."
             />
             <Cartao
               rotulo="Distância média"
-              valor={numero(dados.distanciaKmMedia)}
+              valor={dados.distanciaKmMedia}
               unidade="km"
               nota="Deslocamento só de ida; cada dia útil conta ida e volta."
             />
