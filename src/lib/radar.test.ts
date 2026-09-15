@@ -22,7 +22,11 @@ test('um ponto por pessoa, e nada além de coordenada em cada um', () => {
   const { pontos } = montarRadar([5, 10, 20], { raio: RAIO })
   assert.equal(pontos.length, 3)
   for (const ponto of pontos) {
-    assert.deepEqual(Object.keys(ponto).sort(), ['x', 'y'])
+    // `angulo` entrou para a varredura poder revelar cada ponto na hora certa.
+    // Continua não havendo nada além de geometria: nenhum identificador,
+    // nenhum lugar, nenhum modal.
+    assert.deepEqual(Object.keys(ponto).sort(), ['angulo', 'x', 'y'])
+    assert.ok(ponto.angulo >= 0 && ponto.angulo < Math.PI * 2)
   }
 })
 

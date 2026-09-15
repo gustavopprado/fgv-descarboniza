@@ -2018,3 +2018,65 @@ de erro. Foi procurada e não existe barata: a serialização só acontece na re
   viagem, contêineres por porto, e a barra empilhada de qualidade do dado. Ampliar a camada
   para preencher desenho é decisão de escopo, não de acabamento.
 
+#### 2026-09-15 — Os três itens em aberto do refinamento, fechados
+
+Decisão do Gustavo: entram os três. Dois deles eu tinha recomendado contra ou condicionado,
+e ficam registrados com o argumento, porque decisão revertida sem motivo escrito volta a ser
+discutida daqui a seis meses.
+
+**Varredura do radar — volta, com a legenda pagando a conta**
+
+Eu havia argumentado contra: a varredura revela os pontos conforme gira, ou seja, **anima a
+dimensão angular**, que aqui não carrega informação nenhuma (§3.1). O Gustavo decidiu
+mantê-la, e a contrapartida combinada era a legenda trabalhar mais — ela agora diz em duas
+frases separadas que a direção não significa nada, com o exemplo de dois pontos vizinhos que
+podem morar em extremos opostos da cidade, e que a varredura só escolhe a ordem em que os
+pontos acendem.
+
+Os raios partindo do centro continuam fora: eles desenham uma rosa dos ventos **permanente**,
+enquanto a varredura passa e some. A diferença entre as duas coisas é essa.
+
+A varredura é CSS puro, sem laço no navegador: `montarRadar` passou a devolver o ângulo de
+cada ponto, e o atraso da revelação sai dele. O campo novo tem comentário dizendo que **não
+é direção** — quem for consumi-lo depois precisa encontrar o aviso junto do dado.
+
+**Defeito que a varredura expôs, e que já existia**
+
+Em `prefers-reduced-motion` eu zerava a duração das animações e **não o atraso**. Como todos
+os atrasos deste sistema são calculados no servidor e somam segundos — a cascata dos blocos,
+o crescimento das barras, o desenho das rotas —, quem pede menos movimento estava recebendo
+o conteúdo aos poucos, que é exatamente o que essa preferência pede para não acontecer. O
+atraso passou a ser zerado junto.
+
+**Logo — entra como arquivo em `public/`**
+
+Extraído do protótipo, onde estava embutido em base64. É ativo de marca entrando em
+repositório público, e por isso a decisão era do Gustavo. Dimensões declaradas no `img`
+para o menu não pular enquanto ele carrega.
+
+**Contorno dos continentes — por script, não por caminho colado**
+
+O risco que eu havia levantado era procedência: um `path` gigante colado num arquivo entra
+sem ninguém olhar de onde veio. A solução foi um gerador, `scripts/gerar-contorno.ts`, que
+documenta a origem no cabeçalho e torna o resultado reprodutível — quem duvidar roda de novo
+e compara. O dado é Natural Earth 1:110m, domínio público, chegando pelo pacote
+`world-atlas`, sob licença ISC. O script descarta ilhas abaixo de um limite de área e
+arredonda a coordenada, porque no tamanho em que o mapa é desenhado a precisão restante não
+aparece.
+
+**Medir antes de aceitar.** Com o contorno funcionando, a medição contra as rotas reais
+mostrou o custo: dois anéis entravam no enquadramento e levavam **2.246 vértices** ao HTML,
+cerca de 29 KB, quase todos fora da moldura — a América do Sul inteira desenhada para o
+navegador recortar. Entrou o recorte de polígono (Sutherland–Hodgman), em grau, antes de
+projetar: **2.246 vértices viraram 24**. O ganho não era óbvio no olho; era óbvio na medida.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (99 testes, 7 novos) e `next build` passam. Nenhum servidor de
+  desenvolvimento foi subido.
+- Os testes do recorte cobrem os casos que quebram: anel todo dentro, todo fora, atravessando
+  a borda, maior que a moldura — que precisa virar a própria moldura —, aresta paralela à
+  borda, que é onde nasce divisão por zero, e anel degenerado.
+- O ganho do recorte foi medido contra as rotas reais com ensaio temporário, apagado em
+  seguida.
+

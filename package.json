@@ -11,6 +11,7 @@
     "test": "tsx --test \"src/**/*.test.ts\" \"scripts/**/*.test.ts\"",
     "rules:deploy": "tsx scripts/rules-deploy.ts",
     "perfil": "tsx scripts/definir-perfil.ts",
+    "gerar:contorno": "tsx scripts/gerar-contorno.ts",
     "seed:fatores": "tsx scripts/seed-fatores.ts",
     "seed:fatores-mobilidade": "tsx scripts/seed-fatores-mobilidade.ts",
     "ingest:viagens": "tsx scripts/ingest-viagens.ts",
@@ -29,11 +30,14 @@
     "@types/node": "^26.5.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/topojson-client": "^3.1.5",
     "dotenv": "^17.4.2",
     "exceljs": "^4.4.0",
     "postcss": "^8.5.28",
     "tailwindcss": "^4.3.3",
+    "topojson-client": "^3.1.0",
     "tsx": "^4.23.13",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "world-atlas": "^2.0.2"
   }
 }

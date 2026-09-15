@@ -141,6 +141,34 @@ h3 {
   animation: desenhar 1.6s var(--ease-suave) both;
 }
 
+/* Varredura do radar.
+
+   Uma volta só, e some. A cunha gira e os pontos vão aparecendo no instante em
+   que ela passa por cada um — o atraso de cada ponto é calculado no servidor a
+   partir do ângulo dele, então não há laço nenhum no navegador.
+
+   Ela termina em `opacity: 0`: com movimento reduzido, a animação corre em
+   tempo praticamente nulo e a cunha já nasce invisível, em vez de ficar parada
+   na tela cobrindo um quarto do desenho. */
+@keyframes varrer {
+  from {
+    transform: rotate(0deg);
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  to {
+    transform: rotate(360deg);
+    opacity: 0;
+  }
+}
+
+.varrer {
+  transform-origin: center;
+  animation: varrer 2.2s linear both;
+}
+
 /* Quem pediu menos movimento recebe menos movimento — e recebe o conteúdo
    inteiro, nunca um bloco que ficou invisível esperando animação. */
 @media (prefers-reduced-motion: reduce) {
@@ -150,6 +178,13 @@ h3 {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+    /* O ATRASO também, e não é detalhe: os atrasos daqui são calculados no
+       servidor e chegam a somar segundos — a cascata dos blocos, o crescimento
+       das barras, o desenho das rotas e a varredura do radar. Zerar só a
+       duração deixaria quem pede menos movimento esperando o conteúdo aparecer
+       aos poucos, que é exatamente o que ele pediu para não acontecer. */
+    animation-delay: 0.001ms !important;
+    transition-delay: 0.001ms !important;
   }
 
   /* Com movimento reduzido a animação é praticamente instantânea, mas continua
@@ -158,7 +193,8 @@ h3 {
   .revelar,
   .crescer,
   .surgir,
-  .desenhar {
+  .desenhar,
+  .varrer {
     animation-duration: 0.001ms !important;
   }
 }

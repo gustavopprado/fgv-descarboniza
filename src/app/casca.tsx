@@ -82,6 +82,17 @@ export function Casca({
     <div className="flex min-h-screen flex-col md:flex-row">
       <nav className="shrink-0 bg-[var(--color-escuro)] text-[var(--color-escuro-texto)] md:sticky md:top-0 md:h-screen md:w-[232px] md:flex-none md:flex-col md:overflow-y-auto md:pt-[22px] md:pb-[18px] flex flex-col">
         <div className="px-5 pt-4 pb-4 md:pb-5">
+          {/* Dimensões explícitas para o bloco não pular enquanto a imagem
+              carrega. É `img` e não o componente de imagem do framework de
+              propósito: são 21 KB estáticos, e a pipeline de otimização não tem
+              o que otimizar aqui. */}
+          <img
+            src="/descarboniza.png"
+            alt="FGV"
+            width={112}
+            height={43}
+            className="mb-2 block h-auto w-[112px]"
+          />
           <p className="font-[family-name:var(--font-titulo)] text-base font-semibold tracking-[-0.01em] text-white">
             Descarboniza
           </p>

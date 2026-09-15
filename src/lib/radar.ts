@@ -15,7 +15,19 @@
 /** Ângulo áureo: espalha os pontos sem formar braços nem coincidir. */
 const PASSO_ANGULAR = Math.PI * (3 - Math.sqrt(5))
 
-export type PontoDoRadar = { x: number; y: number }
+export type PontoDoRadar = {
+  x: number
+  y: number
+  /**
+   * Ângulo do ponto, em radianos de 0 a 2π.
+   *
+   * **Não é direção.** Ele existe por um motivo de desenho: é o que permite a
+   * varredura revelar cada ponto no instante em que passa por ele, com o atraso
+   * calculado no servidor em vez de um laço no navegador. Quem consome isto não
+   * pode tratá-lo como informação sobre onde a pessoa mora, porque não é.
+   */
+  angulo: number
+}
 
 export type Radar = {
   pontos: PontoDoRadar[]
@@ -43,9 +55,11 @@ export function montarRadar(
   const escala = maior > 0 ? opcoes.raio / maior : 1
 
   const pontos = distanciasKm.map((distancia, indice) => {
-    const angulo = indice * PASSO_ANGULAR
+    const bruto = indice * PASSO_ANGULAR
+    // Normalizado para uma volta: é assim que o ângulo vira atraso de animação.
+    const angulo = ((bruto % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)
     const raio = distancia * escala
-    return { x: Math.cos(angulo) * raio, y: Math.sin(angulo) * raio }
+    return { x: Math.cos(angulo) * raio, y: Math.sin(angulo) * raio, angulo }
   })
 
   const aneis = Array.from({ length: quantosAneis }, (_, i) => {
