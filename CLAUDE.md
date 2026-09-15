@@ -645,6 +645,42 @@ O sistema fica público na Vercel. Regras não negociáveis:
    por IP. Onde não for, o controle é teto de faturamento com alerta. Chave de API paga
    sem restrição não é só risco de privacidade: é conta a pagar.
 
+9. **O cookie de sessão carrega quatro atributos, e cada um fecha uma porta.**
+   `httpOnly`, para que o JavaScript da página não alcance o cookie e um XSS não
+   vire roubo de sessão. `secure`, para o cookie não trafegar em claro — em
+   produção sempre; em desenvolvimento local ele fica desligado porque o
+   navegador recusaria um cookie `secure` em http e ninguém conseguiria entrar.
+   `sameSite: lax`, que não envia o cookie em requisição disparada por outro
+   site e é o que fecha o CSRF do caminho de escrita da §10.6, sem quebrar quem
+   chega por um link externo. E `path` na raiz: uma sessão para o sistema
+   inteiro. **O cliente nunca lê nem escreve esse cookie**; quem o emite e quem
+   o apaga é o servidor.
+
+10. **A sessão dura doze horas.** O Firebase aceita até quatorze dias, e
+    quatorze dias seria conveniência cara: este sistema mostra dado de pessoa, e
+    a sessão de um notebook esquecido aberto continuaria válida por duas
+    semanas. Doze horas cobrem um dia de trabalho de ponta a ponta e expiram
+    antes da manhã seguinte; renovar é um clique, com a conta já escolhida.
+    Encurtar é sempre aceitável, esticar é decisão que precisa de motivo.
+
+11. **Sair revoga no servidor, não só no navegador.** Apagar o cookie do
+    navegador não invalida nada: quem tiver copiado o valor continua entrando
+    com ele até expirar. O logout chama `revokeRefreshTokens`, que move o marco
+    de validade da conta para agora, e a verificação da requisição seguinte
+    recusa qualquer cookie emitido antes disso. O efeito alcança todas as
+    sessões daquela pessoa, em todos os dispositivos — para este sistema, sair
+    é sair.
+
+12. **Papel revogado ou trocado vale na requisição seguinte.** O papel **nunca
+    vem do token**: ele é lido de `usuarioPerfil/{uid}` a cada requisição, junto
+    da verificação de revogação. Token não carrega papel de propósito — token
+    velho continuaria valendo depois de o acesso ter sido tirado. Rebaixar um
+    perfil tem efeito imediato sem deslogar ninguém; remover o perfil derruba
+    também a sessão aberta, e quem estava dentro é mandado para a tela de
+    entrada, que explica o que houve em vez de devolver erro de servidor.
+    Conceder e revogar acontecem **fora da aplicação**, por script, como as
+    cargas — não existe tela que dê acesso a alguém.
+
 **Verificar o sistema antigo:** na versão estática, as bases iam para o build. Se o JSON de
 viagens (com nome de passageiro) ou a base de mobilidade (com CEP e logradouro) estiverem
 acessíveis pelo navegador, é vazamento ativo hoje.
@@ -1672,3 +1708,87 @@ que é o estado verdadeiro.
 Feito em seguida, a pedido: a variável foi esvaziada no `.env` e a tela passou a declarar
 a data como não definida. A §13 também foi corrigida — ela ainda dizia que nenhuma tela
 tinha sido construída, o que deixou de ser verdade nesta etapa.
+
+#### 2026-09-15 — Sessão endurecida e tela de Mobilidade
+
+**Quatro perguntas do Gustavo sobre a sessão.** Duas já estavam resolvidas, duas não.
+As quatro respostas viraram §11.9 a §11.12 — eram regra de segurança que só existia no
+código, e regra que só existe no código é regra que some na próxima refatoração.
+
+- **Atributos do cookie: já estava.** `httpOnly`, `secure` em produção, `sameSite: lax`
+  e `path` na raiz. O `lax` é o que fecha o CSRF do caminho de escrita que a §10.6 vai
+  ter, e o `secure` fica desligado em desenvolvimento porque o navegador recusaria um
+  cookie `secure` em http e ninguém conseguiria entrar.
+- **Validade: estava em cinco dias, virou doze horas.** O teto do Firebase é quatorze
+  dias, e cinco já era conveniência cara num sistema que mostra dado de pessoa. Doze
+  horas cobrem um dia de trabalho inteiro e expiram antes da manhã seguinte, então a
+  sessão de um notebook esquecido aberto não amanhece válida. Um teste prende a duração
+  entre o mínimo e o máximo que o Firebase aceita — estourar esse limite derruba **todo**
+  login, e só apareceria na hora de entrar.
+- **Sair não revogava nada: agora revoga.** O logout apagava o cookie do navegador, o
+  que não invalida coisa nenhuma — quem tivesse copiado o valor continuaria entrando com
+  ele até expirar. Passou a chamar `revokeRefreshTokens` antes de apagar o cookie, e a
+  verificação da requisição seguinte recusa qualquer cookie emitido antes disso. O efeito
+  alcança todas as sessões da pessoa, em todos os dispositivos: sair é sair.
+- **Perfil revogado: o efeito imediato já existia, mas faltava como revogar.** O papel é
+  lido de `usuarioPerfil/{uid}` a cada requisição, então rebaixar um perfil vale na
+  requisição seguinte sem deslogar ninguém. O que não existia era o comando: o script só
+  sabia conceder. Ganhou `npm run perfil -- alguem@dominio remover`, que apaga o
+  documento **e** revoga o token, para a sessão aberta não continuar viva numa tela que
+  não mostra mais nada. E `exigirSessao` passou a mandar para a tela de entrada quem
+  tiver o perfil apagado no meio da navegação, em vez de devolver erro de servidor:
+  quem precisa pedir liberação tem que entender o que houve.
+
+**Fatia 2 — tela de Mobilidade (§10.2)**
+
+Segunda tela. A camada de consulta já entregava tudo; nenhuma linha dela precisou mudar.
+
+- Três indicadores — kg CO₂ por funcionário/mês, total do ano em toneladas e distância
+  média —, radar, emissão por modal e os recortes por cidade e por bairro.
+- **O radar recebe `number[]` e nada mais.** A assinatura é a garantia: nenhum
+  identificador, bairro ou modal chega ao módulo que calcula as coordenadas, então não há
+  o que vazar para o SVG por atributo, por ordem ou por descuido de quem mexer depois.
+  Sem tooltip, sem clique, sem `title` — §3.1 ao pé da letra.
+- **O ângulo não significa nada, e a tela diz isso.** A pesquisa não coleta direção e a
+  distância é rodoviária; o ângulo só espalha os pontos. Sem o aviso, um radar convida à
+  leitura de mapa onde não há mapa.
+- A escala do radar é linear na distância, de propósito: comprimir a cauda esconderia
+  exatamente quem mora longe, que é o que a tela existe para mostrar.
+- O grupo que veio da supressão aparece **marcado**. Sem a marca, "outros" parece uma
+  categoria da pesquisa em vez do balde que existe para não identificar ninguém.
+
+**Conflito encontrado na especificação, e como foi resolvido**
+
+A §1 diz que distância é insumo de cálculo e **não aparece na interface**. A §10.2 lista
+"distância média" e "radar de onde o quadro mora" como conteúdo da tela de Mobilidade — e
+o radar é, por construção, distância desenhada.
+
+Segui a §10.2, por ser a mais específica: a regra da §1 mira as métricas de frete — peso,
+volume, tonelada-quilômetro, intensidade por quilo —, que são o insumo que não pode ser
+confundido com o resultado. **A decisão é do Gustavo**, e se ele quiser a §1 valendo
+também aqui, sai um indicador e o radar precisa de outro desenho.
+
+**Decisões que não estavam no documento**
+
+- **`src/lib/formato.ts`**, com a formatação pt-BR num lugar só. Milhar e decimal
+  espalhados à mão são como o mesmo número aparece de dois jeitos em duas telas do mesmo
+  sistema.
+- **`src/app/componentes.tsx`** com as peças compartilhadas. A tela de Método tinha cópia
+  própria de duas delas; passou a usar as compartilhadas.
+- **O teste passou a cobrir `scripts/`.** A regra de quem pode receber acesso mora no
+  script de perfil, e regra sem teste é combinado.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (76 testes, 14 novos) e `next build` passam. Nenhum servidor
+  de desenvolvimento foi subido.
+- A consulta de mobilidade foi exercitada contra o Firestore carregado, com um ensaio
+  temporário que foi apagado em seguida: indicadores finitos, um ponto de radar por
+  resposta na média, supressão de grupo pequeno atuando, radar sem NaN, e **nenhum
+  identificador de pessoa na resposta**. A fração de distâncias distintas continua alta,
+  como esperado depois da troca de provedor — a concentração que invalidou a primeira
+  carga não voltou.
+- Os testes novos cobrem a geometria do radar pelos casos que quebram: conjunto vazio,
+  todo mundo na distância zero, distâncias iguais que não podem virar o mesmo ponto, e a
+  forma do ponto, que não aceita campo além de coordenada.
+

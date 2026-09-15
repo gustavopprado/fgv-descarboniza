@@ -25,8 +25,22 @@ import { COLECAO, authAdmin, firestore } from './firestore'
 
 export const COOKIE_SESSAO = 'fgv_sessao'
 
-/** Cinco dias. O Firebase aceita até duas semanas; menos é melhor. */
-export const DURACAO_SESSAO_MS = 5 * 24 * 60 * 60 * 1000
+/**
+ * Doze horas — CLAUDE.md §11.10.
+ *
+ * O Firebase aceita de cinco minutos a quatorze dias. Quatorze dias seria
+ * conveniente e caro: este sistema mostra dado de pessoa, e a sessão de um
+ * notebook esquecido aberto continuaria válida por duas semanas.
+ *
+ * Doze horas cobrem um dia de trabalho inteiro, de quem começa cedo a quem
+ * termina tarde, e expiram antes da manhã seguinte. O custo de renovar é um
+ * clique no Google, com a conta já escolhida.
+ */
+export const DURACAO_SESSAO_MS = 12 * 60 * 60 * 1000
+
+/** Limites que o Firebase impõe a `createSessionCookie`. */
+export const DURACAO_MINIMA_MS = 5 * 60 * 1000
+export const DURACAO_MAXIMA_MS = 14 * 24 * 60 * 60 * 1000
 
 export class LoginRecusadoError extends Error {
   constructor(motivo: string) {
@@ -109,13 +123,50 @@ export async function sessaoAtual(): Promise<ContextoDeAcesso | null> {
 }
 
 /**
+ * Encerra a sessão **no Firebase**, não só no navegador.
+ *
+ * Apagar o cookie do navegador não invalida nada: quem tiver copiado o valor
+ * continua entrando com ele até expirar. `revokeRefreshTokens` move o marco de
+ * validade da conta para agora, e o `verifySessionCookie` com `checkRevoked`
+ * da próxima requisição recusa qualquer cookie emitido antes disso.
+ *
+ * O efeito alcança **todas as sessões daquela pessoa, em todos os dispositivos**.
+ * Para este sistema isso é o comportamento desejado: sair é sair.
+ *
+ * Devolve o uid encerrado, ou `null` se não havia sessão que ainda valesse —
+ * nesse caso não há nada a revogar, e o cookie é apagado do mesmo jeito.
+ */
+export async function encerrarSessao(cookie: string | undefined): Promise<string | null> {
+  if (cookie === undefined || cookie === '') return null
+
+  try {
+    const auth = authAdmin()
+    const sessao = await auth.verifySessionCookie(cookie, false)
+    await auth.revokeRefreshTokens(sessao.uid)
+    return sessao.uid
+  } catch {
+    // Cookie já inválido: não há sessão a revogar. Sair nunca falha.
+    return null
+  }
+}
+
+/**
  * O contexto desta requisição, ou a tela de entrada.
  *
  * Toda tela do sistema começa por aqui. A autorização de verdade vem depois,
  * dentro de cada consulta (§11.3) — isto só garante que existe alguém.
  */
 export async function exigirSessao(): Promise<ContextoDeAcesso> {
-  const ctx = await sessaoAtual()
+  let ctx: ContextoDeAcesso | null
+  try {
+    ctx = await sessaoAtual()
+  } catch (erro) {
+    // Perfil apagado com a sessão aberta: a pessoa vai para a tela de entrada,
+    // que explica o que houve. Fechar a porta na cara com erro de servidor
+    // esconderia o motivo de quem precisa pedir a liberação.
+    if (erro instanceof PerfilAusenteError) redirect('/entrar')
+    throw erro
+  }
   if (ctx === null) redirect('/entrar')
   return ctx
 }

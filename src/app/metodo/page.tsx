@@ -7,6 +7,7 @@
  * esta página não sabe o que é uma coleção.
  */
 import { Casca } from '../casca'
+import { Secao, Vazio } from '../componentes'
 import { AcessoNegadoError } from '@/server/consultas/acesso'
 import { consultarMetodo, NAO_DEFINIDO } from '@/server/consultas/metodo'
 import type {
@@ -35,36 +36,6 @@ const NOME_DA_SEVERIDADE: Record<AlertaDeclarado['severidade'], string> = {
   erro: 'erro',
   atencao: 'atenção',
   informativo: 'informativo',
-}
-
-function Secao({
-  titulo,
-  descricao,
-  children,
-}: {
-  titulo: string
-  descricao?: string
-  children: React.ReactNode
-}) {
-  return (
-    <section className="mt-10">
-      <h2 className="text-lg font-semibold text-[var(--color-folha-900)]">{titulo}</h2>
-      {descricao !== undefined && (
-        <p className="mt-1 max-w-3xl text-sm text-[var(--color-folha-900)]/65">
-          {descricao}
-        </p>
-      )}
-      <div className="mt-4">{children}</div>
-    </section>
-  )
-}
-
-function Vazio({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="rounded-md border border-dashed border-[var(--color-folha-500)] px-4 py-6 text-sm text-[var(--color-folha-900)]/60">
-      {children}
-    </p>
-  )
 }
 
 function Parametros({ metodo }: { metodo: Metodo }) {

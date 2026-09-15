@@ -7,7 +7,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test \"src/**/*.test.ts\"",
+    "test": "tsx --test \"src/**/*.test.ts\" \"scripts/**/*.test.ts\"",
     "rules:deploy": "tsx scripts/rules-deploy.ts",
     "perfil": "tsx scripts/definir-perfil.ts",
     "seed:fatores": "tsx scripts/seed-fatores.ts",

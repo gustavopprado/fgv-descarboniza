@@ -13,6 +13,7 @@ import {
   DURACAO_SESSAO_MS,
   LoginRecusadoError,
   criarCookieDeSessao,
+  encerrarSessao,
 } from '@/server/sessao'
 
 export async function POST(requisicao: Request): Promise<NextResponse> {
@@ -32,6 +33,16 @@ export async function POST(requisicao: Request): Promise<NextResponse> {
     ;(await cookies()).set({
       name: COOKIE_SESSAO,
       value: cookie,
+      // §11.9, os quatro atributos e o porquê de cada um:
+      // httpOnly  — o JavaScript da página não alcança o cookie, então XSS não
+      //             vira roubo de sessão;
+      // secure    — em produção o cookie só viaja por https. Em
+      //             desenvolvimento local o navegador recusaria um cookie
+      //             `secure` em http, e o login não funcionaria;
+      // sameSite  — `lax` não envia o cookie em requisição disparada por outro
+      //             site, o que fecha o CSRF do caminho de escrita da §10.6, e
+      //             ainda funciona quando alguém chega por um link externo;
+      // path      — uma sessão para o sistema inteiro.
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -49,7 +60,13 @@ export async function POST(requisicao: Request): Promise<NextResponse> {
   }
 }
 
+/**
+ * Sair. Revoga a sessão no Firebase **antes** de apagar o cookie: apagar só o
+ * cookie deixaria válido, até expirar, qualquer valor que tivesse sido copiado.
+ */
 export async function DELETE(): Promise<NextResponse> {
-  ;(await cookies()).delete(COOKIE_SESSAO)
+  const armazem = await cookies()
+  await encerrarSessao(armazem.get(COOKIE_SESSAO)?.value)
+  armazem.delete(COOKIE_SESSAO)
   return NextResponse.json({ ok: true })
 }
