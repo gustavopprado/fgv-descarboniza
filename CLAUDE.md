@@ -494,6 +494,18 @@ estiver lá, o cálculo falha explicitamente em vez de usar um padrão.** Não i
 valor nem assumir número de memória. A coleção é pequena: lê-se inteira e filtra-se
 a vigência em JavaScript, sem índice composto.
 
+**A granularidade da falha é o registro, não a carga.** Na mobilidade, combinação
+de modal e combustível sem fator é **erro de dado, não modal a estimar**: moto a
+diesel e moto elétrica não têm fator de propósito. A resposta recebe alerta, vira
+exceção com motivo, fica fora da média e aparece na tela de método — e o restante
+da carga continua. Uma linha ruim não derruba as outras, e nenhuma delas recebe
+valor aproximado.
+
+Nas viagens a política é outra, de propósito: o fator aéreo vem do próprio arquivo
+da base e é carregado pelo seed. Ausência ali não é erro de uma linha, é sinal de
+que o seed não rodou ou de que a base está inconsistente — e continuar
+subestimaria o inventário em silêncio. Por isso a carga de viagens para.
+
 `usuarioPerfil.empresa` existe para o perfil `importacao`, que pode ser filtrado por
 empresa (§5).
 
@@ -1203,3 +1215,224 @@ morde não é guarda.
 privacidade e de integridade em código testado. O que falta para o inventário
 existir de verdade é infraestrutura e dado: projeto no Firebase, service account,
 arquivo de fatores da mobilidade e execução das cargas.
+
+#### 2026-09-14 — Primeira carga real e conferência contra o Firestore
+
+**Viagens: o critério de aceite da migração foi cumprido contra banco de verdade.**
+Reservas, trechos, pessoas, aeroportos, distância, emissão total e os doze meses
+da série bateram com diferença zero, e as três conferências de integridade —
+trecho sem fator carimbado, ordem repetida na reserva, mês diferente do mês da
+data do voo — voltaram zeradas. O número que o modelo relacional produzia em
+simulação é o mesmo que o Firestore produz carregado.
+
+**Mobilidade não foi carregada**, apesar de os comandos terem sido dados. A
+coleção está vazia porque três pré-requisitos ainda não existem: o arquivo de
+fatores da mobilidade, a coordenada real da fábrica e a chave do provedor de
+rota. A conferência detectou e reportou a ausência em vez de passar batido.
+
+**Risco evitado, que vale ficar registrado.** Se a carga tivesse rodado com a
+coordenada da fábrica ainda no valor de exemplo, toda distância sairia medida a
+partir de um ponto no oceano. Como distância acima do limite vira exceção, e
+exceção fica fora da média por desenho, o resultado seria um módulo inteiro em
+exceção com média válida e vazia — um erro que não estoura em lugar nenhum. A
+carga não rodar foi melhor que rodar assim, mas a lição é que o limite de
+distância não protege contra origem errada: ele só transforma o erro em exceção.
+
+**Correção de operação**
+
+- `npm run rules:deploy` falhava com "No currently active project". O caminho
+  convencional seria um `.firebaserc` versionado, que carregaria o id do projeto —
+  identificador de infraestrutura que não entra no git (§2.1). O script passou a
+  ler o projeto do `.env` e passar em `--project`, mantendo fonte única e nada
+  novo para ignorar.
+
+**Incidente contido, sem vazamento**
+
+- As credenciais foram preenchidas no `.env.example`, que é versionado e já está
+  publicado, em vez do `.env`. Conferido que a chave real não entrou em nenhum
+  commit nem no repositório remoto: ela existia apenas na cópia de trabalho. Os
+  valores foram movidos para o `.env`, que é ignorado, e o `.env.example` voltou
+  ao placeholder. Recomendada a rotação da chave, por ela ter passado por um
+  arquivo cujo propósito é ser público.
+
+#### 2026-09-14 — Fator ausente: falha por registro, não por carga
+
+**Pedido do Gustavo.** Combinação sem fator precisa sinalizar o registro e deixar
+o processamento seguir, em vez de quebrar a importação inteira. Moto a diesel e
+moto elétrica não têm fator de propósito: indicam erro de preenchimento e têm que
+aparecer como alerta, nunca receber valor aproximado.
+
+**Como estava.** O resolvedor lançava, ninguém capturava no laço da mobilidade, e
+o erro subia até o encerramento do script. Como a gravação acontece depois do
+laço, **uma única linha com combinação inválida derrubava a carga toda e não
+gravava nada** — nem as respostas boas.
+
+**Como ficou.** A recusa do fator é capturada por registro na mobilidade. A
+resposta vira exceção com motivo, recebe alerta de severidade erro, fica com
+fator nulo e emissão zero, e a carga continua. A validação de escrita já exigia
+que fator nulo viesse com emissão zero, então a combinação é coerente por
+construção; e exceção fica fora da média por desenho, o que impede o registro de
+puxar o indicador para baixo como se fosse emissão zero legítima.
+
+**A política ficou assimétrica entre os módulos, de propósito**, e está escrita
+na §9.8: na mobilidade a ausência é erro de uma linha; nas viagens o fator vem do
+próprio arquivo da base, então ausência é sinal de seed não rodado ou base
+inconsistente, e continuar subestimaria o inventário em silêncio.
+
+**O caso não é hipotético.** A planilha da pesquisa tem uma resposta com
+exatamente uma das combinações que não têm fator. Antes desta correção, ela
+sozinha impediria a carga do módulo inteiro.
+
+**Validação**
+
+- `tsc --noEmit` e `npm test` (39 testes, 6 novos) passam.
+- Os testes novos cobrem o resolvedor pelos dois lados: fator vigente é devolvido;
+  combinação sem fator, fator fora de vigência e coleção vazia são recusados, e
+  nenhum deles vira zero ou aproximação. Um teste garante que a recusa de um
+  registro não interrompe o processamento dos demais.
+
+#### 2026-09-14 — Trava contra credencial em arquivo versionado
+
+O `.env.example` foi preenchido com a credencial real duas vezes — é o arquivo
+mais perigoso do repositório, porque existe para ser público e tem exatamente o
+formato de um arquivo de segredos. Nas duas vezes nada foi commitado, mas a
+terceira poderia ser a que escapa, e histórico público não se apaga (§2.4).
+
+Duas guardas foram instaladas:
+
+- `src/server/segredos.test.ts` — varre os arquivos versionados procurando o que
+  tem cara de credencial: PEM com corpo real, chave de API do Google, client
+  secret do OAuth, token do GitHub, chave da AWS. Os padrões são estreitos de
+  propósito, para não disparar em placeholder: teste que dá alarme falso é teste
+  que se aprende a ignorar.
+- Um gancho de pré-commit, local e não versionado, que roda a mesma varredura
+  sobre o que está sendo commitado e recusa o commit. Removível apagando o
+  arquivo; pulável com `--no-verify`, conscientemente.
+
+Ambas foram conferidas colocando a credencial de volta no arquivo: o teste falha
+e o commit é bloqueado. Guarda que não morde não é guarda.
+
+#### 2026-09-14 — Limite de taxa do provedor de rota
+
+A carga de mobilidade parou com 429 do provedor de rota depois de algumas
+dezenas de respostas. Duas falhas, não uma:
+
+1. **O código não respeitava o limite.** O geocodificador já tinha intervalo
+   entre chamadas; o provedor de rota não tinha nenhum, e disparava tão rápido
+   quanto o geocodificador liberasse — muito acima do que o plano gratuito
+   aceita por minuto.
+2. **Uma recusa transitória derrubava a carga inteira.** Como a gravação
+   acontece depois do laço, dezenas de respostas já processadas se perdiam por
+   causa de uma chamada recusada. Mesmo padrão do fator ausente, corrigido
+   antes, em outro ponto do mesmo laço.
+
+**Como ficou**
+
+- A calculadora de distância passou a declarar o próprio intervalo entre
+  chamadas, como o geocodificador já fazia, com padrão abaixo do limite do plano
+  gratuito e ajustável por variável de ambiente.
+- 429 virou erro tipado, separado dos demais: a espera segue o `Retry-After` que
+  o provedor manda e, na ausência dele, cresce a cada tentativa.
+- Esgotadas as tentativas, a resposta vira exceção com alerta próprio, fica fora
+  da média e a carga continua. O alerta diz que uma recarga pode trazê-la de
+  volta — é falha de infraestrutura, não de dado, e não deve parecer permanente.
+- O script passou a estimar e anunciar a duração da carga a partir dos intervalos
+  declarados pelos dois provedores, para a espera não parecer travamento.
+
+**Decisão**
+
+- **Não há cache de rota na mobilidade**, e isso é deliberado. A §7.4 manda
+  cachear rota por sequência de códigos IBGE, mas ali a chave é município; aqui
+  seria a coordenada da residência, e guardar isso é guardar endereço, o que a
+  §6.1 proíbe. O custo é uma recarga refazer o trabalho — aceitável no volume
+  desta pesquisa.
+
+**Validação**
+
+- `tsc --noEmit` e `npm test` (47 testes, 7 novos) passam.
+- Os testes novos cobrem a leitura do `Retry-After` em segundos, em data HTTP,
+  ausente e no passado, além da simetria e da ordem de grandeza da distância
+  ortodrômica.
+
+#### 2026-09-15 — Mobilidade carregou, conferiu e o número não presta
+
+A carga rodou inteira e **todas as conferências passaram**. Mesmo assim o módulo
+está inválido, e o motivo é instrutivo.
+
+**O achado.** A esmagadora maioria das respostas ficou com exatamente a mesma
+distância, e essas pessoas se espalham por dezenas de bairros diferentes. Isso é
+fisicamente impossível: significa que o provedor de geocodificação devolveu a
+mesma coordenada — a do município — para a maior parte dos CEPs. A distância
+deixou de medir deslocamento e passou a medir "centro da cidade até a fábrica".
+
+**Por que nenhuma conferência pegou.** Todas as que existiam checavam *coerência
+interna*: a emissão gravada bate com distância × dias úteis × fator, o fator
+carimbado é o vigente, a contagem de registros bate com a de respostas do
+arquivo. Tudo isso continua verdadeiro com uma distância errada. Faltava uma
+conferência de **plausibilidade** — a pergunta não é "a conta fecha?", é "o
+insumo faz sentido?".
+
+**O que isso invalida:** a distância média do módulo, o radar da §10.2 (que
+desenharia quase todos os pontos no mesmo raio) e a emissão por pessoa, que fica
+idêntica dentro de cada modal. O total do módulo é igualmente sem sentido.
+
+**Duas guardas novas, uma em cada ponta**
+
+- Na carga: depois de calcular as distâncias, o script mede a fração de respostas
+  que compartilham a mesma distância. Passando do limite, avisa em destaque,
+  explica a causa provável e **marca cada resposta afetada com alerta próprio**,
+  para o problema aparecer na tela de método e não só no terminal.
+- Na conferência: a mesma medida virou item que falha. Foi conferido contra o
+  estado atual do banco e **falhou**, como devia.
+
+O limite é parâmetro, com padrão conservador: com geocodificação de CEP,
+distâncias idênticas até o centímetro são raras.
+
+**Lição que vale além deste caso.** Conferência de coerência e conferência de
+plausibilidade são coisas diferentes. A primeira responde se o sistema calculou
+certo; a segunda, se o que entrou no cálculo era crível. Este módulo passou na
+primeira por dias enquanto falhava na segunda.
+
+**Pendente, e é decisão de método**: trocar o provedor de geocodificação por um
+com precisão de CEP e recarregar o ano-base. Enquanto isso não acontece, o número
+da mobilidade não deve ser publicado nem somado ao painel.
+
+#### 2026-09-15 — Carga 100% em exceção passou em todas as conferências
+
+A cota diária do provedor de rota esgotou e ele passou a responder 403 em toda
+chamada. O resultado: **nenhuma das respostas obteve distância**, o módulo foi
+gravado inteiro em exceção, com emissão zero — e a conferência disse que estava
+tudo certo.
+
+**Dois defeitos, e o segundo é o mesmo que eu tinha acabado de criticar**
+
+1. **Erro de credencial e de cota era tratado como falha transitória.** O 429 já
+   tinha tratamento próprio, mas 401 e 403 caíam no caminho genérico: quatro
+   tentativas inúteis e depois exceção por resposta. Repetir não resolve cota, e
+   transformar isso em exceção espalha uma falha de ambiente por todos os
+   registros, disfarçada de problema de dado.
+2. **Toda conferência do módulo é calculada sobre as respostas que estão na
+   média.** Com o módulo inteiro em exceção, não sobra nada para conferir e tudo
+   passa — inclusive a conferência de plausibilidade adicionada no dia anterior,
+   que mediu concentração de distâncias sobre um conjunto vazio e devolveu zero.
+   É exatamente o ponto cego que aquela conferência existia para cobrir,
+   reproduzido dentro dela.
+
+**Como ficou**
+
+- 401 e 403 viraram erro fatal próprio, que não é repetido e interrompe a carga
+  dizendo para conferir chave e cota.
+- A carga recusa gravar quando **nenhuma** resposta obteve distância: seria
+  substituir o ano-base por um módulo de exceções com aparência de sucesso.
+- A conferência ganhou a fração de respostas em exceção como item que falha.
+  Conferido contra o banco atual: **falhou**, apontando o módulo inteiro em
+  exceção.
+
+**Lição, agora em duas camadas.** Não basta separar conferência de coerência de
+conferência de plausibilidade: a de plausibilidade também precisa de uma guarda
+sobre o próprio conjunto que ela mede. Indicador calculado sobre conjunto vazio
+não devolve erro, devolve zero — e zero passa em quase todo teste de limite.
+
+**Estado do módulo de mobilidade**: inválido e sem número publicável, agora por
+dois motivos acumulados — geocodificação grosseira, que exige trocar de provedor,
+e cota de rota esgotada, que exige esperar a renovação ou outro plano.

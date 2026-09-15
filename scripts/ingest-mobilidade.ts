@@ -30,7 +30,10 @@ import {
   ALERTA_COMBUSTIVEL_DESCONHECIDO,
   ALERTA_COMBUSTIVEL_INDEVIDO,
   ALERTA_DISTANCIA_IMPROVAVEL,
+  ALERTA_DISTANCIA_INDISPONIVEL,
+  ALERTA_FATOR_AUSENTE,
   ALERTA_GEOCODIFICACAO,
+  ALERTA_GEOCODIFICACAO_IMPRECISA,
   ALERTA_MATRICULA_NUMERICA,
   ALERTA_RESPOSTA_SUBSTITUIDA,
   ALERTA_TRANSPORTE_DESCONHECIDO,
@@ -46,6 +49,9 @@ import {
 } from '../src/lib/calculo/mobilidade'
 import {
   criarCalculadoraDeDistancia,
+  LimiteDeTaxaError,
+  ProvedorIndisponivelError,
+  type CalculadoraDeDistancia,
   type Coordenada,
   type ModoDeDistancia,
 } from '../src/lib/geo/distancia'
@@ -63,7 +69,7 @@ import {
 } from '../src/server/documentos/tipos'
 import { validarMobilidade } from '../src/server/documentos/validacao'
 import { gravarCadastro, recarregarEscopo } from '../src/server/escrita'
-import { carregarFatores } from '../src/server/fatores'
+import { carregarFatores, FatorAusenteError } from '../src/server/fatores'
 import { COLECAO } from '../src/server/firestore'
 import {
   caminhoDaBase,
@@ -84,6 +90,9 @@ const SEVERIDADE: Record<string, Severidade> = {
   [ALERTA_COMBUSTIVEL_AUSENTE]: 'erro',
   [ALERTA_TRANSPORTE_DESCONHECIDO]: 'erro',
   [ALERTA_GEOCODIFICACAO]: 'erro',
+  [ALERTA_FATOR_AUSENTE]: 'erro',
+  [ALERTA_DISTANCIA_INDISPONIVEL]: 'erro',
+  [ALERTA_GEOCODIFICACAO_IMPRECISA]: 'erro',
 }
 
 function severidadeDe(tipo: string): Severidade {
@@ -131,6 +140,21 @@ function modoDeDistancia(): ModoDeDistancia {
   throw new Error(
     `MOBILIDADE_DISTANCIA_MODO inválido: "${bruto}". Use "rodoviaria" ou "ortodromica".`,
   )
+}
+
+/**
+ * Fração máxima de respostas que pode compartilhar a mesma distância.
+ *
+ * Passar disso é sinal de geocodificação grosseira, não de gente morando perto:
+ * com coordenada de CEP, distâncias idênticas até o centímetro são raras.
+ */
+function concentracaoMaxima(): number {
+  const bruto = process.env.MOBILIDADE_CONCENTRACAO_MAXIMA
+  const valor = bruto === undefined || bruto.trim() === '' ? 0.25 : Number(bruto)
+  if (!Number.isFinite(valor) || valor <= 0 || valor > 1) {
+    throw new Error(`MOBILIDADE_CONCENTRACAO_MAXIMA inválida: ${bruto}`)
+  }
+  return valor
 }
 
 /** Acima disso o deslocamento diário não se sustenta e a resposta vira exceção. */
@@ -357,6 +381,47 @@ export function manterUltimaPorMatricula(lidas: LinhaLida[]): {
 
 /* ------------------------------------------------------------------ carga */
 
+/** Tentativas por resposta antes de desistir da distância. */
+const TENTATIVAS_DE_ROTA = 4
+
+/**
+ * Distância com espera e repetição.
+ *
+ * O provedor gratuito limita chamadas por minuto, e estourar o limite custava a
+ * carga inteira. Aqui o limite é respeitado antes de acontecer — pelo intervalo
+ * que o próprio provedor declara — e, quando ainda assim vem recusa, a espera
+ * segue o que ele pediu e a chamada é repetida. Devolve `null` quando desiste,
+ * para quem chama decidir o que fazer com a resposta.
+ */
+async function distanciaComTentativas(
+  calculadora: CalculadoraDeDistancia,
+  origem: Coordenada,
+  destino: Coordenada,
+): Promise<number | null> {
+  for (let tentativa = 1; tentativa <= TENTATIVAS_DE_ROTA; tentativa++) {
+    try {
+      const km = await calculadora.entre(origem, destino)
+      await aguardar(calculadora.intervaloMs)
+      return Math.round(km * 100) / 100
+    } catch (erro) {
+      // Credencial ou cota não melhora repetindo, e virar exceção produziria um
+      // módulo inteiro vazio com cara de carga bem-sucedida.
+      if (erro instanceof ProvedorIndisponivelError) throw erro
+      if (tentativa === TENTATIVAS_DE_ROTA) return null
+
+      if (erro instanceof LimiteDeTaxaError) {
+        // Respeita o que o provedor pediu; sem pedido, espera crescente.
+        const espera = erro.esperarMs ?? Math.max(calculadora.intervaloMs, 1000) * 2 ** tentativa
+        console.log(`  limite de taxa do provedor; aguardando ${Math.round(espera / 1000)}s...`)
+        await aguardar(espera)
+        continue
+      }
+      await aguardar(Math.max(calculadora.intervaloMs, 500) * tentativa)
+    }
+  }
+  return null
+}
+
 type RegistroCalculado = {
   resposta: Resposta
   distanciaKm: number
@@ -403,9 +468,18 @@ async function principal(): Promise<void> {
   /* --------------------------------------------- geocodificação e distância */
   tituloDaEtapa('Geocodificação e distância')
   console.log('  o endereço é usado aqui e descartado; nada dele é gravado.')
+  const porResposta = geocodificador.intervaloMs + calculadora.intervaloMs
+  if (porResposta > 0) {
+    const minutos = Math.ceil((mantidas.length * porResposta) / 60000)
+    console.log(
+      `  os provedores limitam chamadas por minuto: ~${minutos} min para ` +
+        `${mantidas.length} respostas. Ajuste com ROTAS_INTERVALO_MS se o seu plano permitir.`,
+    )
+  }
 
   const registros: RegistroCalculado[] = []
   let semCoordenada = 0
+  let semDistancia = 0
   let processadas = 0
 
   for (const { resposta, cep } of mantidas) {
@@ -446,16 +520,27 @@ async function principal(): Promise<void> {
       continue
     }
 
-    let distanciaKm: number
-    try {
-      distanciaKm = await calculadora.entre(coordenada, fabrica)
-    } catch (erro) {
-      const motivo = erro instanceof Error ? erro.message : String(erro)
-      throw new Error(`Falha ao calcular distância (linha ${resposta.linha}): ${motivo}`)
+    const distanciaKm = await distanciaComTentativas(calculadora, coordenada, fabrica)
+
+    if (distanciaKm === null) {
+      semDistancia++
+      resposta.alertas.push({
+        tipo: ALERTA_DISTANCIA_INDISPONIVEL,
+        descricao:
+          'o provedor de rota não devolveu distância depois das tentativas; ' +
+          'recarregue o ano-base para trazer esta resposta de volta ao cálculo',
+      })
+      registros.push({
+        resposta,
+        distanciaKm: 0,
+        co2KgMes: 0,
+        excecao: true,
+        motivoExcecao: 'distância não pôde ser calculada',
+        fator: null,
+      })
+      continue
     }
     // A coordenada morre aqui. A partir deste ponto só existe distância.
-    distanciaKm = Math.round(distanciaKm * 100) / 100
-
     registros.push({
       resposta,
       distanciaKm,
@@ -467,6 +552,67 @@ async function principal(): Promise<void> {
   }
   if (semCoordenada > 0) {
     console.log(`  ${semCoordenada} respostas ficaram sem coordenada e entram como exceção.`)
+  }
+  if (semDistancia > 0) {
+    console.log(
+      `  ${semDistancia} respostas ficaram sem distância e entram como exceção; ` +
+        'uma recarga depois pode trazê-las de volta.',
+    )
+  }
+
+  /* ------------------------------------------------- a carga vale a pena? */
+  // Uma carga em que nada obteve distância não é uma carga: gravaria 159
+  // exceções, com média vazia, e passaria por toda conferência de coerência.
+  // Isso é falha de ambiente, e tem que parar antes de tocar no banco.
+  const comDistanciaCalculada = registros.filter((r) => r.distanciaKm > 0).length
+  if (comDistanciaCalculada === 0) {
+    throw new Error(
+      'Nenhuma resposta obteve distância. Gravar agora substituiria o ano-base ' +
+        'por um módulo inteiro de exceções, com média vazia e aparência de ' +
+        'sucesso. Confira a chave e a cota do provedor de rota e recarregue.',
+    )
+  }
+
+  /* ------------------------------------------- qualidade da geocodificação */
+  // Muitas respostas com a MESMA distância significam muitos CEPs caindo na
+  // mesma coordenada — o provedor devolveu o centro do município. O módulo
+  // continuaria fechando por dentro, então este é o único ponto em que o erro
+  // aparece.
+  const comDistancia = registros.filter((r) => !r.excecao)
+  const porDistancia = new Map<number, RegistroCalculado[]>()
+  for (const r of comDistancia) {
+    const lista = porDistancia.get(r.distanciaKm)
+    if (lista) lista.push(r)
+    else porDistancia.set(r.distanciaKm, [r])
+  }
+  const maiorGrupo = [...porDistancia.values()].sort((a, b) => b.length - a.length)[0] ?? []
+  const concentracao = comDistancia.length === 0 ? 0 : maiorGrupo.length / comDistancia.length
+
+  if (concentracao > concentracaoMaxima()) {
+    const bairros = new Set(maiorGrupo.map((r) => r.resposta.bairro)).size
+    console.log('')
+    console.log('  ATENÇÃO — a geocodificação parece grosseira.')
+    console.log(
+      `  ${maiorGrupo.length} de ${comDistancia.length} respostas ` +
+        `(${Math.round(concentracao * 100)}%) ficaram com a MESMA distância, ` +
+        `e elas se espalham por ${bairros} bairros diferentes.`,
+    )
+    console.log(
+      '  Isso acontece quando o provedor devolve o centro do município no lugar ' +
+        'da coordenada do CEP. A distância média, o radar e a emissão por pessoa',
+    )
+    console.log(
+      '  ficam sem significado. Troque GEOCODE_PROVEDOR por um com precisão de ' +
+        'CEP e recarregue o ano-base.',
+    )
+    for (const r of maiorGrupo) {
+      r.resposta.alertas.push({
+        tipo: ALERTA_GEOCODIFICACAO_IMPRECISA,
+        descricao:
+          'esta distância é compartilhada por muitas outras respostas, de bairros ' +
+          'diferentes: a coordenada obtida para o CEP é do município, não do endereço',
+      })
+    }
   }
 
   /* ------------------------------------------------------------- emissão */
@@ -486,6 +632,7 @@ async function principal(): Promise<void> {
     // data da resposta não é gravada (§9.5), então só esta referência pode ser
     // reproduzida depois por scripts/verificar.ts.
     const dataDoFator = `${ano}-12-31`
+    let semFator = 0
 
     for (const registro of registros) {
       const { resposta } = registro
@@ -517,17 +664,45 @@ async function principal(): Promise<void> {
         continue
       }
 
-      const fator = fatores.vigente(
-        categoriaDoFator(transporte),
-        chaveDoFator(transporte, resposta.combustivel),
-        dataDoFator,
-      )
+      // Combinação sem fator é erro de dado, não modal a estimar: moto a diesel
+      // e moto elétrica não existem na tabela de propósito. A resposta é
+      // sinalizada e sai da média, e a carga continua — uma linha ruim não pode
+      // derrubar as outras. O que nunca acontece é receber valor aproximado.
+      let fator
+      try {
+        fator = fatores.vigente(
+          categoriaDoFator(transporte),
+          chaveDoFator(transporte, resposta.combustivel),
+          dataDoFator,
+        )
+      } catch (erro) {
+        if (!(erro instanceof FatorAusenteError)) throw erro
+        const combinacao = resposta.combustivel
+          ? `${transporte} com ${resposta.combustivel}`
+          : transporte
+        registro.excecao = true
+        registro.motivoExcecao = `sem fator para a combinação: ${combinacao}`
+        resposta.alertas.push({
+          tipo: ALERTA_FATOR_AUSENTE,
+          descricao: `não existe fator de emissão para ${combinacao}; a combinação indica erro de preenchimento`,
+        })
+        semFator++
+        continue
+      }
+
       registro.fator = fator
       registro.co2KgMes = emissaoMensal({
         distanciaKm: registro.distanciaKm,
         diasUteisMes: dias,
         fatorKgPorKm: fator.valor,
       })
+    }
+
+    if (semFator > 0) {
+      console.log(
+        `  ${semFator} resposta(s) sem fator para a combinação informada; ` +
+          'entram como exceção e aparecem na tela de método.',
+      )
     }
 
     const noCalculo = registros.filter((r) => !r.excecao)

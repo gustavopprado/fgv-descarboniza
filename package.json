@@ -8,7 +8,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test \"src/**/*.test.ts\"",
-    "rules:deploy": "firebase deploy --only firestore:rules",
+    "rules:deploy": "tsx scripts/rules-deploy.ts",
     "seed:fatores": "tsx scripts/seed-fatores.ts",
     "seed:fatores-mobilidade": "tsx scripts/seed-fatores-mobilidade.ts",
     "ingest:viagens": "tsx scripts/ingest-viagens.ts",

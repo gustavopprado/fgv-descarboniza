@@ -123,3 +123,32 @@ export const ALERTA_GEOCODIFICACAO = 'geocodificacao_falhou'
 export const ALERTA_DISTANCIA_IMPROVAVEL = 'distancia_improvavel'
 export const ALERTA_RESPOSTA_SUBSTITUIDA = 'resposta_substituida'
 export const ALERTA_MATRICULA_NUMERICA = 'matricula_lida_como_numero'
+
+/**
+ * Combinação de modal e combustível que não tem fator definido.
+ *
+ * A ausência é proposital: moto a diesel e moto elétrica, por exemplo, indicam
+ * erro de preenchimento, não um modal a ser estimado. A resposta é sinalizada e
+ * fica fora da média — **nunca recebe valor aproximado** (§9.8).
+ */
+export const ALERTA_FATOR_AUSENTE = 'fator_ausente'
+
+/**
+ * O provedor de rota não devolveu distância, mesmo depois das tentativas.
+ *
+ * É falha de infraestrutura, não de dado: a resposta vira exceção para não
+ * entrar na média com distância inventada, e o alerta deixa claro que ela pode
+ * voltar ao cálculo numa recarga.
+ */
+export const ALERTA_DISTANCIA_INDISPONIVEL = 'distancia_indisponivel'
+
+/**
+ * A distância desta resposta é compartilhada por muitas outras.
+ *
+ * Denuncia geocodificação grosseira: quando o provedor devolve o centro do
+ * município no lugar da coordenada do CEP, dezenas de endereços diferentes viram
+ * o mesmo ponto e a distância deixa de medir qualquer coisa. O módulo continua
+ * fechando por dentro — emissão bate com distância × dias × fator — e por isso o
+ * erro não aparece em nenhuma conferência de coerência.
+ */
+export const ALERTA_GEOCODIFICACAO_IMPRECISA = 'geocodificacao_imprecisa'

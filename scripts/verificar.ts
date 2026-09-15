@@ -305,8 +305,44 @@ async function conferirMobilidade(db: Firestore, tol: number): Promise<number> {
     if (Math.abs(esperado - r.co2KgMes) > 0.000001) divergentes++
   }
 
+  // Concentração de distâncias idênticas denuncia geocodificação por município.
+  // A coerência interna do módulo continua fechando nesse caso — emissão bate
+  // com distância × dias × fator — então esta é a única conferência que enxerga
+  // o problema.
+  const naMedia = registros.filter((r) => !r.excecao)
+  const porDistancia = new Map<number, number>()
+  for (const r of naMedia) {
+    porDistancia.set(r.distanciaKm, (porDistancia.get(r.distanciaKm) ?? 0) + 1)
+  }
+  const maiorGrupo = Math.max(0, ...porDistancia.values())
+  const concentracao = naMedia.length === 0 ? 0 : maiorGrupo / naMedia.length
+  const limiteBruto = process.env.MOBILIDADE_CONCENTRACAO_MAXIMA
+  const limite =
+    limiteBruto === undefined || limiteBruto.trim() === '' ? 0.25 : Number(limiteBruto)
+
   const emExcecao = registros.filter((r) => r.excecao).length
+  // Todas as demais conferências deste módulo são calculadas sobre as respostas
+  // que estão na média. Com o módulo inteiro em exceção, elas passam sem ter o
+  // que conferir — foi assim que uma carga totalmente falha pareceu correta.
+  const excecaoDemais = registros.length === 0 ? 0 : emExcecao / registros.length
   const conferencias: Conferencia[] = [
+    {
+      item: 'respostas em exceção (%)',
+      esperado: 20,
+      obtido: Math.round(excecaoDemais * 100),
+      tolerancia: Math.max(0, 20 - Math.round(excecaoDemais * 100)),
+      casas: 0,
+      origem: 'plausibilidade',
+    },
+    {
+      item: 'respostas com distância idêntica (%)',
+      esperado: Math.round(limite * 100),
+      obtido: Math.round(concentracao * 100),
+      // Só falha para cima: concentração baixa é o resultado saudável.
+      tolerancia: Math.max(0, Math.round(limite * 100) - Math.round(concentracao * 100)),
+      casas: 0,
+      origem: 'plausibilidade',
+    },
     {
       item: 'emissão recalculada (kg/mês)',
       esperado: recalculado,
