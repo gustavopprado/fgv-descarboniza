@@ -96,6 +96,10 @@ h3 {
 }
 
 .crescer {
+  /* `fill-box` é o que faz `bottom` significar a base DA BARRA. Sem ele a
+     referência é o quadro do SVG inteiro, e a barra cresce a partir de um ponto
+     fora dela — o desenho estica em vez de subir. */
+  transform-box: fill-box;
   transform-origin: bottom;
   animation: crescer 0.9s var(--ease-suave) both;
 }
@@ -165,7 +169,11 @@ h3 {
 }
 
 .varrer {
-  transform-origin: center;
+  /* A cunha é desenhada a partir da própria origem, dentro de um grupo já
+     centralizado no radar — então o eixo de rotação é o ponto zero dela.
+     `center` resolveria para o meio do quadro do SVG e a cunha giraria em
+     torno de um ponto lá fora, varrendo de través. */
+  transform-origin: 0 0;
   animation: varrer 2.2s linear both;
 }
 

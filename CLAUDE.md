@@ -2135,3 +2135,38 @@ privacidade — não de layout.
 - Os anéis e a supressão foram conferidos contra a base com ensaio temporário, apagado em
   seguida.
 
+#### 2026-09-15 — Três defeitos de animação, dois deles de origem de transformação
+
+O Gustavo reportou erro de hidratação e animações que continuavam sem parecer as do
+protótipo. Eram três defeitos distintos, e nenhum deles aparecia em typecheck, teste ou
+build.
+
+**`title` de SVG com mais de um filho quebra a hidratação.** O analisador de HTML trata o
+conteúdo de `title` como texto cru; com vários filhos, o React insere marcadores de
+comentário entre eles, o texto cru fica com lixo no meio e a hidratação falha. A correção é
+montar a string antes e passar um filho só.
+
+**`transform-origin` em SVG precisa de `transform-box`, e sem ele aponta para fora do
+elemento.** Por padrão a referência é o quadro do SVG inteiro, não o elemento:
+
+- na barra do gráfico, `bottom` virava a base do quadro, e a barra **esticava a partir de um
+  ponto fora dela** em vez de crescer da própria base;
+- na varredura do radar, `center` virava o meio do quadro. Como a cunha vive dentro de um
+  grupo já centralizado, o eixo de rotação caía longe do centro e ela **varria de través** —
+  era isto que fazia o radar não parecer um radar.
+
+A lição é a que vale guardar: em SVG, `transform-origin` sem `transform-box: fill-box` quase
+nunca significa o que se quer dizer. Onde a origem é o próprio ponto zero do elemento — o
+caso da cunha, desenhada a partir da origem dentro de um grupo já posicionado —, o certo é
+`0 0`, e não `center`.
+
+**O contador piscava.** O valor final vem do servidor de propósito (§ entrada anterior), e a
+volta para zero acontecia em efeito comum, depois da primeira pintura: o número aparecia
+pronto, saltava para zero e só então subia. Passou a acontecer em efeito de layout, antes da
+pintura. No protótipo o problema não existe porque lá o zero já está no HTML — aqui ele não
+pode estar.
+
+**Sobre as três, a mesma observação de método:** nenhuma seria pega por `tsc`, por teste ou
+por build. Origem de transformação e ordem de pintura só existem quando há navegador
+pintando, e quem pinta é quem abre a tela.
+

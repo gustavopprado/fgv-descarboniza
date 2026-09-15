@@ -10,18 +10,26 @@
  * deixaria um inventário exibindo zero para quem tem JavaScript bloqueado, o
  * que num relatório de emissão é pior que não animar.
  *
- * **A formatação é feita aqui, não recebida pronta.** A primeira versão recebia
- * a função de formatar como prop, e isso não atravessa a fronteira entre
- * servidor e cliente: função não é serializável. O que atravessa é o número de
- * casas decimais, e os dois lados chamam o mesmo `numero()`.
+ * **A volta para zero acontece antes da pintura**, com efeito de layout. Com
+ * efeito comum, o navegador chegava a pintar o valor final, e o número piscava
+ * — aparecia pronto, saltava para zero e só então subia. O protótipo não faz
+ * isso porque lá o zero já está no HTML; aqui o zero não pode estar, então o
+ * salto precisa acontecer no quadro anterior ao primeiro visível.
  *
  * Quem pede menos movimento não vê contagem nenhuma.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { numero } from '@/lib/formato'
 
 const DURACAO_MS = 1100
+
+/**
+ * No servidor não há layout para medir, e o React avisa se `useLayoutEffect` for
+ * chamado lá. Como o efeito só existe para evitar um quadro pintado errado, no
+ * servidor ele simplesmente não precisa rodar.
+ */
+const useEfeitoDeLayout = typeof window === 'undefined' ? useEffect : useLayoutEffect
 
 export function Contador({
   valor,
@@ -35,7 +43,7 @@ export function Contador({
   const [texto, setTexto] = useState(() => numero(valor, casas))
   const jaAnimou = useRef(false)
 
-  useEffect(() => {
+  useEfeitoDeLayout(() => {
     if (jaAnimou.current) return
     jaAnimou.current = true
 
@@ -43,6 +51,9 @@ export function Contador({
       '(prefers-reduced-motion: reduce)',
     ).matches
     if (querMenosMovimento || valor === 0) return
+
+    // Antes de qualquer pintura: o zero entra aqui, não no HTML do servidor.
+    setTexto(numero(0, casas))
 
     let quadro = 0
     const inicio = performance.now()

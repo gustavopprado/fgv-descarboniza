@@ -82,9 +82,14 @@ export function GraficoDeBarras({
                     : 'var(--color-folha-700)'
               }
             >
+              {/* Um filho só, e já montado: o analisador de HTML trata o
+                  conteúdo de `title` como texto cru, então vários filhos viram
+                  marcadores de comentário no meio do texto e a hidratação
+                  falha. */}
               <title>
-                {barra.rotulo}: {numero(barra.valor, casas)}
-                {unidade === undefined ? '' : ` ${unidade}`}
+                {`${barra.rotulo}: ${numero(barra.valor, casas)}${
+                  unidade === undefined ? '' : ` ${unidade}`
+                }`}
               </title>
             </rect>
 
