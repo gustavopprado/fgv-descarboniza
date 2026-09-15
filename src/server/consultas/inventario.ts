@@ -19,7 +19,9 @@
 import type { Firestore, Query } from 'firebase-admin/firestore'
 
 import { corteFonteViagensOuNulo, supressaoMinima } from '@/lib/env'
+import { coordenadaValida } from '@/lib/mapa'
 import type {
+  DocAeroporto,
   DocEmbarque,
   DocMobilidade,
   DocViagemTrecho,
@@ -150,6 +152,35 @@ export async function consultarMobilidade(
 
 /* ---------------------------------------------------------------- viagens */
 
+/**
+ * Uma rota desenhável no mapa (§10.3).
+ *
+ * Só chega aqui a rota que **sobreviveu à supressão** (§3.1): um par
+ * origem-destino voado por pouca gente identifica essa gente, e desenhá-lo no
+ * mapa seria apontar para ela no mapa. O balde de recortes suprimidos não tem
+ * lugar no mundo e por isso não tem linha — some do desenho, e a tela diz
+ * quantas rotas ficaram de fora.
+ */
+export type RotaNoMapa = {
+  origem: string
+  destino: string
+  origemLatitude: number
+  origemLongitude: number
+  destinoLatitude: number
+  destinoLongitude: number
+  co2Kg: number
+  trechos: number
+  pessoas: number
+}
+
+export type MapaDeRotas = {
+  rotas: RotaNoMapa[]
+  /** Rotas que existem, mas foram suprimidas por identificarem quem voou. */
+  suprimidas: number
+  /** Rotas suprimidas não, mas sem coordenada de aeroporto no cadastro. */
+  semCoordenada: number
+}
+
 export type ResumoDeViagens = {
   ano: number | null
   viagens: number
@@ -165,6 +196,8 @@ export type ResumoDeViagens = {
   alertas: { tipo: string; ocorrencias: number }[]
   /** Onde a série troca de fonte, para a tela marcar a virada (§7). */
   mesesPorFonte: { mes: string; agencia: number; formulario: number }[]
+  /** Rotas aéreas desenháveis, já suprimidas e com coordenada (§10.3). */
+  mapa: MapaDeRotas
   /**
    * A data de corte entre agência e formulário, ou `null` enquanto ela não
    * estiver definida (§7).
@@ -205,6 +238,8 @@ export async function consultarViagens(
       alertas.set(codigo, (alertas.get(codigo) ?? 0) + 1)
     }
   }
+
+  const mapa = await montarMapaDeRotas(db, trechos, limite, valor, pessoa)
 
   const porFonte = new Map<string, { agencia: number; formulario: number }>()
   for (const t of trechos) {
@@ -256,7 +291,86 @@ export async function consultarViagens(
     mesesPorFonte: [...porFonte.entries()]
       .map(([mes, v]) => ({ mes, ...v }))
       .sort((a, b) => a.mes.localeCompare(b.mes)),
+    mapa,
     corteFonte: corteFonteViagensOuNulo(),
+  }
+}
+
+/**
+ * Junta rota agregada com coordenada de aeroporto.
+ *
+ * Só o trecho aéreo entra: o de carro guarda município em `origem` e `destino`,
+ * e a coleção de municípios ainda não existe. Desenhar o aéreo e calar sobre o
+ * rodoviário seria mentir por omissão, então a tela declara o recorte.
+ *
+ * A agregação é a mesma do resto da camada, com o mesmo limite de supressão —
+ * o mapa não é uma porta lateral para ver o que a tabela esconde.
+ */
+async function montarMapaDeRotas(
+  db: Firestore,
+  trechos: DocViagemTrecho[],
+  limite: number,
+  valor: (t: DocViagemTrecho) => number,
+  pessoa: (t: DocViagemTrecho) => string,
+): Promise<MapaDeRotas> {
+  const SEPARADOR = ' '
+  const aereos = trechos.filter((t) => t.tipo === 'aereo')
+  if (aereos.length === 0) {
+    return { rotas: [], suprimidas: 0, semCoordenada: 0 }
+  }
+
+  const grupos = agrupar(aereos, {
+    chave: (t) => `${t.origem}${SEPARADOR}${t.destino}`,
+    valor,
+    pessoa,
+    rotuloNulo: 'Sem rota',
+    limite,
+  })
+
+  const distintas = new Set(aereos.map((t) => `${t.origem}${SEPARADOR}${t.destino}`)).size
+  const sobreviventes = grupos.filter((g) => !g.agrupadoPorSupressao)
+
+  const aeroportos = new Map<string, DocAeroporto>()
+  for (const doc of (await db.collection(COLECAO.aeroporto).get()).docs) {
+    const aeroporto = doc.data() as DocAeroporto
+    aeroportos.set(aeroporto.iata, aeroporto)
+  }
+
+  const rotas: RotaNoMapa[] = []
+  let semCoordenada = 0
+
+  for (const grupo of sobreviventes) {
+    const [origem, destino] = grupo.chave.split(SEPARADOR)
+    const a = aeroportos.get(origem)
+    const b = aeroportos.get(destino)
+
+    if (
+      a === undefined ||
+      b === undefined ||
+      !coordenadaValida(a.latitude, a.longitude) ||
+      !coordenadaValida(b.latitude, b.longitude)
+    ) {
+      semCoordenada += 1
+      continue
+    }
+
+    rotas.push({
+      origem,
+      destino,
+      origemLatitude: a.latitude as number,
+      origemLongitude: a.longitude as number,
+      destinoLatitude: b.latitude as number,
+      destinoLongitude: b.longitude as number,
+      co2Kg: grupo.co2Kg,
+      trechos: grupo.documentos,
+      pessoas: grupo.pessoas,
+    })
+  }
+
+  return {
+    rotas: rotas.sort((x, y) => y.co2Kg - x.co2Kg),
+    suprimidas: distintas - sobreviventes.length,
+    semCoordenada,
   }
 }
 

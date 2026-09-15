@@ -10,7 +10,14 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { agrupar, emToneladas, media, serieMensal, somar } from './agregacao'
+import {
+  agrupar,
+  emToneladas,
+  media,
+  mesesEntre,
+  serieMensal,
+  somar,
+} from './agregacao'
 
 type Registro = { bairro: string | null; empresa: string | null; pessoa: string; co2: number }
 
@@ -120,8 +127,11 @@ test('série mensal ordena e ignora documento sem mês', () => {
     { mes: '2031-03', co2: 3 },
   ]
   const serie = serieMensal(itens, (i) => i.mes, (i) => i.co2)
+  // Fevereiro entra com zero: ele existiu e não teve emissão. Ver o contrato de
+  // `serieMensal` — mês ausente seria omissão, não informação.
   assert.deepEqual(serie, [
     { mes: '2031-01', co2Kg: 1, documentos: 1 },
+    { mes: '2031-02', co2Kg: 0, documentos: 0 },
     { mes: '2031-03', co2Kg: 5, documentos: 2 },
   ])
 })
@@ -133,6 +143,46 @@ test('soma, média e conversão para toneladas', () => {
   assert.equal(media([] as { v: number }[], (i) => i.v), 0)
   assert.equal(emToneladas(2500), 2.5)
 })
+
+/* --------------------------------------------------------- série mensal */
+
+test('mês sem emissão vira zero, não desaparece da série', () => {
+  // Sem preenchimento, março apareceria encostado em janeiro e a queda de
+  // fevereiro sumiria do gráfico.
+  const itens = [
+    { mes: '2031-01', co2: 10 },
+    { mes: '2031-03', co2: 30 },
+  ]
+  const serie = serieMensal(itens, (i) => i.mes, (i) => i.co2)
+
+  assert.deepEqual(
+    serie.map((p) => p.mes),
+    ['2031-01', '2031-02', '2031-03'],
+  )
+  assert.equal(serie[1].co2Kg, 0)
+  assert.equal(serie[1].documentos, 0)
+})
+
+test('a série não é estendida além do que existe', () => {
+  const serie = serieMensal([{ mes: '2031-05', co2: 1 }], (i) => i.mes, (i) => i.co2)
+  assert.deepEqual(
+    serie.map((p) => p.mes),
+    ['2031-05'],
+  )
+  assert.deepEqual(serieMensal([] as { mes: string; co2: number }[], (i) => i.mes, (i) => i.co2), [])
+})
+
+test('a contagem de meses atravessa a virada do ano', () => {
+  assert.deepEqual(mesesEntre('2031-11', '2032-02'), [
+    '2031-11',
+    '2031-12',
+    '2032-01',
+    '2032-02',
+  ])
+  assert.deepEqual(mesesEntre('2031-04', '2031-04'), ['2031-04'])
+  assert.deepEqual(mesesEntre('2031-04', '2031-03'), [])
+})
+
 /*
  * A autorização saiu daqui: ela ganhou arquivo próprio em `acesso.test.ts`
  * quando a visão geral passou a ser mais estreita que o inventário (§5).

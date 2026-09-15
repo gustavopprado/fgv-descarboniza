@@ -141,7 +141,18 @@ export function conferirTotal(documentos: number, grupos: Grupo[]): void {
   }
 }
 
-/** Série por mês, com os meses ausentes preenchidos com zero. */
+/**
+ * Série por mês, **com os meses vazios preenchidos com zero** entre o primeiro e
+ * o último mês que têm dado.
+ *
+ * O preenchimento não é enfeite. Sem ele, um mês sem viagem nenhuma
+ * simplesmente não existe na série, e a tela desenha o mês seguinte encostado
+ * no anterior — um buraco vira continuidade, e a queda que houve desaparece do
+ * gráfico. Mês sem emissão é informação; mês ausente é omissão.
+ *
+ * A série não é estendida além do que existe: inventar meses futuros com zero
+ * afirmaria que não houve viagem em período que ainda não foi apurado.
+ */
 export function serieMensal<T>(
   itens: T[],
   mes: (item: T) => string | null,
@@ -156,9 +167,34 @@ export function serieMensal<T>(
     atual.documentos += 1
     porMes.set(m, atual)
   }
-  return [...porMes.entries()]
-    .map(([m, v]) => ({ mes: m, ...v }))
-    .sort((a, b) => a.mes.localeCompare(b.mes))
+
+  const presentes = [...porMes.keys()].sort((a, b) => a.localeCompare(b))
+  if (presentes.length === 0) return []
+
+  const serie: { mes: string; co2Kg: number; documentos: number }[] = []
+  for (const m of mesesEntre(presentes[0], presentes[presentes.length - 1])) {
+    serie.push({ mes: m, ...(porMes.get(m) ?? { co2Kg: 0, documentos: 0 }) })
+  }
+  return serie
+}
+
+/** Todo mês de `inicio` a `fim`, inclusive, em `AAAA-MM`. */
+export function mesesEntre(inicio: string, fim: string): string[] {
+  const meses: string[] = []
+  let ano = Number(inicio.slice(0, 4))
+  let mes = Number(inicio.slice(5, 7))
+
+  // Aritmética de ano e mês na mão, sem `Date`: data em string é o que evita os
+  // bugs de fuso (§9.1), e passar por `Date` os traria de volta pela janela.
+  while (`${ano}-${String(mes).padStart(2, '0')}`.localeCompare(fim) <= 0) {
+    meses.push(`${ano}-${String(mes).padStart(2, '0')}`)
+    mes += 1
+    if (mes > 12) {
+      mes = 1
+      ano += 1
+    }
+  }
+  return meses
 }
 
 export function somar<T>(itens: T[], valor: (item: T) => number): number {

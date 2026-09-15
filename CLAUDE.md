@@ -1792,3 +1792,63 @@ também aqui, sai um indicador e o radar precisa de outro desenho.
   todo mundo na distância zero, distâncias iguais que não podem virar o mesmo ponto, e a
   forma do ponto, que não aceita campo além de coordenada.
 
+#### 2026-09-15 — Fatia 3: tela de Viagens
+
+Terceira tela. Foi a primeira que exigiu ampliar a camada de consulta: o mapa de rotas
+precisa de coordenada de aeroporto, e a camada não lia essa coleção.
+
+**Defeito encontrado antes da tela**
+
+`serieMensal` prometia no comentário preencher mês ausente com zero, e não preenchia:
+devolvia só os meses que tinham dado. Num gráfico de barras isso significa que um mês sem
+viagem nenhuma some, o mês seguinte encosta no anterior e **a queda que houve desaparece**.
+Mês sem emissão é informação; mês ausente é omissão. Passou a preencher entre o primeiro e
+o último mês com dado — e só até aí, porque estender com zeros para a frente afirmaria que
+não houve viagem em período que ainda não foi apurado. O teste que existia fixava o
+comportamento antigo e foi corrigido junto: era o teste que carimbava o defeito.
+
+**Mapa de rotas**
+
+- A camada ganhou `mapa`, com as rotas aéreas já cruzadas com a coleção de aeroportos.
+- **A supressão da §3.1 vale no mapa.** Rota voada por pouca gente não vira linha, porque
+  a linha apontaria para essa gente. O mapa não pode ser a porta lateral que mostra o que
+  a tabela esconde — é o mesmo limite, na mesma agregação. A tela diz quantas rotas
+  ficaram de fora, e elas continuam somando no total.
+- **Só trecho aéreo entra.** No carro, origem e destino são municípios, e a lista do IBGE
+  ainda não foi carregada. A tela declara o recorte em vez de desenhar metade e calar.
+- Projeção equirretangular, com uma escala só para os dois eixos — escalas separadas
+  esticariam o desenho e fariam rota curta parecer longa por acidente de enquadramento.
+- **Não há base cartográfica**, e a legenda diz isso: o desenho mostra a geometria das
+  rotas, não navegação. Tile de provedor externo seria mais uma chave paga e mais um
+  serviço para administrar; contorno embarcado é dado que ainda não vale o peso. Fica como
+  melhoria possível, não como pendência.
+- `coordenadaValida` recusa o ponto (0, 0): é coordenada legítima no Golfo da Guiné e é o
+  que cadastro incompleto costuma trazer. Mesma lição da coordenada da fábrica, agora do
+  lado do aeroporto.
+
+**Troca de fonte marcada na série**
+
+A marca sai da data de corte, não da série. Enquanto ninguém tiver registrado viagem pelo
+formulário, a série sozinha não teria como mostrar a virada — que é justamente quando ela
+mais importa, porque a adesão parcial faz a emissão parecer cair sem ter caído. Com a data
+ainda não definida, a tela diz isso em texto em vez de deixar o gráfico mudo.
+
+**Bug corrigido durante a implementação**
+
+Na checagem de coordenadas eu havia cruzado a latitude de um aeroporto com a longitude do
+outro. A condição era redundante com as duas seguintes, mas teria descartado uma rota cujos
+dois extremos são válidos, na combinação em que a latitude de um e a longitude do outro
+fossem zero.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (85 testes, 9 novos) e `next build` passam. Nenhum servidor de
+  desenvolvimento foi subido.
+- Ensaio temporário contra o Firestore carregado, apagado em seguida: série sem buraco,
+  emissão por viagem finita e positiva, **toda rota desenhada com pelo menos o número
+  mínimo de pessoas**, coordenadas finitas, supressão atuando em destinos e rotas, e
+  nenhum identificador de pessoa na resposta. Nenhuma rota caiu por falta de coordenada.
+- Os testes novos cobrem a projeção pelos casos que quebram — ponto único, conjunto vazio,
+  eixos com a mesma escala, norte em cima — e o preenchimento da série, inclusive na virada
+  do ano.
+
