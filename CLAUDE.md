@@ -1436,3 +1436,45 @@ não devolve erro, devolve zero — e zero passa em quase todo teste de limite.
 **Estado do módulo de mobilidade**: inválido e sem número publicável, agora por
 dois motivos acumulados — geocodificação grosseira, que exige trocar de provedor,
 e cota de rota esgotada, que exige esperar a renovação ou outro plano.
+
+#### 2026-09-15 — Troca de provedor e mobilidade válida pela primeira vez
+
+**Decisão metodológica do Gustavo:** geocodificação e roteamento passam a ser do
+Google. As alternativas gratuitas foram testadas contra a base real e reprovadas
+por motivos diferentes, cada uma na sua ponta da cadeia:
+
+- **Geocodificação** — o provedor gratuito devolve a coordenada do município
+  para a maioria dos CEPs. Dezenas de endereços viram o mesmo ponto, e a
+  distância deixa de medir deslocamento.
+- **Roteamento** — a cota diária do plano gratuito não suporta recarregar a
+  pesquisa mais de uma vez no mesmo dia, e cota esgotada derruba a carga.
+
+Nenhuma linha de código mudou: os dois provedores já estavam implementados e a
+troca é de configuração. O `.env.example` passou a recomendar o Google nos dois,
+com o motivo escrito ao lado — a próxima pessoa não precisa redescobrir isso.
+
+**A troca precisa ser declarada na tela de método.** A distância que sustenta o
+número da mobilidade vem de roteamento rodoviário do Google, e o valor muda
+conforme o provedor: não é detalhe de infraestrutura, é parâmetro do cálculo.
+
+**Resultado da recarga**
+
+A distribuição de distâncias passou a ter forma de gente morando em lugares
+diferentes — quartis separados, cauda longa, quase tantos valores distintos
+quanto respostas. Antes, um único valor cobria a grande maioria.
+
+As exceções caíram para duas, e são exatamente as previstas: a combinação de
+modal e combustível sem fator, e o respondente cuja distância não se sustenta
+como deslocamento diário. Nenhuma falha de infraestrutura sobrou.
+
+A emissão por modal ficou coerente com a física: o modal individual concentra a
+maior parte, o transporte público emite bem menos por pessoa por usar fator por
+passageiro-km, e os modais de emissão zero ficaram zerados.
+
+**As duas conferências de plausibilidade aprovaram**, depois de terem reprovado
+as duas cargas anteriores por motivos opostos — uma por concentração de
+distâncias idênticas, outra por módulo inteiro em exceção. É a primeira vez que
+o módulo de mobilidade passa por elas.
+
+**Estado do inventário:** viagens e mobilidade válidos e conferidos. Marítimo não
+começou; o painel consolidado segue parcial até ele existir.
