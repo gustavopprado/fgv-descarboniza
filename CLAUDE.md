@@ -699,8 +699,10 @@ Coisas que provavelmente vão acontecer, mas não agora.
   método declara a configuração **atual** do ambiente, e não necessariamente a que produziu
   a carga que está no banco. Enquanto a carga for manual e rara, a diferença é teórica;
   quando deixar de ser, o caminho é carimbar o provedor junto do fator.
-- **Nenhuma tela foi construída.** A camada de consulta da §9.10 existe e está testada, mas
-  nada a consome ainda.
+- **Das sete telas da §10, só a de Método existe**, junto da entrada e da casca de
+  navegação. Faltam Visão geral, Mobilidade, Viagens, Marítimo e as duas do programa de
+  viagens. A Visão geral fica por último de propósito: enquanto o marítimo não existir, ela
+  mostraria dois terços do inventário como se fosse o total.
 
 ---
 
@@ -1667,3 +1669,6 @@ tela de Método vai declarar uma data de corte como se ela estivesse decidida. S
 valor de exemplo antigo, o certo é esvaziar a variável: a tela então diz "não definida",
 que é o estado verdadeiro.
 
+Feito em seguida, a pedido: a variável foi esvaziada no `.env` e a tela passou a declarar
+a data como não definida. A §13 também foi corrigida — ela ainda dizia que nenhuma tela
+tinha sido construída, o que deixou de ser verdade nesta etapa.
