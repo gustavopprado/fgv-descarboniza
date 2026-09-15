@@ -1852,3 +1852,18 @@ fossem zero.
   eixos com a mesma escala, norte em cima — e o preenchimento da série, inclusive na virada
   do ano.
 
+#### 2026-09-15 — Dois tropeços na primeira execução no navegador
+
+Nenhuma mudança de comportamento do sistema; as duas correções são de operação.
+
+- **Não existia script `dev`.** A fundação foi montada sob a regra da §0 — eu não subo
+  servidor de desenvolvimento — e o script acabou ficando de fora junto, então o Gustavo
+  não tinha como rodar a aplicação. A regra é sobre quem executa, não sobre o projeto ter
+  o comando. `npm run dev` existe agora.
+- **Erro de hidratação vindo de extensão do navegador.** Uma extensão escrevia um atributo
+  no `<html>` antes de o React hidratar, e o React acusava divergência entre servidor e
+  cliente. Não era defeito do sistema. O elemento passou a declarar
+  `suppressHydrationWarning`, que vale só para os atributos dele e não para a árvore
+  abaixo: divergência dentro da aplicação continua sendo reportada. A supressão foi
+  mantida estreita de propósito — cada uma delas é um pedaço a menos de diagnóstico.
+
