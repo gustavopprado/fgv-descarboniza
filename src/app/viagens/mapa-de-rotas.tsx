@@ -30,6 +30,9 @@ const MOLDURA = { largura: 640, altura: 420, margem: 28 }
 const PASSO_DA_ROTA_MS = 140
 const DURACAO_DA_ROTA_MS = 1600
 
+/** Quanto o arco se afasta da reta, em fração do próprio comprimento. */
+const CURVATURA = 0.17
+
 export function MapaDeRotasSvg({ mapa }: { mapa: MapaDeRotas }) {
   const { rotas } = mapa
 
@@ -91,7 +94,7 @@ export function MapaDeRotasSvg({ mapa }: { mapa: MapaDeRotas }) {
 
   return (
     <figure className="m-0">
-      <div className="overflow-hidden rounded-xl bg-[var(--color-escuro-2)] p-1.5">
+      <div className="relative overflow-hidden rounded-xl bg-[var(--color-escuro-2)] p-1.5">
         <svg
           viewBox={`0 0 ${MOLDURA.largura} ${MOLDURA.altura}`}
           className="block h-auto w-full"
@@ -130,28 +133,37 @@ export function MapaDeRotasSvg({ mapa }: { mapa: MapaDeRotas }) {
             // A espessura carrega a emissão da rota; é a única variável visual
             // que codifica número, e ela está na legenda.
             const espessura = maior > 0 ? 0.8 + (rota.co2Kg / maior) * 4 : 1
-            // O tracejado precisa ter o tamanho exato da linha, senão o desenho
-            // progressivo repete o padrão ou deixa sobra.
-            const comprimento = Math.hypot(para.x - de.x, para.y - de.y)
+
+            // Arco, não reta, como no protótipo: duas rotas entre os mesmos
+            // pontos deixam de se sobrepor, e o traço fica legível sobre o
+            // contorno da terra. A curvatura é perpendicular ao trecho e
+            // proporcional a ele, então rota curta encurva pouco.
+            const dx = para.x - de.x
+            const dy = para.y - de.y
+            const comprimento = Math.hypot(dx, dy)
+            const meioX = (de.x + para.x) / 2
+            const meioY = (de.y + para.y) / 2
+            const controleX = meioX - (dy / (comprimento || 1)) * comprimento * CURVATURA
+            const controleY = meioY + (dx / (comprimento || 1)) * comprimento * CURVATURA
 
             return (
-              <line
+              <path
                 key={`${rota.origem}-${rota.destino}`}
                 className="desenhar"
+                // `pathLength` normaliza o comprimento do traço para 1, então o
+                // tracejado do desenho progressivo não precisa do comprimento
+                // real do arco — que só se obtém por integração numérica.
+                pathLength={1}
                 style={
                   {
-                    // Como texto: propriedade personalizada não recebe
-                    // unidade automática, e o valor entra no CSS como veio.
-                    '--traco': `${comprimento}`,
+                    '--traco': '1',
                     animationDelay: `${i * PASSO_DA_ROTA_MS}ms`,
                   } as React.CSSProperties
                 }
-                x1={de.x}
-                y1={de.y}
-                x2={para.x}
-                y2={para.y}
+                d={`M${de.x.toFixed(1)},${de.y.toFixed(1)} Q${controleX.toFixed(1)},${controleY.toFixed(1)} ${para.x.toFixed(1)},${para.y.toFixed(1)}`}
+                fill="none"
                 stroke="#B0D9B1"
-                strokeOpacity={0.8}
+                strokeOpacity={0.85}
                 strokeWidth={espessura}
                 strokeLinecap="round"
               />
@@ -180,6 +192,11 @@ export function MapaDeRotasSvg({ mapa }: { mapa: MapaDeRotas }) {
             </g>
           ))}
         </svg>
+
+        <p className="absolute right-3 bottom-2.5 flex items-center gap-1.5 text-[11px] text-[#A9C6A5]">
+          <span className="inline-block h-0.5 w-3.5 rounded-sm bg-[#B0D9B1]" />
+          rota aérea
+        </p>
       </div>
 
       <figcaption className="mt-3 text-[12px] text-[var(--color-apoio)]">

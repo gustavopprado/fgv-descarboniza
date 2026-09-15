@@ -2080,3 +2080,58 @@ projetar: **2.246 vértices viraram 24**. O ganho não era óbvio no olho; era �
 - O ganho do recorte foi medido contra as rotas reais com ensaio temporário, apagado em
   seguida.
 
+#### 2026-09-15 — Fidelidade visual ao protótipo, e o que a comparação revelou
+
+O Gustavo comparou as telas com o protótipo e apontou duas coisas: as animações estavam
+piores, e o mapa não mostrava rotas intercontinentais que aparecem no desenho. A segunda
+não era problema de animação nenhum.
+
+**Não há rota intercontinental na base.** A rota mais longa carregada é doméstica, com
+folga. As rotas para Ásia, Europa e América do Norte que o protótipo desenha são **dado
+inventado**, como a §0 avisa que todos os números dele são. Não há o que consertar no mapa:
+ele desenha o que existe.
+
+**A supressão está removendo a maior parte das rotas, e isso precisa ser uma decisão
+consciente.** Medido contra a base: de cada dez rotas distintas, cerca de nove são voadas
+por menos gente que o limite da §3.1 e viram "outras rotas"; quase um terço da emissão por
+destino cai no balde de agrupados. O motivo é a natureza da viagem corporativa aqui — a
+maioria é uma ou duas pessoas indo a um lugar —, e o efeito é um mapa com poucas linhas e
+uma lista de destinos curta.
+
+**Isto não é defeito: é a regra funcionando.** Uma rota voada por uma pessoa aponta para
+essa pessoa, mesmo sem nome, para qualquer um que saiba quem viaja. Fica registrado porque
+a magnitude não era evidente quando o limite foi escrito, e porque baixá-lo é decisão de
+privacidade — não de layout.
+
+**O que mudou no radar**
+
+- **A escala passou a ser a raiz quadrada da distância**, como no protótipo. A linear era
+  mais fiel ao número e ilegível com dado real: a maioria mora perto, todo mundo empilhava
+  num borrão central e o resto do desenho ficava vazio. Com a raiz, a área de cada faixa
+  fica proporcional a quantas pessoas ela costuma conter.
+  O preço está declarado na legenda: **a distância se lê no anel, não no raio.** É por isso
+  que os anéis aqui não são decoração.
+- **Os anéis dobram de valor** a partir de uma escada de números redondos, e **sempre há um
+  anel na borda**, na distância de quem mora mais longe. Sem ele, o limite do desenho não
+  dizia nada — e era isso que acontecia com a base atual, em que o maior valor redondo caía
+  bem antes da margem.
+- Entraram os raios da grade, os pontos maiores e mais claros na faixa próxima, e a
+  varredura já estava.
+
+**O que mudou no mapa**
+
+- **As rotas viraram arco**, como no protótipo. Além de parecido, resolve um problema real:
+  duas rotas entre os mesmos pontos deixam de se sobrepor.
+- O desenho progressivo do arco usa `pathLength`, que normaliza o comprimento do traço —
+  obter o comprimento real de uma curva quadrática exigiria integração numérica.
+- Entrou a legenda no canto.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (102 testes, 3 novos) e `next build` passam. Nenhum servidor de
+  desenvolvimento foi subido.
+- Os testes novos cobrem a escada de anéis, a borda que nunca fica muda e a propriedade que
+  motivou a troca de escala: quem mora perto continua ocupando área visível.
+- Os anéis e a supressão foram conferidos contra a base com ensaio temporário, apagado em
+  seguida.
+

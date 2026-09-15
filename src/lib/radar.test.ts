@@ -62,3 +62,43 @@ test('o desenho é determinístico', () => {
   const segundo = montarRadar([3, 9, 27], { raio: RAIO })
   assert.deepEqual(primeiro, segundo)
 })
+
+test('os anéis dobram de valor e cabem dentro do maior deslocamento', () => {
+  const { aneis, distanciaMaximaKm } = montarRadar([2, 9, 37], { raio: RAIO, aneis: 4 })
+  const escada = aneis.filter((a) => !a.naBorda)
+
+  assert.ok(escada.length >= 2)
+  for (let i = 1; i < escada.length; i++) {
+    assert.equal(escada[i].distanciaKm, escada[i - 1].distanciaKm * 2)
+    assert.ok(escada[i].raio > escada[i - 1].raio)
+  }
+  for (const anel of aneis) {
+    assert.ok(anel.distanciaKm <= distanciaMaximaKm, 'anel além do que existe no dado')
+    assert.ok(anel.raio <= RAIO + 1e-9)
+  }
+})
+
+test('a borda do radar nunca fica sem anel', () => {
+  for (const distancias of [[2, 9, 37], [1, 3, 8], [4, 60], [12]]) {
+    const { aneis } = montarRadar(distancias, { raio: RAIO, aneis: 4 })
+    const maisExterno = aneis[aneis.length - 1]
+    assert.ok(
+      maisExterno !== undefined && maisExterno.raio >= RAIO * 0.92,
+      `borda muda com ${distancias.join(', ')}: o limite do desenho não diz nada`,
+    )
+  }
+})
+
+test('a escala de raiz espalha o que a linear empilharia', () => {
+  // Quase todo mundo perto e um ponto longe: na escala linear os de perto
+  // caem todos no primeiro décimo do raio.
+  const { pontos } = montarRadar([1, 2, 3, 4, 100], { raio: RAIO })
+  const raios = pontos.map(comprimento)
+
+  assert.ok(
+    raios[3] > RAIO * 0.15,
+    'com escala de raiz, quem mora perto ainda ocupa área visível',
+  )
+  assert.ok(raios[0] < raios[1] && raios[1] < raios[2] && raios[2] < raios[3])
+})
+
