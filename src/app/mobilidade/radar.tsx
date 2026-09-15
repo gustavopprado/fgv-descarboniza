@@ -6,13 +6,21 @@
  * calculadas, e o que produz as coordenadas (`src/lib/radar.ts`) só conhece
  * distâncias.
  *
- * Duas diferenças em relação ao protótipo, e as duas são a mesma decisão:
+ * Três diferenças em relação ao protótipo, e as três são a mesma decisão — o
+ * ângulo aqui não significa nada (§3.1), e nada no desenho pode sugerir que
+ * significa:
  *
- *  - o ângulo não significa nada, e a legenda diz isso (§3.1);
- *  - **não há raios partindo do centro.** O protótipo desenha oito, e eles são
- *    enfeite — mas enfeite que sugere rosa dos ventos, e uma rosa dos ventos
- *    convida exatamente a leitura de direção que esta tela não pode oferecer.
- *    Os anéis ficam, porque eles medem distância, que é o que há.
+ *  - **sem os raios partindo do centro.** Eles desenham uma rosa dos ventos, e
+ *    rosa dos ventos convida à leitura de direção;
+ *  - **sem a varredura giratória.** A varredura do protótipo revela os pontos
+ *    conforme gira, ou seja, **anima a dimensão angular** — justamente a que não
+ *    carrega informação. É a animação mais bonita do protótipo e a que mais
+ *    reforça a leitura errada;
+ *  - **os pontos aparecem do centro para fora**, na ordem da distância. A
+ *    animação continua existindo, e passa a encenar a única dimensão que o
+ *    desenho de fato tem.
+ *
+ * Os anéis ficam: eles medem distância.
  */
 import { numero } from '@/lib/formato'
 import { montarRadar } from '@/lib/radar'
@@ -21,11 +29,18 @@ const RAIO = 150
 const MARGEM = 22
 const LADO = (RAIO + MARGEM) * 2
 
+/** Duração total da revelação; cada ponto entra na sua fatia dela. */
+const REVELACAO_MS = 1400
+
 export function Radar({ distanciasKm }: { distanciasKm: number[] }) {
   const { pontos, aneis, distanciaMaximaKm } = montarRadar(distanciasKm, {
     raio: RAIO,
     aneis: 4,
   })
+
+  // `radarDistanciasKm` chega ordenada por distância, então a ordem do ponto na
+  // lista é a ordem em que ele deve aparecer: do mais perto ao mais longe.
+  const passo = pontos.length > 1 ? REVELACAO_MS / pontos.length : 0
 
   return (
     <figure className="m-0">
@@ -49,6 +64,8 @@ export function Radar({ distanciasKm }: { distanciasKm: number[] }) {
             {pontos.map((ponto, i) => (
               <circle
                 key={i}
+                className="surgir"
+                style={{ animationDelay: `${Math.round(i * passo)}ms` }}
                 cx={ponto.x}
                 cy={ponto.y}
                 r={2.4}

@@ -100,6 +100,47 @@ h3 {
   animation: crescer 0.9s var(--ease-suave) both;
 }
 
+/* Ponto que aparece — o radar e os aeroportos do mapa.
+
+   `transform-box: fill-box` é o que faz a escala acontecer em torno do próprio
+   ponto: sem ele, a origem seria o canto do SVG inteiro e o ponto entraria
+   voando de longe. */
+@keyframes surgir {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.surgir {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: surgir 0.35s var(--ease-suave) both;
+}
+
+/* Linha que se desenha, do começo ao fim.
+
+   O comprimento do traço vem de quem desenha, em `--traco`: cada rota tem o
+   seu, e o tracejado precisa ser exatamente do tamanho da linha para a
+   animação não repetir nem deixar sobra. */
+@keyframes desenhar {
+  from {
+    stroke-dashoffset: var(--traco);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.desenhar {
+  stroke-dasharray: var(--traco);
+  animation: desenhar 1.6s var(--ease-suave) both;
+}
+
 /* Quem pediu menos movimento recebe menos movimento — e recebe o conteúdo
    inteiro, nunca um bloco que ficou invisível esperando animação. */
 @media (prefers-reduced-motion: reduce) {
@@ -115,7 +156,9 @@ h3 {
      rodando: é ela que leva o bloco ao estado final. Desligá-la deixaria o
      conteúdo parado no quadro inicial, invisível. */
   .revelar,
-  .crescer {
+  .crescer,
+  .surgir,
+  .desenhar {
     animation-duration: 0.001ms !important;
   }
 }

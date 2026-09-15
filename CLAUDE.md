@@ -1927,3 +1927,94 @@ de interface — §2.2 vale para rótulo igual vale para constante.
 
 Nenhuma linha de tela foi alterada nesta etapa.
 
+#### 2026-09-15 — Refinamento visual, do protótipo para as telas
+
+Cinco passos, na ordem aprovada pelo Gustavo, com parada para revisão entre cada um.
+Nenhuma mudança na camada de consulta e nenhuma mudança de conteúdo: o refinamento é de
+linguagem visual.
+
+**1. Fundação e casca.** As duas famílias tipográficas do protótipo, servidas pelo próprio
+domínio — além de evitar o salto de layout, isso impede que o navegador de quem consulta o
+inventário faça requisição a um provedor de fontes. Os seis tokens estruturais que a §4 não
+nomeia entraram como token. A casca ganhou o menu lateral escuro, com as duas partes do
+sistema rotuladas e separadas.
+
+**2. Peças compartilhadas.** Painel, cartão de indicador em quatro camadas, etiqueta,
+grades nomeadas, classes de tabela, seletor de período e cabeçalho. A abstração não foi
+inventada: ela já estava escrita no protótipo, que define um sistema e não decoração por
+tela.
+
+**3. As três telas reaplicadas.** Método manteve o conteúdo, que é o da §10 e não o do
+protótipo — este é anterior à lista mínima que a especificação passou a exigir.
+
+**4. Gráfico de barras vertical.** Onde o protótipo usa barra, a lista horizontal deu
+lugar a SVG. Onde ele usa tabela com colunas que a camada não entrega, a lista ficou.
+
+**5. Acabamento de mapa e radar.** As rotas se desenham uma a uma; os aeroportos aparecem
+depois; os pontos do radar entram do centro para fora.
+
+**A decisão que atravessa os cinco passos: animação é de CSS, não de JavaScript.**
+
+O protótipo anima adicionando classe pelo script — o bloco nasce invisível e só aparece
+quando o JS roda. Isso significa que **script que não roda deixa a tela em branco com o
+conteúdo presente no HTML**: extensão que atrapalha, erro de hidratação, navegador antigo.
+Como animação de CSS, ela roda sozinha e termina no estado final de qualquer jeito, e o
+atraso de cada bloco é calculado no servidor. O mesmo raciocínio no contador: o valor final
+é o que está no HTML, e a contagem acontece depois — renderizar zero e contar até o valor
+deixaria um relatório de emissão exibindo zero para quem tem JavaScript bloqueado.
+
+Em `prefers-reduced-motion` a animação continua rodando, quase instantânea. Desligá-la
+deixaria o conteúdo parado no primeiro quadro, invisível.
+
+**Três divergências do protótipo, todas registradas com motivo**
+
+- **O menu não desaparece em tela estreita.** No protótipo ele some abaixo de 1000px, o que
+  deixaria quem abre no celular sem navegação nenhuma. Aqui vira faixa rolável no topo.
+- **O radar não tem raios partindo do centro.** Eles desenham uma rosa dos ventos, e rosa
+  dos ventos convida à leitura de direção que a §3.1 proíbe.
+- **O radar não tem a varredura giratória.** É a animação mais bonita do protótipo e a que
+  mais reforça a leitura errada: ela revela os pontos conforme gira, ou seja, **anima a
+  dimensão angular** — justamente a que não carrega informação. Os pontos passaram a
+  aparecer do centro para fora, na ordem da distância: a animação continua existindo e
+  encena a única dimensão que o desenho de fato tem.
+
+**Bug introduzido e corrigido dentro da etapa**
+
+O cartão de indicador passava a função de formatar como prop para o contador, que é
+componente de cliente. **Função não atravessa a fronteira entre servidor e cliente**, e
+nem o typecheck nem o build acusam: a assinatura é válida em TypeScript, e páginas
+dinâmicas não são renderizadas no build. O erro só aparece na primeira requisição. Agora o
+que atravessa é o número de casas decimais, e os dois lados chamam o mesmo formatador.
+
+**A lição vale além do caso:** neste projeto, `next build` passar **não quer dizer que a
+tela abre**. Todas as páginas são dinâmicas, então o build só compila. Quem exercita a
+renderização é quem carrega a página — e não há guarda automática honesta para essa classe
+de erro. Foi procurada e não existe barata: a serialização só acontece na requisição.
+
+**Outros defeitos corrigidos no caminho**
+
+- O gráfico de barras localizava a marcação visual de cada barra por rótulo, num mapa.
+  Dois rótulos iguais colapsariam numa barra só. Passou a ser por índice.
+- Barra com valor pequeno e barra ausente ficavam idênticas na tela. Valor não nulo passou
+  a receber altura mínima.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (92 testes, 7 novos) e `next build` passam. Nenhum servidor de
+  desenvolvimento foi subido.
+- Os testes novos cobrem a geometria das barras pelos casos que estouram: série inteira
+  zerada, valor mínimo que não pode sumir, barras que não podem se sobrepor e série longa,
+  que rareia rótulo e esconde valor.
+
+**Em aberto desta etapa**
+
+- **O logo.** O protótipo traz um PNG embutido; ficou a marca tipográfica. Colocar a arte
+  no repositório é decisão do Gustavo, porque é ativo de marca entrando em repositório
+  público.
+- **Contorno de continente no mapa.** Por último e separado: dado geográfico tem licença, e
+  um contorno colado no repositório é coisa que entra sem ninguém olhar de onde veio. A
+  opção será apresentada antes de qualquer arquivo entrar.
+- **Tabelas com colunas que a camada não entrega.** Destinos com número de viagens e kg por
+  viagem, contêineres por porto, e a barra empilhada de qualidade do dado. Ampliar a camada
+  para preencher desenho é decisão de escopo, não de acabamento.
+
