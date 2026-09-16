@@ -92,9 +92,28 @@ export function diasUteisMes(): number {
   return numeroObrigatorio('MOBILIDADE_DIAS_UTEIS_MES')
 }
 
-/** Recorte com menos que isso não vai para a tela (§3.1). */
+/** Recorte com menos que isso não vai para a tela (§3.1.1). */
 export function supressaoMinima(): number {
   return numeroObrigatorio('MOBILIDADE_SUPRESSAO_MINIMA')
+}
+
+/**
+ * Ano que o inventário de viagens relata (§7).
+ *
+ * **O trecho entra pelo ano do voo, não pelo da emissão da passagem** — há
+ * passagem comprada num ano com voo no seguinte, e o inventário agrupa pela data
+ * do voo (§7.2). Trecho de outro ano não é carregado: ele pertence ao relatório
+ * daquele ano, não a este.
+ *
+ * Sem padrão, de propósito. Um ano de exemplo aqui seria placeholder plausível —
+ * carregaria o período errado sem nenhum erro aparecer, que é o caso da §14.
+ */
+export function anoBaseViagens(): number {
+  const ano = numeroObrigatorio('VIAGENS_ANO_BASE')
+  if (!Number.isInteger(ano) || ano < 2000 || ano > 2100) {
+    throw new Error(`VIAGENS_ANO_BASE fora da faixa aceitável: ${ano}`)
+  }
+  return ano
 }
 
 /**
@@ -120,6 +139,7 @@ export function parametrosDeclarados(): {
   mobilidadeDistanciaModo: string | null
   mobilidadeDistanciaMaximaKm: string | null
   mobilidadeAnoBase: string | null
+  viagensAnoBase: string | null
 } {
   return {
     geocodeProvedor: opcional('GEOCODE_PROVEDOR') ?? null,
@@ -127,6 +147,7 @@ export function parametrosDeclarados(): {
     mobilidadeDistanciaModo: opcional('MOBILIDADE_DISTANCIA_MODO') ?? null,
     mobilidadeDistanciaMaximaKm: opcional('MOBILIDADE_DISTANCIA_MAXIMA_KM') ?? null,
     mobilidadeAnoBase: opcional('MOBILIDADE_ANO_BASE') ?? null,
+    viagensAnoBase: opcional('VIAGENS_ANO_BASE') ?? null,
   }
 }
 

@@ -43,7 +43,9 @@ import {
   emiteZero,
 } from '../src/lib/calculo/mobilidade'
 import { lerCartao } from '../src/lib/cartao'
+import { anoBaseViagens } from '../src/lib/env'
 import { chaveNormalizada } from '../src/lib/texto'
+import { anoDe } from '../src/server/documentos/tipos'
 import type { DocMobilidade, DocViagemTrecho } from '../src/server/documentos/tipos'
 import { carregarFatores } from '../src/server/fatores'
 import { COLECAO } from '../src/server/firestore'
@@ -126,8 +128,19 @@ function tolerancia(): number {
   return valor
 }
 
-/** Recontagem independente a partir do arquivo, sem passar pelo banco. */
-function recalcularDaBase(base: BaseViagens) {
+/**
+ * Recontagem independente a partir do arquivo, sem passar pelo banco.
+ *
+ * `anoBase` recorta pelo ano do voo. Com `null`, conta o arquivo inteiro — é
+ * assim que os totais declarados na origem continuam podendo ser conferidos
+ * contra ela mesma, que é a única coisa que eles descrevem depois que o
+ * inventário passou a relatar um ano (§7.0).
+ *
+ * Uma reserva conta quando **algum** trecho dela cai no ano: reserva que começa
+ * em dezembro e volta em janeiro pertence aos dois relatórios, com os trechos
+ * repartidos entre eles.
+ */
+function recalcularDaBase(base: BaseViagens, anoBase: number | null) {
   const fatorPorFaixa = new Map(base.fatores_emissao.faixas.map((f) => [f.id, f.fator]))
   const multiplicador =
     base.fatores_emissao.multiplicador_classe[base.fatores_emissao.classe_assumida]
@@ -144,9 +157,13 @@ function recalcularDaBase(base: BaseViagens) {
 
   for (const reserva of base.reservas) {
     if (!reserva.contabilizar) continue
+    const doAno = reserva.trechos.filter(
+      (t) => anoBase === null || anoDe(t.data_voo) === anoBase,
+    )
+    if (doAno.length === 0) continue
     reservas++
     pessoas.add(reserva.pax_id)
-    for (const trecho of reserva.trechos) {
+    for (const trecho of doAno) {
       const fator = fatorPorFaixa.get(trecho.faixa_distancia)
       if (fator === undefined) {
         throw new Error(`Faixa de distância sem fator na base: ${trecho.faixa_distancia}`)
@@ -468,6 +485,7 @@ async function conferirCoberturaDasFontes(
   conferencias: Conferencia[],
 ): Promise<void> {
   const inteiro = { tolerancia: 0, casas: 0 }
+  const anoBase = anoBaseViagens()
 
   const fontes: {
     fonte: string
@@ -485,7 +503,10 @@ async function conferirCoberturaDasFontes(
       ),
       contarNaOrigem: async (caminho) => {
         const base = lerJson<BaseViagens>(caminho)
-        return base.reservas.reduce((s, r) => s + r.trechos.length, 0)
+        return base.reservas.reduce(
+          (s, r) => s + r.trechos.filter((t) => anoDe(t.data_voo) === anoBase).length,
+          0,
+        )
       },
     },
     {
@@ -498,7 +519,7 @@ async function conferirCoberturaDasFontes(
       ),
       contarNaOrigem: async (caminho) => {
         const { trechos } = lerCartao(await lerPlanilha(caminho))
-        return trechos.length
+        return trechos.filter((t) => anoDe(t.data) === anoBase).length
       },
     },
   ]
@@ -506,6 +527,8 @@ async function conferirCoberturaDasFontes(
   tituloDaEtapa('Conferência — cobertura das fontes')
   console.log('  Fontes conferidas; uma fonte que não esteja nesta lista não é vista por')
   console.log('  conferência nenhuma.')
+  console.log(`  Ano-base do inventário de viagens: ${anoBase}. A contagem na origem é`)
+  console.log('  recortada pelo mesmo ano, senão acusaria erro numa carga correta.')
 
   const conhecidas = new Set(fontes.map((f) => f.fonte))
 
@@ -560,6 +583,45 @@ async function conferirCoberturaDasFontes(
    * variação mede quanta gente preencheu, não quanta emissão houve. Por isso
    * **falha**, em vez de avisar.
    */
+  /**
+   * **Ano de fora do ano-base falha, e as duas metades desta regra convivem de
+   * propósito.**
+   *
+   * O escopo de recarga inclui o ano (§7.0) para que carregar um período não
+   * derrube o anterior — sem isso o inventário só conseguiria guardar um ano de
+   * cada vez. Guardar mais de um passa então a ser **possível**; esta
+   * conferência é o que o mantém **deliberado**.
+   *
+   * O motivo não é técnico. Um ano que entra pela cauda — algumas semanas de
+   * janeiro, porque a passagem foi comprada no ano anterior — aparece no seletor
+   * de período como se fosse um ano, e três semanas de dado apresentadas como
+   * um exercício é o mesmo erro que a §5 impede na visão geral.
+   *
+   * Filtro na carga não substitui isto: ele só alcança o que passa por ele, e
+   * documento gravado antes do recorte existir continua no banco somando em
+   * silêncio.
+   */
+  const anos = (await db.collection(COLECAO.viagemTrecho).select('ano').get()).docs.map((d) =>
+    Number((d.data() as { ano?: number }).ano),
+  )
+  const outros = new Map<number, number>()
+  for (const a of anos) {
+    if (a !== anoBase) outros.set(a, (outros.get(a) ?? 0) + 1)
+  }
+  for (const [ano, quantos] of [...outros.entries()].sort()) {
+    console.log(
+      `  há ${quantos} trecho(s) de ${ano} no banco. Relatar mais de um ano é decisão, ` +
+        'não padrão: ou o ano-base muda, ou esses trechos saem.',
+    )
+  }
+  conferencias.push({
+    item: `trechos de ano diferente de ${anoBase}`,
+    esperado: 0,
+    obtido: anos.length - anos.filter((a) => a === anoBase).length,
+    origem: 'ano-base',
+    ...inteiro,
+  })
+
   conferencias.push({
     item: 'trechos do programa dentro do inventário (§0.1)',
     esperado: 0,
@@ -590,7 +652,9 @@ async function principal(): Promise<void> {
     : {}
   const esperadoLocal = local.viagens ?? {}
 
-  const recalculado = recalcularDaBase(base)
+  const anoBase = anoBaseViagens()
+  const recalculado = recalcularDaBase(base, anoBase)
+  const recalculadoDoArquivo = recalcularDaBase(base, null)
   const declarado = base.meta?.totais ?? {}
   const conferenciaDaBase = base.meta?.como_calcular?.conferencia ?? {}
 
@@ -620,44 +684,50 @@ async function principal(): Promise<void> {
 
     const inteiro = { tolerancia: 0, casas: 0 }
 
+    // **O esperado do banco sai do recálculo recortado pelo ano, não dos totais
+    // declarados na origem.** Os declarados descrevem o arquivo inteiro, e o
+    // banco passou a guardar um ano (§7.0): compará-los acusaria erro numa carga
+    // correta. É a mesma armadilha da premissa de fonte única, agora no tempo —
+    // um esperado que embute "o banco tem tudo que está no arquivo".
+    //
+    // Eles não são descartados: viraram conferência do arquivo contra ele mesmo,
+    // logo abaixo, que é a única coisa que de fato descrevem.
     conferencias.push({
       item: 'reservas contabilizáveis',
-      esperado:
-        esperadoLocal.reservas_contabilizaveis ??
-        declarado.reservas_contabilizaveis ??
-        recalculado.reservas,
+      esperado: esperadoLocal.reservas_contabilizaveis ?? recalculado.reservas,
       obtido: viagens.reservas,
-      origem: esperadoLocal.reservas_contabilizaveis ? 'conferencia.local.json' : 'base',
+      origem: esperadoLocal.reservas_contabilizaveis
+        ? 'conferencia.local.json'
+        : `recálculo ${anoBase}`,
       ...inteiro,
     })
 
     conferencias.push({
       item: 'trechos contabilizáveis',
-      esperado:
-        esperadoLocal.trechos_contabilizaveis ??
-        declarado.trechos_contabilizaveis ??
-        recalculado.trechos,
+      esperado: esperadoLocal.trechos_contabilizaveis ?? recalculado.trechos,
       obtido: viagens.trechos,
-      origem: esperadoLocal.trechos_contabilizaveis ? 'conferencia.local.json' : 'base',
+      origem: esperadoLocal.trechos_contabilizaveis
+        ? 'conferencia.local.json'
+        : `recálculo ${anoBase}`,
       ...inteiro,
     })
 
-    if (declarado.reservas !== undefined) {
+    if (declarado.reservas_contabilizaveis !== undefined) {
       conferencias.push({
-        item: 'reservas gravadas (com descarte)',
-        esperado: declarado.reservas,
-        obtido: viagens.reservasTodas,
-        origem: 'base',
+        item: 'arquivo: reservas contabilizáveis',
+        esperado: declarado.reservas_contabilizaveis,
+        obtido: recalculadoDoArquivo.reservas,
+        origem: 'declarado × arquivo',
         ...inteiro,
       })
     }
 
-    if (declarado.trechos !== undefined) {
+    if (declarado.trechos_contabilizaveis !== undefined) {
       conferencias.push({
-        item: 'trechos gravados (com descarte)',
-        esperado: declarado.trechos,
-        obtido: viagens.trechosTodos,
-        origem: 'base',
+        item: 'arquivo: trechos contabilizáveis',
+        esperado: declarado.trechos_contabilizaveis,
+        obtido: recalculadoDoArquivo.trechos,
+        origem: 'declarado × arquivo',
         ...inteiro,
       })
     }
@@ -681,29 +751,52 @@ async function principal(): Promise<void> {
       ...inteiro,
     })
 
+    // Mesmo tratamento dos contadores acima: o valor de conferência da origem
+    // descreve o arquivo inteiro, e o banco guarda um ano. Ele continua sendo
+    // conferido — contra o arquivo, que é o que ele mede.
     conferencias.push({
       item: 'distância contabilizável (km)',
-      esperado:
-        esperadoLocal.distancia_total_km ??
-        conferenciaDaBase.distancia_total_km ??
-        recalculado.distanciaKm,
+      esperado: esperadoLocal.distancia_total_km ?? recalculado.distanciaKm,
       obtido: viagens.distanciaKm,
       tolerancia: tol,
       casas: 1,
-      origem: esperadoLocal.distancia_total_km ? 'conferencia.local.json' : 'base',
+      origem: esperadoLocal.distancia_total_km
+        ? 'conferencia.local.json'
+        : `recálculo ${anoBase}`,
     })
 
     conferencias.push({
       item: 'emissão total (kg CO₂e)',
-      esperado:
-        esperadoLocal.emissao_total_kg_co2e ??
-        conferenciaDaBase.emissao_total_kg_co2e ??
-        recalculado.co2Kg,
+      esperado: esperadoLocal.emissao_total_kg_co2e ?? recalculado.co2Kg,
       obtido: viagens.co2Kg,
       tolerancia: tol,
       casas: 1,
-      origem: esperadoLocal.emissao_total_kg_co2e ? 'conferencia.local.json' : 'base',
+      origem: esperadoLocal.emissao_total_kg_co2e
+        ? 'conferencia.local.json'
+        : `recálculo ${anoBase}`,
     })
+
+    if (conferenciaDaBase.distancia_total_km !== undefined) {
+      conferencias.push({
+        item: 'arquivo: distância total (km)',
+        esperado: conferenciaDaBase.distancia_total_km,
+        obtido: recalculadoDoArquivo.distanciaKm,
+        tolerancia: tol,
+        casas: 1,
+        origem: 'declarado × arquivo',
+      })
+    }
+
+    if (conferenciaDaBase.emissao_total_kg_co2e !== undefined) {
+      conferencias.push({
+        item: 'arquivo: emissão total (kg CO₂e)',
+        esperado: conferenciaDaBase.emissao_total_kg_co2e,
+        obtido: recalculadoDoArquivo.co2Kg,
+        tolerancia: tol,
+        casas: 1,
+        origem: 'declarado × arquivo',
+      })
+    }
 
     // O banco precisa fechar também contra a recontagem independente: é o que
     // pega troca de fator, trecho perdido e dupla aplicação de uplift.

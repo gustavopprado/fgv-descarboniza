@@ -45,6 +45,7 @@ import {
 } from '../src/server/documentos/tipos'
 import { classificarRegiao } from '../src/lib/regiao'
 import { validarViagemTrecho } from '../src/server/documentos/validacao'
+import { anoBaseViagens } from '../src/lib/env'
 import { gravarCadastro, recarregarEscopo } from '../src/server/escrita'
 import { carregarFatores } from '../src/server/fatores'
 import { COLECAO } from '../src/server/firestore'
@@ -126,6 +127,7 @@ async function principal(): Promise<void> {
     'BASE_VIAGENS_PATH',
     'dados/base_viagens.json',
   )
+  const anoBase = anoBaseViagens()
   const base = lerJson<BaseViagens>(caminho)
   const classeAssumida = base.fatores_emissao?.classe_assumida
   if (!classeAssumida) {
@@ -197,6 +199,7 @@ async function principal(): Promise<void> {
     let trechosContabilizaveis = 0
     let distanciaContabilizavel = 0
     let emissaoContabilizavel = 0
+    let foraDoAnoBase = 0
 
     for (const reserva of base.reservas) {
       // Alertas são da reserva e acompanham cada trecho dela.
@@ -220,6 +223,15 @@ async function principal(): Promise<void> {
       }
 
       for (const trecho of reserva.trechos) {
+        // **O trecho entra pelo ano do voo** (§7.2, §7). Passagem comprada num
+        // ano com voo no seguinte pertence ao relatório do ano em que se voou,
+        // e é isso que o descarte abaixo respeita — não é dado perdido: é dado
+        // de outro período, que uma carga com outro ano-base traz.
+        if (anoDe(trecho.data_voo) !== anoBase) {
+          foraDoAnoBase += 1
+          continue
+        }
+
         // A distância da base já vem com o uplift; entra na conta como está.
         const faixa = fatores.vigente(
           CATEGORIA_AEREO_FAIXA,
@@ -292,14 +304,25 @@ async function principal(): Promise<void> {
       `  ${trechosContabilizaveis} trechos contabilizáveis, ` +
         `${n(distanciaContabilizavel)} km, ${n(emissaoContabilizavel)} kg CO₂e.`,
     )
+    if (foraDoAnoBase > 0) {
+      console.log(
+        `  ${foraDoAnoBase} trecho(s) com voo fora de ${anoBase} não foram carregados: ` +
+          'pertencem ao relatório de outro ano (§7).',
+      )
+    }
 
     /* ---------------------------------------------------------- gravação */
     tituloDaEtapa('Gravação')
     const resultado = await recarregarEscopo({
       colecao: COLECAO.viagemTrecho,
-      // O escopo protege o que veio do formulário: a recarga do histórico não
-      // enxerga, e portanto não apaga, documento de outra fonte.
-      escopo: [{ campo: 'fonte', valor: FONTE }],
+      // **O escopo é fonte E ano.** A fonte protege o que veio de outra origem;
+      // o ano protege os outros períodos — sem ele, carregar 2027 apagaria 2026
+      // inteiro, porque a recarga remove do escopo tudo que não está na carga
+      // nova. Cada ano é um relatório, e recarregar um não pode derrubar outro.
+      escopo: [
+        { campo: 'fonte', valor: FONTE },
+        { campo: 'ano', valor: anoBase },
+      ],
       documentos,
       db,
     })

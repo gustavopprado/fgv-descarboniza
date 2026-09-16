@@ -54,6 +54,7 @@ import {
   type Severidade,
 } from '../src/server/documentos/tipos'
 import { validarViagemTrecho } from '../src/server/documentos/validacao'
+import { anoBaseViagens } from '../src/lib/env'
 import { apagarIds, recarregarEscopo } from '../src/server/escrita'
 import { carregarFatores } from '../src/server/fatores'
 import { COLECAO } from '../src/server/firestore'
@@ -255,8 +256,10 @@ async function principal(): Promise<void> {
 
     const uplift = fatores.vigente(CATEGORIA_AEREO_UPLIFT, 'gcd', trechos[0].data)
 
+    const anoBase = anoBaseViagens()
     const documentos: { id: string; dados: DocViagemTrecho }[] = []
     let distanciaTotal = 0
+    let foraDoAnoBase = 0
     let emissaoTotal = 0
 
     for (const t of trechos) {
@@ -267,6 +270,13 @@ async function principal(): Promise<void> {
         { latitude: origem.latitude!, longitude: origem.longitude! },
         { latitude: destino.latitude!, longitude: destino.longitude! },
       )
+      // Mesmo recorte de ano da outra fonte administrativa (§7): o trecho entra
+      // pelo ano do voo, e o de outro ano é do relatório daquele ano.
+      if (anoDe(t.data) !== anoBase) {
+        foraDoAnoBase += 1
+        continue
+      }
+
       // Aqui o uplift PRECISA ser aplicado: a distância foi calculada do zero.
       const distanciaKm = aplicarUplift(ortodromica, uplift.valor)
 
@@ -337,6 +347,12 @@ async function principal(): Promise<void> {
         `${n(distanciaTotal)} km, ${n(emissaoTotal)} kg CO₂e.`,
     )
     console.log(`  ${idPorUsuario.size} viajante(s), todos vinculados ao cadastro.`)
+    if (foraDoAnoBase > 0) {
+      console.log(
+        `  ${foraDoAnoBase} trecho(s) com data fora de ${anoBase} não foram carregados: ` +
+          'pertencem ao relatório de outro ano (§7).',
+      )
+    }
 
     console.log('\n  reconstrução, trecho a trecho:')
     for (const { dados } of documentos) {
@@ -354,7 +370,10 @@ async function principal(): Promise<void> {
 
     const resultado = await recarregarEscopo({
       colecao: COLECAO.viagemTrecho,
-      escopo: [{ campo: 'fonte', valor: FONTE }],
+      escopo: [
+        { campo: 'fonte', valor: FONTE },
+        { campo: 'ano', valor: anoBase },
+      ],
       documentos,
       db,
     })
