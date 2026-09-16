@@ -33,14 +33,20 @@ export type Papel =
   | 'colaborador'
 
 /**
- * De onde o trecho veio (§7).
+ * De onde o trecho do **inventário** veio (§7).
  *
- * `agencia` é o relatório da agência, histórico e congelado. `formulario` é o
- * viajante, a partir da data de corte. `cartao` é a planilha do cartão
- * empresarial: viagem que não passa pela agência e por isso não está na base
- * histórica — fonte separada, recarregável sem encostar nas outras duas.
+ * As duas são administrativas e cobrem o mesmo tipo de registro: `agencia` é o
+ * relatório da agência, histórico e congelado; `cartao` é a planilha do cartão
+ * empresarial, viagem paga fora da agência e por isso ausente daquele
+ * relatório.
+ *
+ * **O formulário do viajante não é fonte deste módulo** (§0.1). Ele alimenta o
+ * programa de viagens, que tem coleção própria — `viagemRegistrada`, mais
+ * abaixo. O campo existe por causa do escopo de recarga, para que regravar uma
+ * fonte não enxergue nem apague a outra, e não para dividir a série: não há
+ * data de corte e não há troca de fonte no tempo.
  */
-export type FonteDaViagem = 'agencia' | 'formulario' | 'cartao'
+export type FonteDaViagem = 'agencia' | 'cartao'
 export type TipoDeViagem = 'aereo' | 'carro'
 export type PropriedadeVeiculo = 'frota' | 'proprio' | 'locado'
 export type NivelDado =
@@ -70,25 +76,41 @@ export type FatorAplicado = {
 }
 
 /**
- * Comum às três coleções de emissão (§9.4).
+ * O que todo documento de emissão carrega, seja do inventário ou do programa.
  *
  * `fator` é nulo apenas onde a emissão é zero por definição — bicicleta, a pé e
  * "outro" não têm fator, têm regra (§6.2). A validação exige que emissão nula
  * acompanhe fator nulo, e vice-versa.
+ *
+ * Isto existe separado do envelope logo abaixo porque **a matemática é
+ * compartilhada e o dado não é** (§7.5): o programa de viagens calcula com os
+ * mesmos fatores e precisa carimbá-los do mesmo jeito, sem por isso ganhar os
+ * campos que só fazem sentido num inventário.
  */
-export type EnvelopeEmissao = {
-  modulo: Modulo
+export type NucleoDeEmissao = {
   modal: Modal
   escopo: Escopo
-  periodicidade: Periodicidade
   ano: number
   mes: MesIso | null
-  empresa: string | null
   fator: FatorAplicado | null
   alertas: Alerta[]
   /** Só os códigos, para `array-contains`: array de objeto não é indexável. */
   alertasCodigos: string[]
   atualizadoEm: DataIso
+}
+
+/**
+ * Comum às três coleções de emissão do **inventário** (§9.4).
+ *
+ * `modulo`, `periodicidade` e `empresa` são campos de inventário: dizem de qual
+ * relatório o documento faz parte, se ele é taxa ou evento, e por qual pessoa
+ * jurídica responde. Nenhum dos três se aplica a um registro voluntário, e é por
+ * isso que `viagemRegistrada` não os tem.
+ */
+export type EnvelopeEmissao = NucleoDeEmissao & {
+  modulo: Modulo
+  periodicidade: Periodicidade
+  empresa: string | null
 }
 
 /* ------------------------------------------------------------- mobilidade */
@@ -125,8 +147,12 @@ export type DocMobilidade = EnvelopeEmissao & {
  * ligados pelo mesmo `reservaId`. Não existe array aninhado de trechos.
  *
  * `ano` e `mes` saem da data do voo, nunca da data de lançamento da passagem.
- * `criadoPorUid` é o que permite ao `colaborador` ler apenas as próprias
- * submissões (§5.1).
+ *
+ * **Não existe `criadoPorUid` aqui.** Ele é campo do programa de viagens, que
+ * mora em `viagemRegistrada`: nenhum documento desta coleção é criado por
+ * alguém usando a aplicação, todos vêm de carga. Enquanto o campo existiu aqui,
+ * ele veio nulo em todo documento gravado — campo de um sistema no esquema do
+ * outro, que é exatamente o que a §0.1 desfaz.
  */
 export type DocViagemTrecho = EnvelopeEmissao & {
   modulo: 'viagens'
@@ -134,7 +160,6 @@ export type DocViagemTrecho = EnvelopeEmissao & {
   reservaId: string
   ordem: number
   funcionarioId: string
-  criadoPorUid: string | null
   tipo: TipoDeViagem
   fonte: FonteDaViagem
   contabilizar: boolean
@@ -156,6 +181,66 @@ export type DocViagemTrecho = EnvelopeEmissao & {
    */
   classeCabine: string | null
   multiplicadorClasse: number | null
+  propriedadeVeiculo: PropriedadeVeiculo | null
+  combustivel: Combustivel | null
+  ocupantes: number | null
+}
+
+/* ------------------------------------------- programa de viagens (não é inventário) */
+
+/**
+ * Uma viagem registrada pelo próprio colaborador — CLAUDE.md §0.1 e §7.5.
+ *
+ * **Isto não é inventário, e a coleção separada é o que torna a mistura
+ * impossível em vez de apenas proibida.** Um campo discriminador dentro de
+ * `viagemTrecho` deixaria a separação dependendo de toda consulta futura
+ * lembrar de filtrar por ele — e uma consulta que esquecesse somaria
+ * autodeclaração voluntária a fonte administrativa completa, produzindo série
+ * que mede adesão e parece medir emissão. Com duas coleções, esquecer o filtro
+ * não é possível: não há filtro para esquecer.
+ *
+ * O que ele **não** tem é tão importante quanto o que tem:
+ *
+ *  - **sem `fonte`** — não há série a dividir nem data de corte; o inventário
+ *    tem duas fontes administrativas e esta coleção não é uma delas;
+ *  - **sem `contabilizar`** — itinerário duplicado é coisa de relatório de
+ *    agência, não de formulário preenchido por quem viajou;
+ *  - **sem `empresa`** — a empresa é dimensão de inventário, por qual pessoa
+ *    jurídica o Escopo 3 responde;
+ *  - **sem `passageiros`** — quem preenche é quem viajou, e a divisão entre
+ *    ocupantes de um carro é `ocupantes`;
+ *  - **sem `modulo` e sem `periodicidade`** — não faz parte de módulo nenhum do
+ *    inventário.
+ *
+ * E `criadoPorUid` é **obrigatório**, ao contrário de tudo no inventário: é ele
+ * que permite ao `colaborador` ler apenas as próprias submissões, na consulta
+ * e não na interface (§5.1). Documento sem dono ficaria invisível para quem o
+ * escreveu e visível para ninguém.
+ *
+ * O cálculo reaproveita os mesmos fatores e as mesmas funções do inventário —
+ * o que não se compartilha é o dado, não a matemática (§7.5). Por isso o
+ * `fator` é carimbado aqui do mesmo jeito.
+ */
+export type DocViagemRegistrada = NucleoDeEmissao & {
+  /** Liga os trechos da mesma viagem, como no inventário. */
+  reservaId: string
+  ordem: number
+  /** Quem registrou. Obrigatório: é o controle de acesso do §5.1. */
+  criadoPorUid: string
+  /** Vínculo com o cadastro, quando quem registrou já existe nele. */
+  funcionarioId: string | null
+  tipo: TipoDeViagem
+  dataIda: DataIso
+  dataVolta: DataIso | null
+  origem: string
+  destino: string
+  distanciaKm: number
+  co2Kg: number
+  /** Aéreo: a distância é calculada do zero, então o uplift é aplicado (§7.2). */
+  faixaDistancia: FaixaDistancia | null
+  classeCabine: string | null
+  multiplicadorClasse: number | null
+  /** Carro: os três entram na conta, e por isso são exceção ao formulário mínimo. */
   propriedadeVeiculo: PropriedadeVeiculo | null
   combustivel: Combustivel | null
   ocupantes: number | null

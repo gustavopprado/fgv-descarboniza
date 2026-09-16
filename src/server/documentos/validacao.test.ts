@@ -16,6 +16,7 @@ import {
   idFatorEmissao,
   idFuncionario,
   idMobilidade,
+  idViagemRegistrada,
   idViagemTrecho,
   sanitizarSegmento,
 } from './ids'
@@ -24,6 +25,7 @@ import type {
   DocEmbarque,
   DocFatorEmissao,
   DocMobilidade,
+  DocViagemRegistrada,
   DocViagemTrecho,
 } from './tipos'
 import {
@@ -32,6 +34,7 @@ import {
   validarEmbarque,
   validarFatorEmissao,
   validarMobilidade,
+  validarViagemRegistrada,
   validarViagemTrecho,
 } from './validacao'
 
@@ -210,7 +213,6 @@ function trecho(): DocViagemTrecho {
     reservaId: 'ZZ001',
     ordem: 1,
     funcionarioId: 'org_pessoa-ficticia',
-    criadoPorUid: null,
     tipo: 'aereo',
     fonte: 'agencia',
     contabilizar: true,
@@ -252,8 +254,8 @@ function trechoDeCarro(): DocViagemTrecho {
 
 test('trecho aéreo e trecho de carro válidos passam', () => {
   validarViagemTrecho('agencia_ZZ001_1', trecho())
-  validarViagemTrecho('formulario_ZZ002_1', trechoDeCarro())
-  validarViagemTrecho('formulario_ZZ003_1', {
+  validarViagemTrecho('cartao_ZZ002_1', trechoDeCarro())
+  validarViagemTrecho('cartao_ZZ003_1', {
     ...trechoDeCarro(),
     propriedadeVeiculo: 'frota',
     escopo: 1,
@@ -267,6 +269,129 @@ test('ano e mês têm que bater com a data de referência do documento', () => {
 
 test('aéreo sem data do voo é recusado — é ela que define o mês', () => {
   recusa(() => validarViagemTrecho('x', { ...trecho(), dataVoo: null }))
+})
+
+/* ------------------------------- a §0.1 como invariante de escrita ------- */
+
+/**
+ * **O inventário recusa o formulário, e isso é a §0.1 em código.**
+ *
+ * Enquanto a separação fosse só um filtro nas consultas, bastava uma consulta
+ * esquecer o `where` para somar autodeclaração voluntária a fonte administrativa
+ * completa — e o resultado seria uma série cuja variação mede quanta gente
+ * preencheu, não quanta emissão houve. Erro assim não estoura em lugar nenhum,
+ * então precisa estourar na escrita.
+ */
+test('trecho de inventário com fonte do formulário é recusado', () => {
+  recusa(() =>
+    validarViagemTrecho('x', {
+      ...trecho(),
+      fonte: 'formulario' as unknown as DocViagemTrecho['fonte'],
+    }),
+  )
+})
+
+test('as duas fontes administrativas do inventário passam', () => {
+  validarViagemTrecho('x', { ...trecho(), fonte: 'agencia' })
+  validarViagemTrecho('x', { ...trecho(), fonte: 'cartao' })
+})
+
+/* ------------------------------------------ programa de viagens ---------- */
+
+function registrada(): DocViagemRegistrada {
+  return {
+    modal: 'aereo',
+    escopo: 3,
+    ano: 2031,
+    mes: '2031-05',
+    fator: {
+      categoria: 'viagem_aerea_faixa',
+      chave: 'curta',
+      versao: 'FICT-2031',
+      valor: 0.2,
+      unidade: 'kg CO2e por passageiro-km',
+      vigenciaInicio: '2031-01-01',
+    },
+    ...montarAlertas([]),
+    atualizadoEm: '2031-06-01',
+    reservaId: 'reg-0001',
+    ordem: 1,
+    criadoPorUid: 'uid-ficticio',
+    funcionarioId: 'org_pessoa-ficticia',
+    tipo: 'aereo',
+    dataIda: '2031-05-04',
+    dataVolta: '2031-05-08',
+    origem: 'AAA',
+    destino: 'BBB',
+    distanciaKm: 100,
+    co2Kg: 20,
+    faixaDistancia: 'curta',
+    classeCabine: 'economica',
+    multiplicadorClasse: 1,
+    propriedadeVeiculo: null,
+    combustivel: null,
+    ocupantes: null,
+  }
+}
+
+test('viagem registrada válida passa', () => {
+  validarViagemRegistrada(idViagemRegistrada('uid-ficticio', 'reg-0001', 1), registrada())
+})
+
+/**
+ * Sem dono, a submissão fica invisível para quem a escreveu e visível para
+ * ninguém: `criadoPorUid` é o controle de acesso do `colaborador` (§5.1), e no
+ * inventário esse campo nem existe.
+ */
+test('viagem registrada sem quem registrou é recusada', () => {
+  recusa(() => validarViagemRegistrada('x', { ...registrada(), criadoPorUid: '' }))
+})
+
+/**
+ * Esta é a única coleção preenchida à mão por gente usando a aplicação, e é
+ * onde erro de digitação chega. As outras vêm de carga conferida.
+ */
+test('volta anterior à ida é recusada', () => {
+  recusa(() => validarViagemRegistrada('x', { ...registrada(), dataVolta: '2031-05-01' }))
+  validarViagemRegistrada('x', { ...registrada(), dataVolta: null })
+})
+
+test('as regras da §9.9 valem no programa como valem no inventário', () => {
+  // ano e mês contra a data de referência
+  recusa(() => validarViagemRegistrada('x', { ...registrada(), mes: '2031-06' }))
+  // escopo coerente com a propriedade do veículo
+  recusa(() =>
+    validarViagemRegistrada('x', {
+      ...registrada(),
+      tipo: 'carro',
+      modal: 'terrestre',
+      faixaDistancia: null,
+      classeCabine: null,
+      multiplicadorClasse: null,
+      propriedadeVeiculo: 'frota',
+      escopo: 3,
+    }),
+  )
+  // ocupantes inteiro ≥ 1
+  recusa(() => validarViagemRegistrada('x', { ...registrada(), ocupantes: 0 }))
+  // fator nulo só com emissão zero
+  recusa(() => validarViagemRegistrada('x', { ...registrada(), fator: null }))
+})
+
+/**
+ * O ID do inventário sai do arquivo de origem; aqui não há arquivo, e a origem
+ * é quem registrou. Duas pessoas com a mesma sequência de reserva não podem
+ * colidir num documento só.
+ */
+test('o ID da viagem registrada separa pessoas', () => {
+  assert.notEqual(
+    idViagemRegistrada('uid-a', 'reg-0001', 1),
+    idViagemRegistrada('uid-b', 'reg-0001', 1),
+  )
+  assert.equal(
+    idViagemRegistrada('uid-a', 'reg-0001', 1),
+    idViagemRegistrada('uid-a', 'reg-0001', 1),
+  )
 })
 
 test('modal precisa corresponder ao tipo da viagem', () => {

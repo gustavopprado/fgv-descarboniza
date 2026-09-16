@@ -27,7 +27,6 @@ import {
   CATEGORIA_AEREO_CLASSE,
   CATEGORIA_AEREO_FAIXA,
 } from '../src/lib/calculo/categorias'
-import { corteFonteViagens } from '../src/lib/env'
 import {
   idAeroporto,
   idFuncionario,
@@ -111,7 +110,6 @@ const SEVERIDADE: Record<string, Severidade> = {
   fora_do_inventario: 'informativo',
   trecho_nao_aereo: 'atencao',
   possivel_duplicidade: 'atencao',
-  fora_do_periodo_da_agencia: 'atencao',
 }
 
 function severidadeDe(tipo: string): Severidade {
@@ -128,7 +126,6 @@ async function principal(): Promise<void> {
     'BASE_VIAGENS_PATH',
     'dados/base_viagens.json',
   )
-  const corte = corteFonteViagens()
   const base = lerJson<BaseViagens>(caminho)
   const classeAssumida = base.fatores_emissao?.classe_assumida
   if (!classeAssumida) {
@@ -200,7 +197,6 @@ async function principal(): Promise<void> {
     let trechosContabilizaveis = 0
     let distanciaContabilizavel = 0
     let emissaoContabilizavel = 0
-    const foraDoPeriodo = new Set<string>()
 
     for (const reserva of base.reservas) {
       // Alertas são da reserva e acompanham cada trecho dela.
@@ -216,15 +212,6 @@ async function principal(): Promise<void> {
           severidade: severidadeDe('fora_do_inventario'),
         })
       }
-      if (reserva.trechos.some((t) => t.data_voo >= corte)) {
-        foraDoPeriodo.add(reserva.id)
-        alertasDaReserva.push({
-          tipo: 'fora_do_periodo_da_agencia',
-          descricao: `voo em ${corte} ou depois, período em que a fonte oficial é o formulário`,
-          severidade: severidadeDe('fora_do_periodo_da_agencia'),
-        })
-      }
-
       const funcionarioId = idPorChaveOrigem.get(reserva.pax_id)
       if (!funcionarioId) {
         throw new Error(
@@ -267,7 +254,6 @@ async function principal(): Promise<void> {
           reservaId: reserva.id,
           ordem: trecho.ordem,
           funcionarioId,
-          criadoPorUid: null,
           tipo: 'aereo',
           fonte: FONTE,
           contabilizar: reserva.contabilizar,
@@ -306,12 +292,6 @@ async function principal(): Promise<void> {
       `  ${trechosContabilizaveis} trechos contabilizáveis, ` +
         `${n(distanciaContabilizavel)} km, ${n(emissaoContabilizavel)} kg CO₂e.`,
     )
-    if (foraDoPeriodo.size > 0) {
-      console.log(
-        `  atenção: ${foraDoPeriodo.size} reservas têm voo em ${corte} ou depois, ` +
-          'período em que a fonte oficial passa a ser o formulário (§7).',
-      )
-    }
 
     /* ---------------------------------------------------------- gravação */
     tituloDaEtapa('Gravação')

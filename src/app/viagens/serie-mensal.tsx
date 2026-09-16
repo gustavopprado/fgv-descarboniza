@@ -1,13 +1,16 @@
 /**
- * Série mensal com a marca da troca de fonte — CLAUDE.md §7 e §10.3.
+ * Série mensal do inventário de viagens — CLAUDE.md §10.3.
  *
- * A marca existe porque, nos primeiros meses do programa, a adesão vai ser
- * parcial e **a emissão vai parecer cair sem ter caído**. Sem a marca, o gráfico
- * conta uma história de redução que não aconteceu.
+ * **Não há marca de troca de fonte, e a ausência é a §0.1.** Enquanto se
+ * acreditou que o relatório da agência e o formulário do viajante eram a mesma
+ * série, esta tela destacava o mês da data de corte para avisar que a emissão
+ * ia parecer cair sem ter caído. A premissa estava errada: as duas fontes deste
+ * módulo são administrativas, cobrem o mesmo tipo de registro e convivem sem
+ * ressalva. O formulário alimenta o programa de viagens, que tem coleção e
+ * telas próprias.
  *
- * A marca vem da data de corte, não da série: enquanto ninguém tiver registrado
- * viagem pelo formulário, a série sozinha não teria como mostrar a virada — que
- * é justamente quando ela mais importa.
+ * O que sobra é a única ressalva que a série de fato tem, e que é de outra
+ * regra: mês sem viagem aparece com barra zerada, não sumido.
  */
 import { GraficoDeBarras } from '../grafico-de-barras'
 
@@ -23,15 +26,10 @@ function rotuloDoMes(mes: string): string {
 
 export function SerieMensal({
   serie,
-  corteFonte,
 }: {
   serie: { mes: string; co2Kg: number; documentos: number }[]
-  corteFonte: string | null
 }) {
   if (serie.length === 0) return null
-
-  const mesDoCorte = corteFonte === null ? null : corteFonte.slice(0, 7)
-  const corteNaSerie = mesDoCorte !== null && serie.some((p) => p.mes === mesDoCorte)
 
   return (
     <div>
@@ -39,7 +37,6 @@ export function SerieMensal({
         barras={serie.map((ponto) => ({
           rotulo: rotuloDoMes(ponto.mes),
           valor: ponto.co2Kg,
-          destaque: ponto.mes === mesDoCorte,
         }))}
         unidade="kg CO₂"
         casas={0}
@@ -48,27 +45,12 @@ export function SerieMensal({
       />
 
       <p className="mt-3 max-w-[80ch] border-t border-[var(--color-linha)] pt-3 text-[12px] text-[var(--color-apoio)]">
-        Mês sem viagem aparece com barra zerada, não sumido: mês ausente esconderia
-        a queda que houve.{' '}
-        {corteFonte === null ? (
-          <>
-            A data em que a fonte passa da agência para o formulário do viajante
-            ainda não foi definida, então a série não marca a virada. Enquanto
-            isso, tudo que está aqui vem do relatório da agência.
-          </>
-        ) : corteNaSerie ? (
-          <>
-            O mês em destaque é o da troca de fonte, em {corteFonte}: antes dele o
-            dado vem do relatório da agência, a partir dele do formulário de quem
-            viajou. Nos primeiros meses a adesão é parcial, e a emissão vai
-            parecer cair sem ter caído.
-          </>
-        ) : (
-          <>
-            A troca de fonte está marcada para {corteFonte}, fora do período
-            exibido.
-          </>
-        )}
+        Mês sem viagem aparece com barra zerada, não sumido: mês ausente
+        esconderia a queda que houve. A série cobre as duas fontes
+        administrativas do módulo — o relatório da agência e a planilha do cartão
+        empresarial —, somadas sem distinção, porque as duas cobrem o mesmo tipo
+        de registro. O que os colaboradores registram no programa de viagens não
+        entra aqui.
       </p>
     </div>
   )

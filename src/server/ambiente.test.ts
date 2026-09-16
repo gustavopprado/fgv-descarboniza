@@ -10,8 +10,7 @@
  * Golfo da Guiné. Uma carga rodada a partir dela mediria a distância de todo
  * mundo até o oceano; como distância acima do limite vira exceção, e exceção
  * fica fora da média por desenho, o módulo inteiro ficaria em exceção com média
- * válida e vazia — erro que não estoura em lugar nenhum. O mesmo vale para uma
- * data de corte plausível, que já foi lida como compromisso uma vez.
+ * válida e vazia — erro que não estoura em lugar nenhum.
  *
  * Para estes, exemplo vazio é mais seguro: o código recusa rodar sem o valor, e
  * recusar é melhor que calcular a partir de um palpite.
@@ -27,7 +26,6 @@ import { test } from 'node:test'
 const PRECISAM_VIR_VAZIAS = [
   'FABRICA_LATITUDE',
   'FABRICA_LONGITUDE',
-  'VIAGENS_CORTE_FONTE',
   'MOBILIDADE_ANO_BASE',
   'FATORES_VIGENCIA_INICIO',
   'MARITIMO_BASE_DE_DATA',

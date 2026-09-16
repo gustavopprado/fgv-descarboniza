@@ -38,15 +38,17 @@ import {
 } from './acesso'
 
 /**
- * Nome de cada fonte de viagem, para a tela.
+ * Nome de cada fonte do **inventário** de viagens, para a tela.
  *
  * Uma fonte que não esteja aqui aparece pelo próprio código, em vez de ser
  * somada a outra: fonte desconhecida tem que ficar visível, não se diluir.
+ *
+ * O formulário do viajante não está aqui porque não é fonte deste módulo
+ * (§0.1): ele alimenta o programa de viagens, que tem coleção e telas próprias.
  */
 const NOME_DA_FONTE: Record<string, string> = {
   agencia: 'relatório da agência',
   cartao: 'planilha do cartão',
-  formulario: 'formulário do viajante',
 }
 
 /** O que a tela escreve onde a decisão ainda não foi tomada. */
@@ -144,16 +146,6 @@ function parametros(
 ): ParametroDeclarado[] {
   const env = parametrosDeclarados()
   const lista: ParametroDeclarado[] = []
-
-  const corte = texto(env.corteFonteViagens)
-  lista.push({
-    rotulo: 'Data de corte entre agência e formulário',
-    ...corte,
-    observacao: corte.definido
-      ? 'O corte é pela data do voo ou da viagem, não pela data de preenchimento. Na série mensal, a troca de fonte é marcada neste mês.'
-      : 'A decisão ainda não foi tomada: depende do anúncio do programa aos colaboradores, não do código. Enquanto isso, a carga da base histórica exige o valor para rodar.',
-    escopo: 'geral',
-  })
 
   const supressao = texto(opcional('MOBILIDADE_SUPRESSAO_MINIMA') ?? null)
   lista.push({
@@ -441,9 +433,9 @@ export async function consultarMetodo(
     fontes.push({
       modulo: 'viagens',
       descricao:
-        'Até a data de corte, relatório da agência de viagens. A partir dela, formulário preenchido por quem viajou.',
+        'Duas fontes administrativas: o relatório da agência de viagens e a planilha do cartão empresarial, que traz a viagem paga fora da agência e por isso ausente daquele relatório. O que os colaboradores registram no programa de viagens não entra neste módulo.',
       situacao:
-        'O histórico da agência é carga única e imutável. A série mensal marca a troca de fonte no mês da data de corte.',
+        'O histórico da agência é carga única e imutável. Cada fonte tem escopo de recarga próprio, então regravar uma não enxerga nem apaga a outra. Não há data de corte: as duas cobrem o mesmo tipo de registro e somam sem ressalva.',
     })
 
     qualidade.push({

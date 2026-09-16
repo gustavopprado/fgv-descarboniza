@@ -1,5 +1,16 @@
 /**
- * Consultas do programa de viagens — CLAUDE.md §3.2, §5.1 e §10.
+ * Consultas do programa de viagens — CLAUDE.md §0.1, §3.2, §5.1 e §10.
+ *
+ * **Este módulo lê `viagemRegistrada` e nenhuma coleção do inventário.** A
+ * recíproca também vale: as cinco telas de inventário não tocam nesta coleção.
+ * Não é preferência de organização — somar uma fonte administrativa completa a
+ * uma autodeclaração voluntária produz série cuja variação mede quanta gente
+ * preencheu, não quanta emissão houve, e uma queda de adesão seria lida como
+ * redução de emissão num relatório que alguém assina.
+ *
+ * Até agora a separação era um `where('fonte', '==', 'formulario')` sobre a
+ * coleção do inventário. Bastava uma consulta esquecer o filtro. Com duas
+ * coleções não há filtro para esquecer.
  *
  * É a única parte do sistema em que a pessoa aparece pelo nome, e mesmo assim
  * com limite:
@@ -12,9 +23,9 @@
  *
  * Nada disto vale para as telas de inventário, onde ninguém vê nome (§3.1).
  */
-import type { Firestore } from 'firebase-admin/firestore'
+import type { Firestore, Query } from 'firebase-admin/firestore'
 
-import type { DocFuncionario, DocViagemTrecho } from '../documentos/tipos'
+import type { DocFuncionario, DocViagemRegistrada } from '../documentos/tipos'
 import { COLECAO, firestore } from '../firestore'
 import { emToneladas, serieMensal, somar } from './agregacao'
 import {
@@ -22,8 +33,6 @@ import {
   podeVerQuemRegistrou,
   type ContextoDeAcesso,
 } from './acesso'
-
-const FONTE_DO_PROGRAMA = 'formulario' as const
 
 export type ViagemRegistrada = {
   reservaId: string
@@ -39,10 +48,10 @@ export type ViagemRegistrada = {
 
 /** Agrupa trechos em viagens, que é como a tela lista. */
 function montarViagens(
-  trechos: DocViagemTrecho[],
+  trechos: DocViagemRegistrada[],
   nomePorFuncionario: Map<string, string> | null,
 ): ViagemRegistrada[] {
-  const porReserva = new Map<string, DocViagemTrecho[]>()
+  const porReserva = new Map<string, DocViagemRegistrada[]>()
   for (const t of trechos) {
     const lista = porReserva.get(t.reservaId)
     if (lista) lista.push(t)
@@ -66,7 +75,10 @@ function montarViagens(
         rota,
         co2Kg: somar(ordenados, (t) => t.co2Kg),
         trechos: ordenados.length,
-        registradoPor: nomePorFuncionario?.get(primeiro.funcionarioId) ?? null,
+        registradoPor:
+          primeiro.funcionarioId === null
+            ? null
+            : (nomePorFuncionario?.get(primeiro.funcionarioId) ?? null),
       }
     })
     .sort((a, b) => b.dataIda.localeCompare(a.dataIda))
@@ -83,10 +95,10 @@ export async function consultarMinhasViagens(
   exigirProgramaDeViagens(ctx)
 
   const instantaneo = await db
-    .collection(COLECAO.viagemTrecho)
+    .collection(COLECAO.viagemRegistrada)
     .where('criadoPorUid', '==', ctx.uid)
     .get()
-  const trechos = instantaneo.docs.map((d) => d.data() as DocViagemTrecho)
+  const trechos = instantaneo.docs.map((d) => d.data() as DocViagemRegistrada)
 
   return {
     viagens: montarViagens(trechos, null),
@@ -132,13 +144,11 @@ export async function consultarPrograma(
     )
   }
 
-  let consulta = db
-    .collection(COLECAO.viagemTrecho)
-    .where('fonte', '==', FONTE_DO_PROGRAMA)
+  let consulta: Query = db.collection(COLECAO.viagemRegistrada)
   if (filtros.ano !== undefined) consulta = consulta.where('ano', '==', filtros.ano)
 
   const instantaneo = await consulta.get()
-  const trechos = instantaneo.docs.map((d) => d.data() as DocViagemTrecho)
+  const trechos = instantaneo.docs.map((d) => d.data() as DocViagemRegistrada)
 
   // O nome só é lido quando o perfil pode vê-lo. Para o gestor, ele nem sai da
   // coleção de funcionários.
@@ -154,7 +164,9 @@ export async function consultarPrograma(
   const co2Kg = somar(trechos, (t) => t.co2Kg)
 
   const funcionarios = (await db.collection(COLECAO.funcionario).select().get()).size
-  const registraram = new Set(trechos.map((t) => t.funcionarioId)).size
+  // Conta pessoas distintas pelo uid, não pelo vínculo com o cadastro: quem
+  // registrou e ainda não tem documento de funcionário mesmo assim aderiu.
+  const registraram = new Set(trechos.map((t) => t.criadoPorUid)).size
 
   const porTipo = new Map<string, { viagens: number; co2Kg: number }>()
   for (const v of viagens) {

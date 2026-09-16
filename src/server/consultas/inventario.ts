@@ -18,12 +18,11 @@
  */
 import type { Firestore, Query } from 'firebase-admin/firestore'
 
-import { corteFonteViagensOuNulo, supressaoMinima } from '@/lib/env'
+import { supressaoMinima } from '@/lib/env'
 import { coordenadaValida } from '@/lib/mapa'
 import { corredor } from '@/lib/regiao'
 import type {
   DocAeroporto,
-  FonteDaViagem,
   DocEmbarque,
   DocMobilidade,
   DocViagemTrecho,
@@ -209,19 +208,8 @@ export type ResumoDeViagens = {
   porEmpresa: Grupo[]
   porModal: Grupo[]
   alertas: { tipo: string; ocorrencias: number }[]
-  /** Onde a série troca de fonte, para a tela marcar a virada (§7). */
-  mesesPorFonte: { mes: string; agencia: number; formulario: number; cartao: number }[]
   /** Corredores aéreos desenháveis, já suprimidos e com geografia (§10.3). */
   mapa: MapaDeCorredores
-  /**
-   * A data de corte entre agência e formulário, ou `null` enquanto ela não
-   * estiver definida (§7).
-   *
-   * Vem daqui, e não da própria série, porque nos primeiros meses do programa
-   * ainda não há submissão nenhuma: sem a data, a tela não teria onde marcar a
-   * virada justamente no período em que a marca mais importa.
-   */
-  corteFonte: string | null
 }
 
 export async function consultarViagens(
@@ -256,14 +244,11 @@ export async function consultarViagens(
 
   const mapa = await montarMapaDeCorredores(db, trechos, limite, valor, pessoa)
 
-  const porFonte = new Map<string, Record<FonteDaViagem, number>>()
-  for (const t of trechos) {
-    if (!t.mes) continue
-    const atual = porFonte.get(t.mes) ?? { agencia: 0, formulario: 0, cartao: 0 }
-    atual[t.fonte] += t.co2Kg
-    porFonte.set(t.mes, atual)
-  }
-
+  // **A série não se divide por fonte, e isso é a §0.1.** As duas fontes deste
+  // módulo são administrativas, cobrem o mesmo tipo de registro e convivem sem
+  // ressalva; o formulário do viajante não é fonte daqui. A contagem de trecho
+  // por fonte que existia neste ponto, e a marca de virada que ela alimentava,
+  // existiam só para sustentar uma junção que não deve acontecer.
   return {
     ano: filtros.ano ?? null,
     viagens,
@@ -303,11 +288,7 @@ export async function consultarViagens(
     alertas: [...alertas.entries()]
       .map(([tipo, ocorrencias]) => ({ tipo, ocorrencias }))
       .sort((a, b) => b.ocorrencias - a.ocorrencias),
-    mesesPorFonte: [...porFonte.entries()]
-      .map(([mes, v]) => ({ mes, ...v }))
-      .sort((a, b) => a.mes.localeCompare(b.mes)),
     mapa,
-    corteFonte: corteFonteViagensOuNulo(),
   }
 }
 

@@ -1,9 +1,13 @@
 /**
  * Tela de Viagens corporativas — CLAUDE.md §10.3.
  *
- * Aéreo e carro, das duas fontes separadas pela data de corte (§7). A métrica
- * exibida é **kg CO₂ por viagem** (§1), e viagem aqui é a reserva: a unidade de
- * cálculo é o trecho, mas quem lê o painel conta viagens.
+ * Aéreo e carro, das duas fontes administrativas do módulo: o relatório da
+ * agência e a planilha do cartão empresarial (§7). Não há data de corte e não há
+ * troca de fonte no tempo — **o que os colaboradores registram no programa de
+ * viagens não aparece em tela nenhuma daqui** (§0.1).
+ *
+ * A métrica exibida é **kg CO₂ por viagem** (§1), e viagem aqui é a reserva: a
+ * unidade de cálculo é o trecho, mas quem lê o painel conta viagens.
  *
  * Nada identifica ninguém (§3.1): destinos, rotas e mapa já vêm com supressão
  * de recorte pequeno, e a rota suprimida não vira linha no mapa.
@@ -108,7 +112,7 @@ export default async function Page({
               titulo="Emissão por mês"
               descricao="Pela data do voo ou da viagem, nunca pela data de lançamento da passagem."
             >
-              <SerieMensal serie={dados.porMes} corteFonte={dados.corteFonte} />
+              <SerieMensal serie={dados.porMes} />
             </Painel>
           </Revelar>
 

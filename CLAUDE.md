@@ -486,6 +486,7 @@ anonimato e a supressão de grupos pequenos.
 funcionario/{matriculaOuChaveDeOrigem}
 mobilidade/{anoBase}_{matricula}
 viagemTrecho/{fonte}_{refOrigem}_{ordem}
+viagemRegistrada/{uid}_{reservaId}_{ordem}
 embarque/{agente}_{shipmentId}
 containerPortoMes/{ano}_{mes}_{porto}
 fatorEmissao/{categoria}__{chave}__{versao}__{vigenciaInicio}
@@ -541,11 +542,11 @@ bairro, cidade, diasUteisMes, co2KgMes, excecao, motivoExcecao
 é nulo: a pesquisa é anual e o valor vale para todo mês do ano-base — na série
 mensal o mesmo valor se repete nos doze meses, e isso é declarado na tela de método.
 
-### 9.6 `viagemTrecho` — um documento por trecho
+### 9.6 `viagemTrecho` — um documento por trecho do inventário
 
 ```
-reservaId, ordem, funcionarioId, criadoPorUid,
-tipo('aereo'|'carro'), fonte('agencia'|'formulario'), contabilizar,
+reservaId, ordem, funcionarioId,
+tipo('aereo'|'carro'), fonte('agencia'|'cartao'), contabilizar,
 dataIda, dataVolta, origem, destino, companhia, voo, dataVoo,
 distanciaKm, faixaDistancia, passageiros, co2Kg
 aereo: classeCabine, multiplicadorClasse
@@ -557,8 +558,62 @@ conta (§7.2) e fica em campo próprio, senão a emissão do trecho não é
 reproduzível a partir do documento.
 
 `reservaId` é o que liga os trechos da mesma viagem. `ano` e `mes` saem **da data do
-voo**, nunca da data de lançamento da passagem (§7.2). `criadoPorUid` é o que
-permite ao `colaborador` ler apenas as próprias submissões (§5.1).
+voo**, nunca da data de lançamento da passagem (§7.2).
+
+`fonte` só admite as duas fontes administrativas, e **a validação de escrita
+recusa qualquer outra** — em particular `formulario`. Ela existe por causa do
+escopo de recarga, não para dividir a série (§7).
+
+**`criadoPorUid` não mora aqui.** Ele é campo do programa de viagens que tinha
+ficado no lugar errado: nenhum documento desta coleção é criado por alguém
+usando a aplicação — todos vêm de carga —, e enquanto o campo esteve aqui veio
+nulo em todo documento gravado. Ele mora em `viagemRegistrada`, onde é
+obrigatório.
+
+### 9.6.1 `viagemRegistrada` — uma viagem registrada pelo colaborador
+
+**Não é inventário** (§0.1, §7.5). Coleção própria, telas próprias, e nenhum
+dado daqui entra em consulta, indicador, série ou mapa do inventário.
+
+```
+reservaId, ordem, criadoPorUid, funcionarioId,
+tipo('aereo'|'carro'), dataIda, dataVolta, origem, destino,
+distanciaKm, co2Kg
+aereo: faixaDistancia, classeCabine, multiplicadorClasse
+carro: propriedadeVeiculo, combustivel, ocupantes
+```
+
+**Por que duas coleções, e não um campo discriminador em `viagemTrecho`.** Um
+campo deixaria a separação dependendo de toda consulta futura lembrar de
+filtrar por ele. Uma consulta que esquecesse somaria autodeclaração voluntária a
+fonte administrativa completa, e o resultado seria uma série cuja variação mede
+quanta gente preencheu e parece medir emissão — erro que não estoura em lugar
+nenhum. **Com duas coleções, esquecer o filtro não é possível: não há filtro
+para esquecer.** A mistura passa de proibida a impossível, e é essa diferença
+que a §0.1 pede.
+
+O documento carrega o mesmo núcleo de emissão do inventário — modal, escopo,
+ano, mês, fator carimbado com versão, alertas e `atualizadoEm` —, porque o
+cálculo reaproveita os mesmos fatores e as mesmas funções: **o que não se
+compartilha é o dado, não a matemática** (§7.5).
+
+O que ele **não** tem diz o resto: sem `fonte`, porque não há série a dividir;
+sem `contabilizar`, porque itinerário duplicado é coisa de relatório de agência;
+sem `empresa`, que é dimensão de inventário; sem `passageiros`, porque quem
+preenche é quem viajou e a divisão entre ocupantes de um carro é `ocupantes`; e
+sem `modulo` nem `periodicidade`, porque não faz parte de módulo nenhum do
+inventário.
+
+`criadoPorUid` é **obrigatório** — é ele que permite ao `colaborador` ler apenas
+as próprias submissões, na consulta e não na interface (§5.1). É também o que
+entra no ID: o do inventário é derivado do arquivo de origem, porque é
+recarregar o arquivo que precisa sobrescrever; aqui não existe arquivo, e a
+origem é quem registrou. `funcionarioId` é o vínculo com o cadastro quando quem
+registrou já existe nele, e pode ser nulo.
+
+Além das regras da §9.9, que valem inteiras aqui, a validação exige que a data
+de volta não anteceda a de ida: esta é a única coleção preenchida à mão por
+gente usando a aplicação, e é onde erro de digitação chega.
 
 ### 9.7 `embarque` — um embarque do relatório do agente
 
@@ -886,6 +941,71 @@ reintroduz a chance de o número ficar parado no recorte anterior.
 defeito, e isso está escrito no cabeçalho do arquivo. Ciclo de efeito e ordem de
 pintura só existem quando há navegador pintando — é a mesma lição de 15/09, e
 continua sem guarda automática honesta.
+
+#### 2026-09-16 — A §0.1 no código: duas coleções, e a data de corte apagada
+
+Implementação da separação decidida na entrada anterior. O código ainda refletia
+a premissa de que agência e formulário eram a mesma série com uma data no meio.
+
+**A data de corte saiu inteira.** `VIAGENS_CORTE_FONTE` e as duas funções que a
+liam, o campo na lista de parâmetros da tela de método, a contagem de trecho por
+fonte na série, a marca de virada no gráfico mensal, o alerta de fonte
+sobreposta na carga e os dois testes que fixavam o comportamento. A variável
+saiu também do `.env.example`, com o motivo escrito no lugar dela — e a lista de
+placeholders vigiados encolheu junto.
+
+Um efeito dessa premissa estava vivo e não tinha sido notado: **a carga da base
+da agência não rodava.** A variável tinha sido esvaziada de propósito em 15/09 e
+o script a exigia, então recarregar o histórico falhava reclamando de uma
+variável que a §7 diz que não deve existir.
+
+**Duas coleções, não um campo discriminador.** O programa de viagens passou a
+ler `viagemRegistrada`. Antes a separação era um `where` por fonte sobre a
+coleção do inventário, e bastava uma consulta esquecer o filtro. Com duas
+coleções não há filtro para esquecer: a mistura deixa de ser proibida e passa a
+ser impossível, que é a diferença que a §0.1 pede.
+
+**`criadoPorUid` mudou de coleção.** Era campo do programa no esquema do
+inventário, e vinha nulo em todo documento gravado — nenhum documento de
+`viagemTrecho` é criado por alguém usando a aplicação. Em `viagemRegistrada` ele
+é obrigatório e entra no ID: o ID do inventário deriva do arquivo de origem,
+porque é recarregar o arquivo que precisa sobrescrever; aqui não há arquivo, e a
+origem é quem registrou.
+
+**O envelope da §9.4 foi partido em dois.** O núcleo — modal, escopo, período,
+fator carimbado, alertas — é comum, porque o cálculo do programa reaproveita os
+mesmos fatores. `modulo`, `periodicidade` e `empresa` ficaram no envelope do
+inventário, que é onde fazem sentido. É a §7.5 no esquema: compartilha-se a
+matemática, não o dado.
+
+**A separação virou invariante executável, em três pontos.** A validação de
+escrita recusa `fonte: 'formulario'` em `viagemTrecho`; a conferência falha se
+encontrar um desses no banco, porque validação só alcança o que passa por ela e
+documento gravado antes da regra continua lá; e a cobertura passou a anunciar
+quantos trechos o programa tem em coleção própria, para a ausência deles nas
+conferências de origem ser uma informação e não um silêncio.
+
+**Decisão que não estava no documento:** `validarViagemRegistrada` exige que a
+data de volta não anteceda a de ida. É a única coleção preenchida à mão por
+gente usando a aplicação, e é onde erro de digitação chega; as outras vêm de
+carga conferida.
+
+**Um teste novo nasceu cego e foi corrigido na hora.** Ele proibia a palavra
+"corte" em qualquer texto da fonte de viagens, e reprovou a própria frase que
+explica que não há corte — frase que a tela deve ter, porque a pergunta é
+natural para quem lembra da versão anterior. Passou a proibir o que de fato é
+errado: prometer troca de fonte no tempo.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (134 testes, 7 novos) e `next build` passam. Nenhum
+  servidor de desenvolvimento foi subido.
+- As três guardas novas foram conferidas **desligando cada uma**: as três
+  reprovam quando a regra sai e passam quando volta. Guarda que não morde não é
+  guarda.
+- `verificar` rodou contra o banco carregado e **todas as conferências bateram**,
+  incluindo a nova da §0.1. A da planilha do cartão continua reportando arquivo
+  de origem ausente nesta máquina, como já fazia.
 
 #### 2026-09-16 — Separação entre inventário e programa de viagens
 

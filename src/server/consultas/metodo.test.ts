@@ -77,7 +77,6 @@ function trecho(parcial: Partial<DocViagemTrecho>): DocViagemTrecho {
     reservaId: 'reserva-ficticia',
     ordem: 1,
     funcionarioId: 'funcionario-ficticio',
-    criadoPorUid: null,
     tipo: 'aereo',
     fonte: 'agencia',
     contabilizar: true,
@@ -138,27 +137,51 @@ async function comAmbiente<T>(
   }
 }
 
-test('data de corte não definida é declarada, não deixada em branco', async () => {
+test('decisão pendente é declarada como tal, não deixada em branco', async () => {
   const metodo = await comAmbiente(
-    { VIAGENS_CORTE_FONTE: '', MOBILIDADE_ANO_BASE: String(ANO_BASE) },
+    { MOBILIDADE_SUPRESSAO_MINIMA: '', MOBILIDADE_ANO_BASE: String(ANO_BASE) },
     () => consultarMetodo(ctx('admin'), {}, bancoCom({})),
   )
 
-  const corte = metodo.parametros.find((p) => p.rotulo.startsWith('Data de corte'))
-  assert.notEqual(corte, undefined)
-  assert.equal(corte?.definido, false)
-  assert.equal(corte?.valor, NAO_DEFINIDO)
-  assert.match(corte?.observacao ?? '', /ainda não foi tomada/)
+  const supressao = metodo.parametros.find((p) => p.rotulo.startsWith('Supressão'))
+  assert.notEqual(supressao, undefined)
+  assert.equal(supressao?.definido, false)
+  assert.equal(supressao?.valor, NAO_DEFINIDO)
 })
 
-test('data de corte definida aparece como valor', async () => {
-  const metodo = await comAmbiente({ VIAGENS_CORTE_FONTE: '2031-10-01' }, () =>
+test('parâmetro definido aparece como valor', async () => {
+  const metodo = await comAmbiente({ MOBILIDADE_SUPRESSAO_MINIMA: '7' }, () =>
     consultarMetodo(ctx('admin'), {}, bancoCom({})),
   )
 
-  const corte = metodo.parametros.find((p) => p.rotulo.startsWith('Data de corte'))
-  assert.equal(corte?.definido, true)
-  assert.equal(corte?.valor, '2031-10-01')
+  const supressao = metodo.parametros.find((p) => p.rotulo.startsWith('Supressão'))
+  assert.equal(supressao?.definido, true)
+  assert.equal(supressao?.valor, '7 pessoas')
+})
+
+/**
+ * **A §0.1 na tela.** O formulário do viajante não é fonte deste módulo: as duas
+ * origens são administrativas e não há data de corte a declarar como parâmetro
+ * do cálculo. Um parâmetro de corte de volta aqui seria a premissa antiga
+ * voltando pela porta da documentação.
+ *
+ * A fonte declarada **pode** dizer que não há corte — e diz, porque a pergunta
+ * é natural para quem lembra da versão anterior. O que ela não pode é prometer
+ * uma troca de fonte no tempo, que é a afirmação errada.
+ */
+test('o método não declara data de corte como parâmetro', async () => {
+  const metodo = await consultarMetodo(ctx('admin'), {}, bancoCom({}))
+
+  assert.equal(
+    metodo.parametros.find((p) => /corte/i.test(p.rotulo)),
+    undefined,
+  )
+
+  const viagens = metodo.fontes.find((f) => f.modulo === 'viagens')
+  assert.notEqual(viagens, undefined)
+  const declarado = `${viagens?.descricao} ${viagens?.situacao}`
+  assert.doesNotMatch(declarado, /a partir dela|troca de fonte|passa a ser/i)
+  assert.match(declarado, /administrativas/)
 })
 
 test('importacao recebe só o marítimo, e a mobilidade nem é lida', async () => {

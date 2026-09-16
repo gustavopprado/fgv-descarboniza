@@ -304,7 +304,6 @@ async function principal(): Promise<void> {
         reservaId,
         ordem: t.ordem,
         funcionarioId,
-        criadoPorUid: null,
         tipo: 'aereo',
         fonte: FONTE,
         contabilizar: true,

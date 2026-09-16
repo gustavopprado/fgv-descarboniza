@@ -534,10 +534,11 @@ async function conferirCoberturaDasFontes(
   // Fonte gravada no banco que ninguém confere é o mesmo ponto cego, do outro
   // lado: dado que entrou e não tem quem o confronte com a origem.
   const todas = (await db.collection(COLECAO.viagemTrecho).select('fonte').get()).docs
+  const fontesNoBanco = todas.map((d) =>
+    String((d.data() as { fonte?: string }).fonte ?? ''),
+  )
   const semConferencia = new Set(
-    todas
-      .map((d) => String((d.data() as { fonte?: string }).fonte ?? ''))
-      .filter((f) => f !== '' && !conhecidas.has(f)),
+    fontesNoBanco.filter((f) => f !== '' && !conhecidas.has(f)),
   )
   for (const fonte of semConferencia) {
     console.log(
@@ -545,6 +546,34 @@ async function conferirCoberturaDasFontes(
         'sabe de onde eles vieram.',
     )
   }
+
+  /**
+   * **A §0.1, conferida contra o banco.**
+   *
+   * A validação de escrita já recusa `fonte: 'formulario'` em `viagemTrecho`,
+   * mas validação só alcança o que passa por ela: documento gravado antes da
+   * regra, ou por um caminho que não a use, continua lá. Esta conferência olha
+   * o que está no banco hoje.
+   *
+   * Não é fonte desconhecida — é o tipo errado de dado na coleção errada. Somar
+   * autodeclaração voluntária a fonte administrativa completa produz série cuja
+   * variação mede quanta gente preencheu, não quanta emissão houve. Por isso
+   * **falha**, em vez de avisar.
+   */
+  conferencias.push({
+    item: 'trechos do programa dentro do inventário (§0.1)',
+    esperado: 0,
+    obtido: fontesNoBanco.filter((f) => f === 'formulario').length,
+    origem: 'separação',
+    ...inteiro,
+  })
+
+  const doPrograma = (await db.collection(COLECAO.viagemRegistrada).select().get()).size
+  console.log(
+    `  o programa de viagens tem ${doPrograma} trecho(s) em coleção própria, ` +
+      'fora de toda conferência de cobertura: ele não tem arquivo de origem a ' +
+      'confrontar, porque não é carga — é registro voluntário (§0.1).',
+  )
 }
 
 async function principal(): Promise<void> {

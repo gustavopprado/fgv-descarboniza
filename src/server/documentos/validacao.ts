@@ -12,8 +12,9 @@ import type {
   DocEmbarque,
   DocFatorEmissao,
   DocMobilidade,
+  DocViagemRegistrada,
   DocViagemTrecho,
-  EnvelopeEmissao,
+  NucleoDeEmissao,
 } from './tipos'
 
 export class DocumentoInvalidoError extends Error {
@@ -97,9 +98,16 @@ export function exigirSemUndefined(
 
 /* ------------------------------------------------------ envelope de emissão */
 
+/**
+ * Confere o que inventário e programa têm em comum: escopo, período, fator
+ * carimbado e alertas. Recebe o núcleo, e não o envelope do inventário, porque
+ * nenhuma destas regras depende de `modulo`, `periodicidade` ou `empresa` — e é
+ * o que permite ao programa de viagens ser validado com o mesmo rigor sem
+ * ganhar campo de inventário (§0.1).
+ */
 function validarEnvelope(
   ctx: Contexto,
-  doc: EnvelopeEmissao,
+  doc: NucleoDeEmissao,
   emissao: number,
   dataDeReferencia: string | null,
 ): void {
@@ -196,6 +204,20 @@ export function validarViagemTrecho(id: string, doc: DocViagemTrecho): void {
   if (doc.periodicidade !== 'evento') {
     falhar(ctx, 'periodicidade', 'viagem é evento, não taxa mensal')
   }
+
+  // **A §0.1 vira invariante executável aqui.** O inventário tem duas fontes,
+  // ambas administrativas; o formulário do viajante alimenta `viagemRegistrada`
+  // e nada mais. Somar autodeclaração voluntária a fonte administrativa
+  // completa produz série que mede adesão e parece medir emissão — e um erro
+  // desses não estoura em lugar nenhum, então precisa estourar aqui.
+  if (doc.fonte !== 'agencia' && doc.fonte !== 'cartao') {
+    falhar(
+      ctx,
+      'fonte',
+      `"${String(doc.fonte)}" não é fonte do inventário; o programa de viagens ` +
+        'grava em viagemRegistrada (§0.1)',
+    )
+  }
   const referencia = doc.dataVoo ?? doc.dataIda
   validarEnvelope(ctx, doc, doc.co2Kg, referencia)
 
@@ -241,6 +263,71 @@ export function validarViagemTrecho(id: string, doc: DocViagemTrecho): void {
 
   if (doc.tipo === 'aereo' && doc.dataVoo === null) {
     falhar(ctx, 'dataVoo', 'é obrigatória no aéreo: é ela que define o mês (§7.2)')
+  }
+}
+
+/**
+ * Viagem registrada pelo colaborador — programa, não inventário (§0.1, §7.5).
+ *
+ * As regras da §9.9 valem inteiras aqui: o dado do programa não entra no
+ * inventário, mas é dado de emissão calculado com os mesmos fatores, e nada
+ * justifica validá-lo mais frouxo.
+ *
+ * Duas diferenças, e as duas vêm da natureza da coleção:
+ *
+ *  - **`criadoPorUid` é obrigatório.** No inventário ele nem existe; aqui ele é
+ *    o controle de acesso do `colaborador` (§5.1). Documento sem dono ficaria
+ *    invisível para quem o escreveu;
+ *  - **a data de volta não pode anteceder a de ida.** Esta é a única coleção
+ *    preenchida à mão por gente usando a aplicação, e é onde erro de digitação
+ *    chega. As outras vêm de carga conferida.
+ */
+export function validarViagemRegistrada(id: string, doc: DocViagemRegistrada): void {
+  const ctx = { colecao: 'viagemRegistrada', id }
+
+  validarEnvelope(ctx, doc, doc.co2Kg, doc.dataIda)
+
+  if (!doc.criadoPorUid) {
+    falhar(ctx, 'criadoPorUid', 'está vazio; é ele que dá dono à submissão (§5.1)')
+  }
+  if (!doc.reservaId) falhar(ctx, 'reservaId', 'está vazio; é o que liga os trechos')
+  exigirInteiroPositivo(ctx, 'ordem', doc.ordem)
+  exigirNumeroNaoNegativo(ctx, 'distanciaKm', doc.distanciaKm)
+  exigirData(ctx, 'dataIda', doc.dataIda)
+  exigirDataOuNulo(ctx, 'dataVolta', doc.dataVolta)
+  if (doc.dataVolta !== null && doc.dataVolta < doc.dataIda) {
+    falhar(ctx, 'dataVolta', `antecede a ida: ${doc.dataVolta} < ${doc.dataIda}`)
+  }
+
+  if (doc.modal !== (doc.tipo === 'aereo' ? 'aereo' : 'terrestre')) {
+    falhar(ctx, 'modal', `não corresponde ao tipo "${doc.tipo}"`)
+  }
+
+  // Frota é Escopo 1; próprio e locado são Escopo 3 (§7.5).
+  if (doc.propriedadeVeiculo !== null) {
+    const esperado = doc.propriedadeVeiculo === 'frota' ? 1 : 3
+    if (doc.escopo !== esperado) {
+      falhar(
+        ctx,
+        'escopo',
+        `veículo "${doc.propriedadeVeiculo}" exige escopo ${esperado}, veio ${doc.escopo}`,
+      )
+    }
+  }
+  if (doc.ocupantes !== null) exigirInteiroPositivo(ctx, 'ocupantes', doc.ocupantes)
+
+  // Os dois termos da conta aérea andam juntos, como no inventário: sem eles a
+  // emissão do trecho não é reproduzível a partir do documento.
+  if (doc.multiplicadorClasse !== null) {
+    if (typeof doc.multiplicadorClasse !== 'number' || doc.multiplicadorClasse <= 0) {
+      falhar(ctx, 'multiplicadorClasse', 'precisa ser número > 0')
+    }
+    if (!doc.classeCabine) {
+      falhar(ctx, 'classeCabine', 'é obrigatória quando há multiplicador de classe')
+    }
+  }
+  if (doc.tipo === 'aereo' && doc.multiplicadorClasse === null && doc.co2Kg !== 0) {
+    falhar(ctx, 'multiplicadorClasse', 'é obrigatório no aéreo com emissão')
   }
 }
 

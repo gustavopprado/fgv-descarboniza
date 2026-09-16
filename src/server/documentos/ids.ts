@@ -68,6 +68,23 @@ export function idViagemTrecho(
   return montar(fonte, refOrigem, ordem)
 }
 
+/**
+ * Viagem registrada pelo colaborador — programa, não inventário (§0.1).
+ *
+ * O ID do inventário é derivado do arquivo de origem, porque é recarregar o
+ * arquivo que precisa sobrescrever. Aqui não existe arquivo: a origem é quem
+ * registrou, e é por isso que o uid entra na chave. Assim uma submissão editada
+ * substitui a anterior, e duas pessoas nunca colidem num mesmo identificador de
+ * viagem.
+ */
+export function idViagemRegistrada(
+  criadoPorUid: string,
+  reservaId: string,
+  ordem: number,
+): string {
+  return montar(criadoPorUid, reservaId, ordem)
+}
+
 export function idEmbarque(agente: string, shipmentId: string): string {
   return montar(agente, shipmentId)
 }

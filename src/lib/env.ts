@@ -98,27 +98,14 @@ export function supressaoMinima(): number {
 }
 
 /**
- * Data em que a fonte oficial das viagens passa da agência para o formulário
- * (§7). O corte é pela data do voo, não pela data de lançamento.
+ * **Não existe data de corte, e a ausência é deliberada** (§0.1, §7).
  *
- * **A data ainda não está decidida** e por isso não tem padrão: quem carrega
- * base precisa informá-la, e o script para se ela faltar. Nunca há um valor
- * assumido — o mesmo tratamento dado à coordenada da fábrica (§6.2).
+ * `VIAGENS_CORTE_FONTE` existiu enquanto se acreditou que o relatório da agência
+ * e o formulário do viajante eram a mesma série, separadas por uma data. São
+ * dois sistemas: um inventário alimentado por planilha e um programa de registro
+ * voluntário. Não há o que cortar, e variável de ambiente que ninguém lê é
+ * armadilha esperando alguém encontrar.
  */
-export function corteFonteViagens(): string {
-  return obrigatoria('VIAGENS_CORTE_FONTE')
-}
-
-/**
- * O corte como a tela precisa dele: `null` enquanto não estiver definido.
- *
- * A tela de método declara "não definida" nesse caso. Campo em branco parece
- * bug ou dado perdido; a ausência aqui é uma decisão pendente, e a tela diz isso
- * com todas as letras.
- */
-export function corteFonteViagensOuNulo(): string | null {
-  return opcional('VIAGENS_CORTE_FONTE') ?? null
-}
 
 /**
  * Parâmetros que a tela de método declara (§10).
@@ -133,7 +120,6 @@ export function parametrosDeclarados(): {
   mobilidadeDistanciaModo: string | null
   mobilidadeDistanciaMaximaKm: string | null
   mobilidadeAnoBase: string | null
-  corteFonteViagens: string | null
 } {
   return {
     geocodeProvedor: opcional('GEOCODE_PROVEDOR') ?? null,
@@ -141,7 +127,6 @@ export function parametrosDeclarados(): {
     mobilidadeDistanciaModo: opcional('MOBILIDADE_DISTANCIA_MODO') ?? null,
     mobilidadeDistanciaMaximaKm: opcional('MOBILIDADE_DISTANCIA_MAXIMA_KM') ?? null,
     mobilidadeAnoBase: opcional('MOBILIDADE_ANO_BASE') ?? null,
-    corteFonteViagens: corteFonteViagensOuNulo(),
   }
 }
 
