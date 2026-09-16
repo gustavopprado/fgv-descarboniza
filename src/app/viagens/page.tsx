@@ -22,13 +22,12 @@ import {
   Cartao,
   Grade,
   ListaDeGrupos,
-  Nota,
   Painel,
   Revelar,
   SeletorDeAno,
   Vazio,
 } from '../componentes'
-import { MapaDeRotasSvg } from './mapa-de-rotas'
+import { MapaDeRotasSvg, NaoDesenhado } from './mapa-de-rotas'
 import { SerieMensal } from './serie-mensal'
 
 export const dynamic = 'force-dynamic'
@@ -89,20 +88,27 @@ export default async function Page({
                 rotulo="Por viagem"
                 valor={dados.co2KgPorViagem}
                 unidade="kg CO₂"
-                nota={`${plural(dados.viagens, 'viagem', 'viagens')}, somando ${plural(dados.trechos, 'trecho', 'trechos')}.`}
+                nota={
+                  `${plural(dados.viagens, 'viagem', 'viagens')}, somando ${plural(dados.trechos, 'trecho', 'trechos')}` +
+                  (dados.trechosForaDoTotal === 0
+                    ? '.'
+                    : `. Outro${dados.trechosForaDoTotal === 1 ? '' : 's'} ${dados.trechosForaDoTotal} ` +
+                      `${dados.trechosForaDoTotal === 1 ? 'trecho está gravado' : 'trechos estão gravados'} e fora desta conta, ` +
+                      'por serem itinerário duplicado no relatório da agência — a conferência de cobertura conta os dois.')
+                }
               />
               <Cartao
                 rotulo={ano === undefined ? 'Total do período' : `Total de ${ano}`}
                 valor={dados.co2ToneladasAno}
                 casas={2}
                 unidade="t CO₂e"
-                nota="Reserva duplicada no relatório da agência fica gravada e fora deste total."
+                nota="Soma as duas fontes administrativas do módulo. O que os colaboradores registram no programa de viagens não entra aqui."
               />
               <Cartao
-                rotulo="Emissão total"
-                valor={dados.co2Kg}
-                casas={0}
-                unidade="kg CO₂"
+                rotulo="Trechos por viagem"
+                valor={dados.viagens === 0 ? 0 : dados.trechos / dados.viagens}
+                unidade="trechos"
+                nota="Ida e volta dão dois; escala conta separado e emite mais que um voo direto. Valor abaixo de dois indica viagem partida em mais de um registro na origem, o que infla a contagem de viagens e puxa o indicador ao lado para baixo."
               />
             </Grade>
           </Revelar>
@@ -123,9 +129,8 @@ export default async function Page({
             >
               {dados.mapa.corredores.length === 0 ? (
                 <Vazio>
-                  Nenhum corredor pôde ser desenhado.
-                  {dados.mapa.suprimidos > 0 &&
-                    ` ${plural(dados.mapa.suprimidos, 'corredor é percorrido', 'corredores são percorridos')} por pouca gente para aparecer sem identificar quem voou.`}
+                  Nenhum corredor pôde ser desenhado.{' '}
+                  <NaoDesenhado mapa={dados.mapa} />
                 </Vazio>
               ) : (
                 <MapaDeRotasSvg mapa={dados.mapa} />

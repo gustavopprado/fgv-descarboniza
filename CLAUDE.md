@@ -880,10 +880,6 @@ Coisas que provavelmente vão acontecer, mas não agora.
   e da casca de navegação. Faltam Visão geral, Marítimo e as duas do programa de viagens. A
   Visão geral fica por último de propósito: enquanto o marítimo não existir, ela mostraria
   dois terços do inventário como se fosse o total.
-- **A tela de Viagens tem defeito aberto.** Com "Todos os anos" selecionado os três cartões
-  de indicador vêm zerados enquanto o gráfico da mesma tela soma o período inteiro; o
-  terceiro cartão duplica o segundo em outra unidade; e o mapa continua desenhando rota
-  par-a-par em vez de corredor por região.
 - **O denominador da cobertura do programa não está definido.** Hoje seria o total da
   coleção de funcionários, que inclui gente que só aparece como aprovador de passagem.
   Indicador com denominador errado é pior que indicador ausente, porque parece funcionar.
@@ -905,6 +901,56 @@ documento.
 ### Histórico
 
 <!-- adicionar entradas abaixo -->
+
+#### 2026-09-16 — Acabamento da tela de Viagens
+
+Os três defeitos que a §13 listava em aberto. Nenhum era o que parecia, e o
+levantamento veio antes de qualquer linha.
+
+**Os cartões zerados não eram da consulta.** A suspeita era que os indicadores
+calculassem por ano e devolvessem vazio sem ano escolhido. Conferido contra o
+banco nos três recortes: a camada devolve valor em todos, e a soma da série bate
+com o total dos cartões em cada um. Era o contador congelado, corrigido na
+entrada anterior.
+
+**O terceiro cartão virou "trechos por viagem".** Ele duplicava o segundo em
+outra unidade. A §10.3 nunca pediu três indicadores — três colunas vieram do
+protótipo e puxaram conteúdo. O substituto foi escolhido por ser o que **denuncia
+um defeito de dado conhecido**: a planilha do cartão separa viagem por linha em
+branco, e viagem partida em mais de um bloco vira mais de uma viagem, inflando a
+contagem e puxando para baixo o indicador ao lado. Valor abaixo de dois é o
+sintoma, e a nota do cartão diz isso.
+
+**O mapa já era por corredor.** Conferido: a camada agrega por região, a tela
+desenha por região e os aeroportos do cadastro estão todos classificados. O que
+restava era outra coisa — **num recorte em que nenhum corredor sobrevive à
+supressão, a tela caía num vazio que não explicava nada.** É justamente quando a
+explicação mais importa: mapa vazio sem motivo é lido como falha de carga, e o
+motivo é o oposto disso. A frase do que não pôde ser desenhado, com a proporção
+da emissão envolvida, virou componente único usado nos dois caminhos — com mapa e
+sem mapa. Texto duplicado seria garantir que um dos dois envelhecesse.
+
+**A ponte entre duas contagens certas.** O cartão conta trechos que entram no
+total; a conferência de cobertura conta documentos da origem, duplicata inclusive
+— e tem que contar, senão uma reserva perdida na leitura se esconderia atrás de
+uma duplicata. As duas estão certas e respondem a perguntas diferentes. Faltava a
+tela dizer isso: a camada passou a expor os trechos gravados e fora do total, e a
+nota do primeiro cartão explica a diferença em vez de deixá-la para quem cruzar
+os números por conta.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` e `next build` passam. Nenhum servidor de
+  desenvolvimento foi subido.
+- Os três recortes de período foram exercitados contra o Firestore carregado, com
+  ensaio temporário apagado em seguida: os três cartões finitos e coerentes em
+  todos, a soma de trechos no total e fora dele batendo com a contagem de
+  documentos da coleção em cada recorte, e o caso de mapa vazio reproduzido —
+  é ele que agora declara a proporção não desenhada em vez de calar.
+
+**Operação:** `VIAGENS_CORTE_FONTE` foi removida também do `.env` local, junto do
+comentário que só falava dela. Nenhuma outra variável foi tocada e as
+conferências continuam fechando.
 
 #### 2026-09-16 — Contador congelado em zero
 

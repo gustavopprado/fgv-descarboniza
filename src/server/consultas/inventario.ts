@@ -199,6 +199,18 @@ export type ResumoDeViagens = {
   ano: number | null
   viagens: number
   trechos: number
+  /**
+   * Trechos gravados e **fora do total**: itinerário duplicado no relatório da
+   * agência (§7.2).
+   *
+   * Existe para a tela poder dizer isso. `trechos` conta o que entra na conta, e
+   * a conferência de cobertura conta os documentos da origem, duplicata
+   * inclusive — se ela filtrasse, uma reserva perdida na leitura se esconderia
+   * atrás de uma duplicata. As duas contagens estão certas e respondem a
+   * perguntas diferentes; sem este campo, a diferença entre elas fica sem
+   * explicação na tela.
+   */
+  trechosForaDoTotal: number
   co2Kg: number
   co2ToneladasAno: number
   co2KgPorViagem: number
@@ -253,6 +265,7 @@ export async function consultarViagens(
     ano: filtros.ano ?? null,
     viagens,
     trechos: trechos.length,
+    trechosForaDoTotal: todos.length - trechos.length,
     co2Kg,
     co2ToneladasAno: emToneladas(co2Kg),
     co2KgPorViagem: viagens === 0 ? 0 : co2Kg / viagens,

@@ -29,6 +29,45 @@ const DURACAO_MS = 1600
 /** Quanto o arco se afasta da reta, em fração do próprio comprimento. */
 const CURVATURA = 0.17
 
+/**
+ * O que existe e não pôde ser desenhado.
+ *
+ * **Isto precisa aparecer nos dois caminhos** — com mapa e sem mapa —, e por isso
+ * mora num componente só. Quando nenhum corredor sobrevive à supressão, é
+ * justamente quando a frase mais importa: tela vazia sem explicação é lida como
+ * falha de carga, e o motivo é o oposto disso. Duplicar o texto seria garantir
+ * que um dos dois envelhecesse.
+ */
+export function NaoDesenhado({ mapa }: { mapa: MapaDeCorredores }) {
+  if (mapa.suprimidos === 0 && mapa.semGeografia === 0) return null
+
+  return (
+    <>
+      {mapa.suprimidos > 0 && (
+        <>
+          <strong className="font-medium text-[var(--color-tinta)]">
+            {proporcao(mapa.proporcaoSuprimida, 0)} da emissão aérea não está
+            desenhada
+          </strong>
+          , em {mapa.suprimidos}{' '}
+          {mapa.suprimidos === 1 ? 'corredor percorrido' : 'corredores percorridos'} por
+          pouca gente. <strong className="font-medium">Não é dado faltando</strong>: é
+          deslocamento de poucas pessoas, que não pode virar linha sem apontar para
+          elas. O valor continua somando em todos os totais desta tela.
+        </>
+      )}
+      {mapa.semGeografia > 0 && (
+        <>
+          {' '}
+          {mapa.semGeografia}{' '}
+          {mapa.semGeografia === 1 ? 'trecho ficou fora' : 'trechos ficaram fora'} por
+          aeroporto sem região.
+        </>
+      )}
+    </>
+  )
+}
+
 export function MapaDeRotasSvg({ mapa }: { mapa: MapaDeCorredores }) {
   const { corredores } = mapa
 
@@ -199,23 +238,8 @@ export function MapaDeRotasSvg({ mapa }: { mapa: MapaDeCorredores }) {
         do corredor — o mais pesado soma {numero(maior)} kg CO₂. Somente trechos
         aéreos; projeção equirretangular, com contorno de terra em escala
         grosseira, que situa mas não serve para medir.
-        {mapa.suprimidos > 0 && (
-          <>
-            {' '}
-            <strong className="font-medium text-[var(--color-tinta)]">
-              {proporcao(mapa.proporcaoSuprimida, 0)} da emissão aérea não está
-              desenhada
-            </strong>
-            , em {mapa.suprimidos}{' '}
-            {mapa.suprimidos === 1 ? 'corredor' : 'corredores'} percorridos por
-            pouca gente. <strong className="font-medium">Não é dado faltando</strong>
-            : é deslocamento de poucas pessoas, que não pode virar linha sem apontar
-            para elas. O valor continua somando em todos os totais desta tela.
-          </>
-        )}
-        {mapa.semGeografia > 0 && (
-          <> {mapa.semGeografia} trecho(s) ficaram fora por aeroporto sem região.</>
-        )}
+        {' '}
+        <NaoDesenhado mapa={mapa} />
       </figcaption>
     </figure>
   )
