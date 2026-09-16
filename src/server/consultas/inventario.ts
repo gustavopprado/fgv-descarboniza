@@ -20,6 +20,7 @@ import type { Firestore, Query } from 'firebase-admin/firestore'
 
 import { corteFonteViagensOuNulo, supressaoMinima } from '@/lib/env'
 import { coordenadaValida } from '@/lib/mapa'
+import { corredor } from '@/lib/regiao'
 import type {
   DocAeroporto,
   FonteDaViagem,
@@ -154,17 +155,22 @@ export async function consultarMobilidade(
 /* ---------------------------------------------------------------- viagens */
 
 /**
- * Uma rota desenhável no mapa (§10.3).
+ * Um corredor desenhável no mapa (§10.3).
  *
- * Só chega aqui a rota que **sobreviveu à supressão** (§3.1): um par
- * origem-destino voado por pouca gente identifica essa gente, e desenhá-lo no
- * mapa seria apontar para ela no mapa. O balde de recortes suprimidos não tem
- * lugar no mundo e por isso não tem linha — some do desenho, e a tela diz
- * quantas rotas ficaram de fora.
+ * **A unidade do mapa é o corredor entre regiões, não a rota par-a-par.** A
+ * troca não afrouxa a supressão da §3.1 — ela continua contando pessoas, e um
+ * corredor voado por pouca gente continua fora. O que muda é que recortes que
+ * sozinhos não chegavam ao limite passam a somar população suficiente, e o peso
+ * doméstico deixa de ficar escondido no balde de "outras rotas".
+ *
+ * **Agregar não cria população:** um destino para onde só uma pessoa foi
+ * continua suprimido por mais grosso que seja o recorte, e é isso que mantém a
+ * regra honesta.
  */
-export type RotaNoMapa = {
-  origem: string
-  destino: string
+export type CorredorNoMapa = {
+  corredor: string
+  origemRegiao: string
+  destinoRegiao: string
   origemLatitude: number
   origemLongitude: number
   destinoLatitude: number
@@ -174,12 +180,20 @@ export type RotaNoMapa = {
   pessoas: number
 }
 
-export type MapaDeRotas = {
-  rotas: RotaNoMapa[]
-  /** Rotas que existem, mas foram suprimidas por identificarem quem voou. */
-  suprimidas: number
-  /** Rotas suprimidas não, mas sem coordenada de aeroporto no cadastro. */
-  semCoordenada: number
+export type MapaDeCorredores = {
+  corredores: CorredorNoMapa[]
+  /** Corredores que existem e não podem ser desenhados por identificarem quem voou. */
+  suprimidos: number
+  /**
+   * Fração da emissão aérea que está em corredor suprimido.
+   *
+   * A tela **precisa** declarar isto: sem o número, quem vê um mapa com poucas
+   * linhas conclui que falta dado. O motivo não é dado faltando — é deslocamento
+   * de pouca gente, que não pode ser desenhado sem apontar para ela.
+   */
+  proporcaoSuprimida: number
+  /** Corredor descartado por aeroporto sem região ou sem coordenada. */
+  semGeografia: number
 }
 
 export type ResumoDeViagens = {
@@ -197,8 +211,8 @@ export type ResumoDeViagens = {
   alertas: { tipo: string; ocorrencias: number }[]
   /** Onde a série troca de fonte, para a tela marcar a virada (§7). */
   mesesPorFonte: { mes: string; agencia: number; formulario: number; cartao: number }[]
-  /** Rotas aéreas desenháveis, já suprimidas e com coordenada (§10.3). */
-  mapa: MapaDeRotas
+  /** Corredores aéreos desenháveis, já suprimidos e com geografia (§10.3). */
+  mapa: MapaDeCorredores
   /**
    * A data de corte entre agência e formulário, ou `null` enquanto ela não
    * estiver definida (§7).
@@ -240,7 +254,7 @@ export async function consultarViagens(
     }
   }
 
-  const mapa = await montarMapaDeRotas(db, trechos, limite, valor, pessoa)
+  const mapa = await montarMapaDeCorredores(db, trechos, limite, valor, pessoa)
 
   const porFonte = new Map<string, Record<FonteDaViagem, number>>()
   for (const t of trechos) {
@@ -307,29 +321,30 @@ export async function consultarViagens(
  * A agregação é a mesma do resto da camada, com o mesmo limite de supressão —
  * o mapa não é uma porta lateral para ver o que a tabela esconde.
  */
-async function montarMapaDeRotas(
+/**
+ * Agrega os trechos aéreos em corredores entre regiões e os posiciona no mapa.
+ *
+ * O ponto de cada região é o **centroide dos aeroportos daquela região que
+ * aparecem nos trechos** — não um ponto inventado para a região inteira. Assim a
+ * linha sai de onde a empresa de fato voa, e o desenho continua derivado do
+ * dado.
+ *
+ * Aeroporto sem região ou sem coordenada não vira corredor: entra na contagem
+ * de descartados, para a tela poder dizer que existe algo fora do desenho em vez
+ * de calar.
+ */
+async function montarMapaDeCorredores(
   db: Firestore,
   trechos: DocViagemTrecho[],
   limite: number,
   valor: (t: DocViagemTrecho) => number,
   pessoa: (t: DocViagemTrecho) => string,
-): Promise<MapaDeRotas> {
-  const SEPARADOR = ' '
+): Promise<MapaDeCorredores> {
   const aereos = trechos.filter((t) => t.tipo === 'aereo')
+  const emissaoAerea = somar(aereos, valor)
   if (aereos.length === 0) {
-    return { rotas: [], suprimidas: 0, semCoordenada: 0 }
+    return { corredores: [], suprimidos: 0, proporcaoSuprimida: 0, semGeografia: 0 }
   }
-
-  const grupos = agrupar(aereos, {
-    chave: (t) => `${t.origem}${SEPARADOR}${t.destino}`,
-    valor,
-    pessoa,
-    rotuloNulo: 'Sem rota',
-    limite,
-  })
-
-  const distintas = new Set(aereos.map((t) => `${t.origem}${SEPARADOR}${t.destino}`)).size
-  const sobreviventes = grupos.filter((g) => !g.agrupadoPorSupressao)
 
   const aeroportos = new Map<string, DocAeroporto>()
   for (const doc of (await db.collection(COLECAO.aeroporto).get()).docs) {
@@ -337,31 +352,68 @@ async function montarMapaDeRotas(
     aeroportos.set(aeroporto.iata, aeroporto)
   }
 
-  const rotas: RotaNoMapa[] = []
-  let semCoordenada = 0
+  const regiaoDe = (iata: string): string | null => {
+    const a = aeroportos.get(iata)
+    if (a === undefined || a.regiao === null) return null
+    if (!coordenadaValida(a.latitude, a.longitude)) return null
+    return a.regiao
+  }
 
-  for (const grupo of sobreviventes) {
-    const [origem, destino] = grupo.chave.split(SEPARADOR)
-    const a = aeroportos.get(origem)
-    const b = aeroportos.get(destino)
+  // Centroide por região, sobre os aeroportos que os trechos realmente usam.
+  const pontos = new Map<string, { lat: number; lon: number; n: number }>()
+  const registrar = (iata: string): void => {
+    const regiao = regiaoDe(iata)
+    const a = aeroportos.get(iata)
+    if (regiao === null || a === undefined) return
+    const atual = pontos.get(regiao) ?? { lat: 0, lon: 0, n: 0 }
+    atual.lat += a.latitude as number
+    atual.lon += a.longitude as number
+    atual.n += 1
+    pontos.set(regiao, atual)
+  }
 
-    if (
-      a === undefined ||
-      b === undefined ||
-      !coordenadaValida(a.latitude, a.longitude) ||
-      !coordenadaValida(b.latitude, b.longitude)
-    ) {
-      semCoordenada += 1
+  const comGeografia: DocViagemTrecho[] = []
+  let semGeografia = 0
+  for (const t of aereos) {
+    if (regiaoDe(t.origem) === null || regiaoDe(t.destino) === null) {
+      semGeografia += 1
       continue
     }
+    registrar(t.origem)
+    registrar(t.destino)
+    comGeografia.push(t)
+  }
 
-    rotas.push({
-      origem,
-      destino,
-      origemLatitude: a.latitude as number,
-      origemLongitude: a.longitude as number,
-      destinoLatitude: b.latitude as number,
-      destinoLongitude: b.longitude as number,
+  const SEPARADOR = ' ↔ '
+  const grupos = agrupar(comGeografia, {
+    chave: (t) => corredor(regiaoDe(t.origem)!, regiaoDe(t.destino)!),
+    valor,
+    pessoa,
+    rotuloNulo: 'Sem corredor',
+    limite,
+  })
+
+  const sobreviventes = grupos.filter((g) => !g.agrupadoPorSupressao)
+  const distintos = new Set(
+    comGeografia.map((t) => corredor(regiaoDe(t.origem)!, regiaoDe(t.destino)!)),
+  ).size
+  const suprimido = grupos.find((g) => g.agrupadoPorSupressao)
+
+  const corredores: CorredorNoMapa[] = []
+  for (const grupo of sobreviventes) {
+    const [origemRegiao, destinoRegiao] = grupo.chave.split(SEPARADOR)
+    const a = pontos.get(origemRegiao)
+    const b = pontos.get(destinoRegiao)
+    if (a === undefined || b === undefined) continue
+
+    corredores.push({
+      corredor: grupo.rotulo,
+      origemRegiao,
+      destinoRegiao,
+      origemLatitude: a.lat / a.n,
+      origemLongitude: a.lon / a.n,
+      destinoLatitude: b.lat / b.n,
+      destinoLongitude: b.lon / b.n,
       co2Kg: grupo.co2Kg,
       trechos: grupo.documentos,
       pessoas: grupo.pessoas,
@@ -369,9 +421,11 @@ async function montarMapaDeRotas(
   }
 
   return {
-    rotas: rotas.sort((x, y) => y.co2Kg - x.co2Kg),
-    suprimidas: distintas - sobreviventes.length,
-    semCoordenada,
+    corredores: corredores.sort((x, y) => y.co2Kg - x.co2Kg),
+    suprimidos: distintos - sobreviventes.length,
+    proporcaoSuprimida:
+      emissaoAerea === 0 ? 0 : (suprimido?.co2Kg ?? 0) / emissaoAerea,
+    semGeografia,
   }
 }
 

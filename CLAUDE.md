@@ -2349,3 +2349,67 @@ da agência ficou de fora do cadastro**.
 > supressão morde, a pergunta certa é quantas pessoas existem no recorte — não quão grosso
 > ele é.
 
+#### 2026-09-16 — Varredura de premissa de fonte única, e o mapa por corredor
+
+**A varredura pedida encontrou mais duas, e uma era bug vivo numa tela.**
+
+O Gustavo pediu, antes do corredor, uma busca por outras conferências, validações ou
+consultas que assumissem implicitamente que uma coleção vem de uma fonte só — porque a
+premissa já tinha aparecido em dois lugares. Encontrei três:
+
+- **A tela de Método contava o formulário por subtração.** "Trechos vindos do formulário"
+  era *total menos agência*, e no dia em que a terceira fonte entrou, os trechos do cartão
+  apareceram na tela como se fossem do formulário. **Premissa de fonte única se esconde
+  bem numa subtração.** Passou a contar por fonte, e fonte desconhecida aparece pelo
+  próprio código em vez de se diluir em outra.
+- **Três conferências de integridade só olhavam a agência.** Trecho sem fator carimbado,
+  ordem repetida na reserva e mês diferente do mês do voo nasceram dentro da agregação da
+  agência, que filtra por fonte. Elas substituem o que o banco relacional garantia sozinho
+  e valem para qualquer trecho — com a segunda fonte, viraram **integridade conferida em
+  parte da coleção**. Passaram a varrer todos os trechos.
+- **A cobertura do programa usa o total da coleção de funcionários** como denominador de
+  adesão. Essa coleção é alimentada por mais de uma fonte e já inclui gente que só aparece
+  como aprovador de passagem. Não é defeito de código — é definição de indicador, e fica
+  registrado para quando a tela do programa existir.
+
+**Mapa por corredor**
+
+Aprovado com a premissa corrigida pelo próprio Gustavo: o problema era população, não
+granularidade. O corredor entra porque dobra o doméstico visível, não porque resolve o
+internacional.
+
+- A região fica **gravada no cadastro do aeroporto**, com o critério ao lado. Para
+  aeroporto brasileiro sai do `uf`, que é dado; para estrangeiro sai da coordenada, por
+  faixa continental — a metade frágil. Gravar, e não calcular na consulta, é o que permite
+  rever e corrigir à mão, e impede que trocar a regra mude em silêncio um mapa publicado.
+- **A lista dos aeroportos classificados por coordenada aparece na tela de Método**, com o
+  aeroporto e a região atribuída. A inferência que muda um desenho precisa estar onde
+  alguém possa conferir sem abrir código.
+- **O ponto de cada região é o centroide dos aeroportos que a empresa de fato usa ali**,
+  não um ponto inventado para a região inteira: a linha sai de onde se voa, e o desenho
+  continua derivado do dado.
+- **Corredor dentro da mesma região vira anel, não linha.** Um par de regiões iguais é um
+  ponto, e um ponto não tem direção para desenhar.
+- **A linha do que não pode ser desenhado.** A legenda declara a proporção da emissão
+  aérea que está em corredor suprimido, sem nomear nenhum, e diz explicitamente que **não
+  é dado faltando**: é deslocamento de poucas pessoas, que não vira linha sem apontar para
+  elas. Sem essa frase, mapa com poucas linhas é lido como falha de carga.
+- **A tabela continua por aeroporto**, e cada bloco diz por quê. As duas unidades convivem
+  porque a restrição é diferente: no mapa o balde de suprimidos não tem lugar e sumiria; na
+  tabela ele é uma linha que soma e aparece.
+
+**O limite continua cego, e isso é o ponto.** Um corredor com quatro pessoas — uma abaixo
+do limite — continua suprimido. Se coubesse exceção para caso quase suficiente, o limite
+não existiria.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (126 testes, 8 novos) e `next build` passam. Nenhum servidor
+  de desenvolvimento foi subido.
+- Conferido contra a base com ensaio temporário, apagado em seguida: **todo corredor
+  desenhado tem pelo menos o número mínimo de pessoas**, nenhum identificador sai na
+  resposta, e a proporção não desenhada bate com a medição feita antes de implementar.
+- Os testes novos cobrem a classificação pelos dois critérios, a precedência do `uf` sobre
+  a coordenada, coordenada fora de todas as faixas, e o corredor sem direção — ida e volta
+  precisam ser o mesmo recorte, senão a supressão contaria cada sentido separado.
+

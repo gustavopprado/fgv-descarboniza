@@ -115,43 +115,16 @@ export default async function Page({
           <Revelar ordem={2} className="mt-4">
             <Painel
               titulo="Para onde a empresa voa"
-              descricao="Espessura da linha proporcional à emissão da rota no período."
+              descricao="Por corredor entre regiões. O mapa usa uma unidade mais grossa que a tabela de destinos de propósito: uma linha precisa de dois lugares, e o agrupamento de recortes pequenos não tem lugar nenhum — ele sumiria do desenho levando junto o peso que carrega."
             >
-              {dados.mapa.rotas.length === 0 ? (
+              {dados.mapa.corredores.length === 0 ? (
                 <Vazio>
-                  Nenhuma rota com coordenada para desenhar.
-                  {dados.mapa.suprimidas > 0 &&
-                    ` ${plural(dados.mapa.suprimidas, 'rota ficou', 'rotas ficaram')} de fora por identificar quem voou.`}
+                  Nenhum corredor pôde ser desenhado.
+                  {dados.mapa.suprimidos > 0 &&
+                    ` ${plural(dados.mapa.suprimidos, 'corredor é percorrido', 'corredores são percorridos')} por pouca gente para aparecer sem identificar quem voou.`}
                 </Vazio>
               ) : (
-                <>
-                  <MapaDeRotasSvg mapa={dados.mapa} />
-                  <Nota>
-                    {dados.mapa.suprimidas > 0 && (
-                      <>
-                        {plural(
-                          dados.mapa.suprimidas,
-                          'rota não aparece',
-                          'rotas não aparecem',
-                        )}{' '}
-                        no mapa por serem voadas por pouca gente: a linha apontaria
-                        para essa gente. Elas continuam somando no total.{' '}
-                      </>
-                    )}
-                    {dados.mapa.semCoordenada > 0 && (
-                      <>
-                        {plural(
-                          dados.mapa.semCoordenada,
-                          'rota ficou de fora',
-                          'rotas ficaram de fora',
-                        )}{' '}
-                        por falta de coordenada do aeroporto no cadastro.{' '}
-                      </>
-                    )}
-                    Trechos de carro não são desenhados: a origem e o destino deles
-                    são municípios, e a lista do IBGE ainda não foi carregada.
-                  </Nota>
-                </>
+                <MapaDeRotasSvg mapa={dados.mapa} />
               )}
             </Painel>
           </Revelar>
@@ -160,11 +133,14 @@ export default async function Page({
             <Grade tipo="duas">
               <Painel
                 titulo="Destinos mais frequentes"
-                descricao="Por emissão acumulada no destino."
+                descricao="Por aeroporto, não por região: aqui o agrupamento de recortes pequenos é uma linha que soma e aparece, então a unidade fina cabe — ao contrário do mapa, onde ela sumiria."
               >
                 <ListaDeGrupos grupos={dados.destinos} />
               </Painel>
-              <Painel titulo="Rotas" descricao="Por emissão acumulada no par.">
+              <Painel
+                titulo="Rotas"
+                descricao="Pelo par de aeroportos, pelo mesmo motivo dos destinos."
+              >
                 <ListaDeGrupos grupos={dados.rotas} />
               </Painel>
             </Grade>

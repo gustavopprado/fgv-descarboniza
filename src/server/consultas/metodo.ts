@@ -20,6 +20,7 @@ import type { Firestore } from 'firebase-admin/firestore'
 
 import { opcional, parametrosDeclarados } from '@/lib/env'
 import type {
+  DocAeroporto,
   DocEmbarque,
   DocFatorEmissao,
   DocMobilidade,
@@ -35,6 +36,18 @@ import {
   type ContextoDeAcesso,
   type Modulo,
 } from './acesso'
+
+/**
+ * Nome de cada fonte de viagem, para a tela.
+ *
+ * Uma fonte que não esteja aqui aparece pelo próprio código, em vez de ser
+ * somada a outra: fonte desconhecida tem que ficar visível, não se diluir.
+ */
+const NOME_DA_FONTE: Record<string, string> = {
+  agencia: 'relatório da agência',
+  cartao: 'planilha do cartão',
+  formulario: 'formulário do viajante',
+}
 
 /** O que a tela escreve onde a decisão ainda não foi tomada. */
 export const NAO_DEFINIDO = 'não definida'
@@ -79,6 +92,20 @@ export type AlertaDeclarado = {
 
 export type FatorDeclarado = DocFatorEmissao & { vigenteHoje: boolean }
 
+/**
+ * Aeroporto cuja região foi inferida da coordenada, não lida do cadastro.
+ *
+ * Esta é a metade frágil da classificação que agrupa o mapa em corredor
+ * (§10.3): caixas retangulares sobre um mundo que não é retangular. A lista sai
+ * na tela **para poder ser revisada sem abrir código** — é curta de propósito, e
+ * se deixar de ser, é sinal de que a regra precisa de outra fonte.
+ */
+export type RegiaoInferida = {
+  iata: string
+  nome: string
+  regiao: string
+}
+
 export type Metodo = {
   geradoEm: string
   modulos: Modulo[]
@@ -88,6 +115,8 @@ export type Metodo = {
   qualidade: QualidadeDoModulo[]
   excecoes: ExcecaoDeclarada[]
   alertas: AlertaDeclarado[]
+  /** Aeroportos cuja região foi inferida da coordenada (§10.3). */
+  regioesInferidas: RegiaoInferida[]
 }
 
 function texto(valor: string | null): { valor: string; definido: boolean } {
@@ -315,6 +344,7 @@ export async function consultarMetodo(
   const qualidade: QualidadeDoModulo[] = []
   const excecoes: ExcecaoDeclarada[] = []
   const alertas: AlertaDeclarado[] = []
+  const regioesInferidas: RegiaoInferida[] = []
   let diasUteisNaCarga: number | null = null
 
   /**
@@ -398,7 +428,15 @@ export async function consultarMetodo(
       (d) => d.data() as DocViagemTrecho,
     )
     const contabilizaveis = trechos.filter((t) => t.contabilizar)
-    const daAgencia = contabilizaveis.filter((t) => t.fonte === 'agencia').length
+    // **Contado por fonte, não deduzido por subtração.** A versão anterior
+    // calculava o formulário como "tudo menos a agência", o que embutia a
+    // premissa de que só existiam duas fontes — e no dia em que entrou a
+    // terceira, os trechos dela apareceram nesta tela como se fossem do
+    // formulário. Premissa de fonte única se esconde bem numa subtração.
+    const porFonte = new Map<string, number>()
+    for (const t of contabilizaveis) {
+      porFonte.set(t.fonte, (porFonte.get(t.fonte) ?? 0) + 1)
+    }
 
     fontes.push({
       modulo: 'viagens',
@@ -417,11 +455,12 @@ export async function consultarMetodo(
           rotulo: 'Fora do total, como reserva duplicada',
           valor: String(trechos.length - contabilizaveis.length),
         },
-        { rotulo: 'Trechos vindos da agência', valor: String(daAgencia) },
-        {
-          rotulo: 'Trechos vindos do formulário',
-          valor: String(contabilizaveis.length - daAgencia),
-        },
+        ...[...porFonte.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([fonte, quantos]) => ({
+            rotulo: `Trechos vindos de: ${NOME_DA_FONTE[fonte] ?? fonte}`,
+            valor: String(quantos),
+          })),
         {
           rotulo: 'Trechos sem fator carimbado',
           valor: String(contabilizaveis.filter((t) => t.fator === null).length),
@@ -430,6 +469,19 @@ export async function consultarMetodo(
     })
 
     contarAlertas('viagens', trechos)
+
+    // A região do aeroporto agrupa o mapa em corredor. Onde ela veio da
+    // coordenada, e não do `uf`, a classificação é inferência — e inferência
+    // que muda um desenho precisa estar onde alguém possa conferir.
+    for (const doc of (await db.collection(COLECAO.aeroporto).get()).docs) {
+      const a = doc.data() as DocAeroporto
+      if (a.regiaoCriterio !== 'coordenada' && a.regiaoCriterio !== 'indefinida') continue
+      regioesInferidas.push({
+        iata: a.iata,
+        nome: a.nome,
+        regiao: a.regiao ?? 'Região indefinida',
+      })
+    }
   }
 
   if (podeVerModulo(ctx, 'maritimo')) {
@@ -495,5 +547,6 @@ export async function consultarMetodo(
     alertas: alertas.sort(
       (a, b) => b.ocorrencias - a.ocorrencias || a.tipo.localeCompare(b.tipo),
     ),
+    regioesInferidas: regioesInferidas.sort((a, b) => a.iata.localeCompare(b.iata)),
   }
 }

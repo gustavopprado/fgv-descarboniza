@@ -44,6 +44,7 @@ import {
   type DocViagemTrecho,
   type Severidade,
 } from '../src/server/documentos/tipos'
+import { classificarRegiao } from '../src/lib/regiao'
 import { validarViagemTrecho } from '../src/server/documentos/validacao'
 import { gravarCadastro, recarregarEscopo } from '../src/server/escrita'
 import { carregarFatores } from '../src/server/fatores'
@@ -139,9 +140,8 @@ async function principal(): Promise<void> {
   try {
     /* ---------------------------------------------------------- aeroportos */
     tituloDaEtapa('Aeroportos')
-    const aeroportos = Object.values(base.aeroportos).map((a) => ({
-      id: idAeroporto(a.iata),
-      dados: {
+    const aeroportos = Object.values(base.aeroportos).map((a) => {
+      const bruto = {
         iata: a.iata,
         nome: a.nome,
         cidade: a.cidade ?? null,
@@ -149,8 +149,15 @@ async function principal(): Promise<void> {
         utcOffset: a.utc_offset ?? null,
         latitude: a.latitude ?? null,
         longitude: a.longitude ?? null,
-      } satisfies DocAeroporto,
-    }))
+      }
+      // A região é gravada junto, com o critério: o mapa agrega por corredor
+      // (§10.3) e precisa dela no documento, não calculada na consulta.
+      const { regiao, criterio } = classificarRegiao(bruto)
+      return {
+        id: idAeroporto(a.iata),
+        dados: { ...bruto, regiao, regiaoCriterio: criterio } satisfies DocAeroporto,
+      }
+    })
     await gravarCadastro(COLECAO.aeroporto, aeroportos, db)
     console.log(`  ${aeroportos.length} aeroportos gravados.`)
 

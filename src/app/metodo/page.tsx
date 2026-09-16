@@ -280,7 +280,41 @@ export default async function Page() {
         </Revelar>
       </Grade>
 
-      <Revelar ordem={6} className="mt-4">
+      {metodo.regioesInferidas.length > 0 && (
+        <Revelar ordem={6} className="mt-4">
+          <Painel
+            titulo="Região inferida da coordenada"
+            descricao="O mapa de viagens agrupa por corredor entre regiões. A região do aeroporto brasileiro vem do estado, que é dado do cadastro; a destes aqui foi deduzida da coordenada, por faixa continental — é a parte frágil da classificação, e está aqui para ser conferida."
+          >
+            <table className={TABELA.tabela}>
+              <thead>
+                <tr>
+                  <th className={TABELA.th}>Código</th>
+                  <th className={TABELA.th}>Aeroporto</th>
+                  <th className={TABELA.th}>Região atribuída</th>
+                </tr>
+              </thead>
+              <tbody>
+                {metodo.regioesInferidas.map((r) => (
+                  <tr key={r.iata}>
+                    <td className={`${TABELA.td} font-mono text-[11.5px]`}>{r.iata}</td>
+                    <td className={TABELA.td}>{r.nome}</td>
+                    <td className={TABELA.td}>
+                      {r.regiao === 'Região indefinida' ? (
+                        <Etiqueta tom="atencao">{r.regiao}</Etiqueta>
+                      ) : (
+                        r.regiao
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Painel>
+        </Revelar>
+      )}
+
+      <Revelar ordem={7} className="mt-4">
         <Painel
           titulo="Fatores de emissão"
           descricao="Com fonte, versão e vigência. Fator muda de ano para ano, e todo documento de emissão guarda o que foi usado no cálculo."

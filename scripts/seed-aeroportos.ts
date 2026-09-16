@@ -19,6 +19,7 @@
 import 'dotenv/config'
 
 import { coordenadaValida } from '../src/lib/mapa'
+import { classificarRegiao } from '../src/lib/regiao'
 import { idAeroporto } from '../src/server/documentos/ids'
 import type { DocAeroporto } from '../src/server/documentos/tipos'
 import { COLECAO } from '../src/server/firestore'
@@ -148,7 +149,7 @@ async function principal(): Promise<void> {
 
     const lote = db.batch()
     for (const achado of achados) {
-      const dados: DocAeroporto = {
+      const bruto = {
         iata: achado.iata,
         nome: achado.nome,
         cidade: null,
@@ -157,6 +158,11 @@ async function principal(): Promise<void> {
         latitude: achado.latitude,
         longitude: achado.longitude,
       }
+      // Sem `uf`, a região destes sai da coordenada — a metade frágil da
+      // classificação. O critério fica gravado justamente para que ela possa
+      // ser revisada depois.
+      const { regiao, criterio } = classificarRegiao(bruto)
+      const dados: DocAeroporto = { ...bruto, regiao, regiaoCriterio: criterio }
       lote.set(db.collection(COLECAO.aeroporto).doc(idAeroporto(achado.iata)), dados, {
         merge: true,
       })

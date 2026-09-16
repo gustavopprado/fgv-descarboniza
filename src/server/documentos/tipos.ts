@@ -224,6 +224,20 @@ export type DocAeroporto = {
   utcOffset: number | null
   latitude: number | null
   longitude: number | null
+  /**
+   * Região usada para agregar o mapa em corredor (§10.3).
+   *
+   * Fica **gravada**, e não calculada na consulta, por dois motivos: é
+   * revisável — dá para ver e corrigir uma classificação errada sem abrir
+   * código — e trocar a regra depois não muda em silêncio um mapa já publicado.
+   */
+  regiao: string | null
+  /**
+   * Como a região foi obtida: `uf` é dado do cadastro, `coordenada` é
+   * inferência por faixa continental. O critério viaja junto porque é ele que
+   * diz de qual metade da classificação se deve desconfiar.
+   */
+  regiaoCriterio: 'uf' | 'coordenada' | 'indefinida' | null
 }
 
 export type DocMunicipio = {

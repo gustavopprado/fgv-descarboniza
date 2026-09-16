@@ -206,22 +206,6 @@ async function agregarViagens(db: Firestore) {
     if (doc.mes) porMes.set(doc.mes, (porMes.get(doc.mes) ?? 0) + doc.co2Kg)
   }
 
-  // Integridade que o banco relacional garantia sozinho.
-  const semFator = contabilizaveis.filter((t) => t.doc.fator === null).length
-  const ordemRepetida = (() => {
-    const vistos = new Set<string>()
-    let repetidos = 0
-    for (const { doc } of trechos) {
-      const chave = `${doc.reservaId}|${doc.ordem}`
-      if (vistos.has(chave)) repetidos++
-      vistos.add(chave)
-    }
-    return repetidos
-  })()
-  const mesDivergente = trechos.filter(
-    (t) => t.doc.dataVoo !== null && t.doc.mes !== t.doc.dataVoo.slice(0, 7),
-  ).length
-
   return {
     reservas: new Set(contabilizaveis.map((t) => t.doc.reservaId)).size,
     reservasTodas: new Set(trechos.map((t) => t.doc.reservaId)).size,
@@ -231,9 +215,39 @@ async function agregarViagens(db: Firestore) {
     distanciaKm,
     co2Kg,
     porMes,
-    semFator,
+  }
+}
+
+/**
+ * Integridade dos trechos — **de todas as fontes**, não só da agência.
+ *
+ * Estas três conferências substituem o que o banco relacional garantia sozinho,
+ * e por isso valem para qualquer trecho, venha ele de onde vier. Elas nasceram
+ * dentro da agregação da agência, que filtra por fonte; com a chegada de uma
+ * segunda fonte de viagens, isso passou a significar **integridade conferida em
+ * parte da coleção** — o tipo de premissa de fonte única que não aparece porque
+ * mora dentro de uma conferência.
+ */
+async function conferirIntegridadeDosTrechos(db: Firestore) {
+  const trechos = (await db.collection(COLECAO.viagemTrecho).get()).docs.map(
+    (d) => d.data() as DocViagemTrecho,
+  )
+
+  const vistos = new Set<string>()
+  let ordemRepetida = 0
+  for (const doc of trechos) {
+    const chave = `${doc.fonte}|${doc.reservaId}|${doc.ordem}`
+    if (vistos.has(chave)) ordemRepetida++
+    vistos.add(chave)
+  }
+
+  return {
+    total: trechos.length,
+    semFator: trechos.filter((t) => t.contabilizar && t.fator === null).length,
     ordemRepetida,
-    mesDivergente,
+    mesDivergente: trechos.filter(
+      (t) => t.dataVoo !== null && t.mes !== t.dataVoo.slice(0, 7),
+    ).length,
   }
 }
 
@@ -560,6 +574,7 @@ async function principal(): Promise<void> {
 
   try {
     const viagens = await agregarViagens(db)
+    const integridade = await conferirIntegridadeDosTrechos(db)
     // A coleção de aeroportos deixou de ser alimentada por uma fonte só: a
     // planilha do cartão trouxe aeroportos internacionais que a base da agência
     // não tem. Conferir o TAMANHO da coleção passou a acusar erro numa carga
@@ -673,25 +688,25 @@ async function principal(): Promise<void> {
     })
 
     conferencias.push({
-      item: 'trechos sem fator carimbado',
+      item: 'trechos sem fator carimbado (todas as fontes)',
       esperado: 0,
-      obtido: viagens.semFator,
+      obtido: integridade.semFator,
       origem: 'auditoria',
       ...inteiro,
     })
 
     conferencias.push({
-      item: 'ordem repetida na mesma reserva',
+      item: 'ordem repetida na reserva (todas as fontes)',
       esperado: 0,
-      obtido: viagens.ordemRepetida,
+      obtido: integridade.ordemRepetida,
       origem: 'integridade',
       ...inteiro,
     })
 
     conferencias.push({
-      item: 'mês ≠ mês da data do voo',
+      item: 'mês ≠ mês da data do voo (todas as fontes)',
       esperado: 0,
-      obtido: viagens.mesDivergente,
+      obtido: integridade.mesDivergente,
       origem: 'integridade',
       ...inteiro,
     })
