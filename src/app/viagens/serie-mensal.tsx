@@ -40,8 +40,16 @@ export function SerieMensal({
         }))}
         unidade="kg CO₂"
         casas={0}
-        largura={Math.max(420, serie.length * 54)}
-        altura={240}
+        // **A proporção é escolhida para a coluna, não para a tela inteira.**
+        // O `viewBox` não é tamanho, é escala: quanto mais largo, mais o
+        // navegador encolhe tudo para caber na coluna — e era isso que deixava
+        // rótulo e valor ilegíveis aqui do lado da tabela. Mais estreito e mais
+        // alto, o mesmo gráfico chega maior à tela.
+        //
+        // Um ano cabe na largura fixa; séries mais longas alargam devagar, e a
+        // geometria rareia o rótulo sozinha quando ele deixa de caber.
+        largura={Math.max(420, serie.length * 34)}
+        altura={300}
       />
 
       <p className="mt-3 max-w-[80ch] border-t border-[var(--color-linha)] pt-3 text-[12px] text-[var(--color-apoio)]">

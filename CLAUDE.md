@@ -144,29 +144,111 @@ novo, não `git rm`. Avise o Gustavo se encontrar rastro assim.
 
 **Regra geral: nas telas de inventário, nenhuma pessoa é identificável.**
 
-### 3.1 Inventário — anônimo
+### 3.1 Inventário — sem pessoa identificável
 
-Nas telas de Mobilidade, Viagens (histórico) e Marítimo:
+**Vale em todas as telas do inventário, sem exceção e sem módulo de fora:**
 
 - **Nunca exibir nome, matrícula, e-mail ou qualquer identificador de pessoa.** Nem em
   tabela, nem em tooltip, nem em legenda, nem em exportação.
 - O identificador interno existe no banco para cálculo e deduplicação, mas **não é enviado
-  ao cliente**. O agregado sai pronto do servidor.
-- No radar de mobilidade, cada ponto é um funcionário **sem nenhum dado associado**. Sem
-  tooltip, sem clique, sem nada que permita isolar um indivíduo.
-- **O ângulo do radar não tem significado, e isso é uma decisão de privacidade, não
-  preguiça de implementação.** O protótipo posiciona cada ponto por distância *e direção*
-  em relação à fábrica. Raio e direção reais, juntos, formam um localizador quase único:
-  apontam para uma casa mesmo sem nome, sem bairro e sem tooltip — é reidentificação por
-  geometria. Direção também não é dado que o sistema possa ter, porque a §6.1 só permite
-  persistir distância, bairro e cidade. O ângulo serve apenas para os pontos não se
-  empilharem, e a tela declara isso em texto para ninguém ler um mapa onde não há mapa.
-- **Supressão de grupos pequenos:** não exibir recorte com menos de 5 pessoas. Um bairro com
-  um respondente identifica esse respondente mesmo sem o nome dele. Agrupe o que ficar
-  abaixo do limite em "outros".
+  ao cliente**. Ele é lido na camada de consulta, serve para contar e agrupar, e morre ali:
+  o agregado sai pronto do servidor (§9.10, §11.5).
+- A base histórica de viagens contém nomes de passageiros. Eles são carregados para ligar a
+  viagem ao funcionário e **não aparecem em tela nenhuma do inventário**.
 
-A base histórica de viagens contém nomes de passageiros. Eles são carregados para ligar a
-viagem ao funcionário, e **não aparecem em tela nenhuma do inventário**.
+**A supressão de grupos pequenos é outra coisa, e vale só na Mobilidade.** O que segue
+explica por quê, e precisa ser lido antes de qualquer tentativa de uniformizar a regra
+entre os módulos.
+
+#### O raciocínio, que importa mais que a regra
+
+**O objeto deste painel é a empresa, não as pessoas.** A pergunta que ele responde é quanto
+a empresa emitiu, direta e indiretamente, pelos três módulos. **Uma rota é fato da operação
+da empresa**, não dado pessoal de quem embarcou: o voo aconteceu a serviço, foi pago pela
+empresa e faz parte do que ela precisa relatar.
+
+**Suprimir o que já é sabido não protege ninguém.** As viagens internacionais são feitas
+pela diretoria, e isso é de conhecimento geral dentro da empresa. A supressão existe para
+impedir reidentificação; onde não há o que reidentificar, ela não protege — só esconde.
+
+**E o estado que ela produzia era o pior dos dois mundos.** A emissão das rotas suprimidas
+**já estava no total** — a supressão nunca omitiu emissão, omitiu **de onde ela veio**.
+Escondia exatamente a informação que explicaria o número grande, deixando quem lê com um
+total que não se explica pelo mapa e sem meio de descobrir por quê. Um terço da emissão
+aérea ficava sem lugar.
+
+**A discrepância entre um voo curto e um intercontinental não é problema a esconder: é o
+achado.** Um inventário existe para tornar visível que poucos deslocamentos concentram
+muita emissão. Apagar a origem desse peso é apagar a conclusão.
+
+**Nada disso vale para onde a pessoa mora.** Bairro e cidade de residência não são fato
+operacional da empresa, não são de conhecimento geral e não foram escolhidos por ninguém a
+serviço. É essa a distinção que separa os dois módulos, e é por ela que a regra difere.
+
+#### 3.1.1 Mobilidade — suprime, e fica exatamente como está
+
+**Este módulo não muda.** Está funcionando e não se toca.
+
+- **Supressão de grupos pequenos:** não exibir recorte com menos de **5 pessoas**. Um bairro
+  com um respondente identifica esse respondente mesmo sem o nome dele. O que ficar abaixo
+  do limite é agrupado em "outros", e o grupo agrupado aparece marcado como tal.
+- A contagem da supressão é de **pessoas distintas**, nunca de registros.
+- No radar, cada ponto é um funcionário **sem nenhum dado associado**. Sem tooltip, sem
+  clique, sem nada que permita isolar um indivíduo.
+- **O ângulo do radar não tem significado, e isso é decisão de privacidade, não preguiça de
+  implementação.** O protótipo posiciona cada ponto por distância *e direção* em relação à
+  fábrica. Raio e direção reais, juntos, formam um localizador quase único: apontam para uma
+  casa mesmo sem nome, sem bairro e sem tooltip — é reidentificação por geometria. Direção
+  também não é dado que o sistema possa ter, porque a §6.1 só permite persistir distância,
+  bairro e cidade. O ângulo serve apenas para os pontos não se empilharem, e a tela declara
+  isso em texto para ninguém ler um mapa onde não há mapa.
+
+#### 3.1.2 Viagens — não suprime
+
+Recorte por **rota, corredor e destino não é suprimido por contagem de pessoas.** Rota é
+fato operacional, pelo raciocínio acima.
+
+O que **continua valendo** aqui, e não é afetado:
+
+- nenhum nome, matrícula, e-mail ou identificador de pessoa em tela — a mudança é sobre
+  **rota**, não sobre **pessoa**;
+- nenhum identificador trafega para o cliente. A supressão sair de Viagens não arrasta
+  junto a regra do agregado sair pronto do servidor;
+- nada que permita isolar um indivíduo dentro de um recorte: a tela mostra emissão por
+  rota, nunca a lista de quem voou.
+
+**Se um dia uma tela de Viagens precisar de um recorte que aponte para uma pessoa** — um
+extremo isolado, "a viagem mais longa", um corte por pessoa —, o que o barra não é a
+supressão: é a primeira regra desta seção, que continua absoluta.
+
+#### 3.1.3 Marítimo — não há pessoa a suprimir
+
+**Embarque não tem pessoa.** O documento tem agente, empresa, portos, navio, contêineres e
+emissão; não há funcionário, não há passageiro, não há residência. Supressão por contagem de
+pessoas **não se aplica aqui e não existe neste módulo** — não é omissão a corrigir quando o
+módulo for construído.
+
+Duas coisas para não tropeçar depois, porque as duas são fáceis de fazer por engano:
+
+- **Não inventar uma supressão por contagem de documentos.** A função de agrupamento, quando
+  não recebe identidade de pessoa, trata cada documento como uma pessoa distinta — é o lado
+  seguro de errar num módulo que tem pessoas. Passar um limite ao marítimo nesse estado
+  produziria uma supressão que **mede número de embarques e finge medir privacidade**:
+  esconderia corredor pouco usado sem proteger ninguém, que é exatamente o erro que a
+  §3.1.2 acaba de desfazer em Viagens.
+- **Nome de agente, de navio, de cliente e de fornecedor é assunto da §2.2, não desta
+  seção.** A restrição ali é sobre o **repositório**: esses nomes nunca viram constante,
+  fixture, rótulo escrito à mão ou massa de teste. Chegar à tela vindo do banco em tempo de
+  execução é outro caminho, e é o normal — o sistema é interno e o acesso é por perfil (§5).
+
+#### Aviso a quem for mexer nisto
+
+**A regra difere entre os módulos de propósito.** Se você chegou aqui achando que há uma
+inconsistência a uniformizar, releia o raciocínio acima: a diferença não é acidente
+histórico, é a distinção entre fato operacional da empresa e lugar onde uma pessoa mora.
+Uniformizar para cima devolve a Viagens uma supressão que esconde um terço da emissão sem
+proteger ninguém; uniformizar para baixo tira da Mobilidade a única coisa que impede
+identificar um respondente pelo bairro.
 
 ### 3.2 Programa de viagens — identificado
 
@@ -295,9 +377,9 @@ Três coisas dela mudam o número e ficam declaradas na tela de método:
   viagem, e os demais trechos herdam. Para o total do ano não muda nada; para a série
   mensal, um trecho de volta pode cair no mês seguinte e ser contado no anterior;
 - **o viajante vem só pelo primeiro nome.** Nome de uma palavra não identifica ninguém, e
-  vincular pelo palpite atribuiria a viagem à pessoa errada e estragaria a contagem de
-  pessoas distintas que sustenta a supressão (§3.1). Quem não casa com o cadastro entra como
-  registro próprio desta fonte, com alerta no trecho.
+  vincular pelo palpite atribuiria a viagem à pessoa errada — o vínculo com o cadastro é o
+  que liga emissão a funcionário, e errá-lo corrompe o dado na origem. Quem não casa com o
+  cadastro entra como registro próprio desta fonte, com alerta no trecho.
 
 **Não existe data de corte.** O `VIAGENS_CORTE_FONTE` e tudo que dependia dele saem: a
 premissa que os justificava foi apagada pela §0.1. Variável de ambiente que ninguém lê é
@@ -305,6 +387,24 @@ armadilha esperando alguém encontrar.
 
 **O inventário agrupa pela data do voo ou da viagem, nunca pela data de lançamento da
 passagem.**
+
+### 7.0 Ano-base: um relatório por ano
+
+**O inventário de viagens relata um ano, declarado em `VIAGENS_ANO_BASE`.** O trecho entra
+pelo **ano do voo**, não pelo da emissão da passagem — há passagem comprada num ano com voo
+no seguinte, e ela pertence ao relatório do ano em que se voou.
+
+Trecho fora do ano-base **não é carregado**. Não é dado perdido: é dado de outro período, e
+uma carga com outro ano-base o traz.
+
+**O escopo de recarga é fonte E ano.** A fonte protege o que veio de outra origem; o ano
+protege os outros períodos. Sem o ano no escopo, carregar um ano apagaria o anterior
+inteiro, porque a recarga remove do escopo tudo que não está na carga nova (§9.9) — e um
+inventário que só consegue guardar um ano de cada vez não é um inventário.
+
+A variável **não tem padrão**: ano de exemplo é placeholder plausível, que carregaria o
+período errado sem nenhum erro aparecer. As cargas recusam rodar sem o valor, e a tela de
+método declara qual é.
 
 ### 7.1 Base histórica
 
@@ -696,7 +796,9 @@ a coleção por fora dele — e isso é verificado por teste, não só combinado
 É esse módulo que garante, para as telas de inventário:
 
 - nenhum identificador de pessoa no que sai (§3.1);
-- supressão de recorte com menos de 5 pessoas, agrupado em "outros" (§3.1);
+- supressão de recorte com menos de 5 pessoas **na mobilidade**, agrupada em "outros"
+  (§3.1.1). Viagens não suprime e marítimo não tem pessoa a suprimir (§3.1.2, §3.1.3) — a
+  camada é o lugar onde essa diferença fica explícita, não onde ela se apaga;
 - **nulo é categoria visível, não registro ausente.** Ao agrupar por `empresa`, os
   documentos sem empresa aparecem como fatia própria, "Sem empresa". **O total
   geral sempre bate com a contagem de documentos da coleção; se não bater, é bug.**
@@ -901,6 +1003,357 @@ documento.
 ### Histórico
 
 <!-- adicionar entradas abaixo -->
+
+#### 2026-09-16 — O mar Cáspio virando fronteira, e o Brasil entrando como linha
+
+**O contorno fantasma no meio da Ásia era um furo.** O gerador coletava todos os
+anéis de cada polígono, e do segundo em diante eles são **furos** — lago e mar
+interior recortados da terra. Coletado como anel comum, o furo é desenhado por
+cima do continente, com contorno próprio, e se lê como fronteira de país. Era o
+mar Cáspio.
+
+O gerador passou a ficar só com o anel externo. Preencher o furo de verde é erro
+menor que desenhá-lo: num mapa que já declara servir para situar e não para
+medir, o lago somido não muda nada, e a forma fantasma muda a leitura.
+
+**O primeiro teste que escrevi para isso estava errado, e foi refeito na hora.**
+Ele acusava anel contido no retângulo envolvente de outro — e ilha dentro da
+caixa de um continente é comum e legítima, então ele reprovava dezenas de ilhas
+verdadeiras. É a armadilha já registrada em 14/09: **teste que dá alarme falso é
+teste que se aprende a ignorar.** O que de fato separa furo de ilha é o **sentido
+de giro**, não a posição — o GeoJSON gira o anel externo num sentido e o furo no
+contrário. O teste passou a exigir que todo anel gire para o mesmo lado, e
+conferido devolvendo o furo ao arquivo: **reprova, e aponta o anel certo.**
+
+**O Brasil entrou como linha, não como área.** Pedido do Gustavo, para o país se
+situar no quadro global e no inserto. Vem do mesmo pacote e da mesma licença do
+contorno de terra — Natural Earth 1:110m, agora o recorte de fronteiras
+nacionais —, e **só o Brasil é extraído**: trazer os outros 177 países seria
+pagar o arquivo inteiro por uma linha. São 203 vértices, 3 KB.
+
+Duas decisões de desenho, e as duas são sobre ele ser linha:
+
+- **Constante separada no arquivo gerado.** Junto dos anéis de terra, o país
+  seria pintado como um continente a mais em cima do que já está lá.
+- **Não passa pelo recorte de polígono.** Recortar um traço faz aparecerem as
+  arestas da moldura, e o desenho ganharia uma caixa que ninguém pediu — o `svg`,
+  o de fora e o do inserto, já corta sozinho o que passa da borda.
+
+**E as divisas das cinco regiões, no quadro que mostra o Brasil de perto.**
+Decisão do Gustavo entre regiões e estados, depois da ressalva: **o mapa agrega
+por região**, e vinte e sete divisas num inserto de pouco mais de duzentos pixels
+convidariam a procurar um estado que não existe como recorte. A divisa desenhada
+é a mesma que o cadastro do aeroporto usa para classificar, e o nome viaja junto
+— é ele que faz **clicar num ponto acender o desenho da região**, ligando o
+painel ao mapa em vez de deixá-lo solto embaixo.
+
+**A origem é outra, e o gerador mudou de natureza por causa disso.** As malhas
+territoriais do IBGE, na qualidade mínima: dado público, reutilizável com
+atribuição, que agora está no cabeçalho do arquivo gerado e na legenda do mapa.
+**É a única coisa do gerador que vem da rede** — a divisão interna do Brasil não
+está em nenhum pacote já instalado. O resultado é versionado, então a rede só é
+necessária para regerar. O download é por `curl`: o cliente HTTP do Node quebra a
+resposta desse servidor ao decodificá-la, e a mensagem de erro diz o que fazer em
+vez de devolver falha de rede solta.
+
+**O teste do sentido de giro precisou ser corrigido junto, e o motivo vale
+guardar.** Ele comparava todos os anéis entre si, e as regiões vêm do IBGE
+enquanto o resto vem do Natural Earth — o sentido é convenção de quem publicou o
+arquivo, e exigir o mesmo giro dos dois prenderia uma coincidência. A conferência
+passou a ser **dentro de cada origem, nunca entre elas**. Foi a segunda vez nesta
+etapa que um teste meu reprovava dado correto; as duas vezes, por prender uma
+propriedade parecida com a certa.
+
+**A legenda passou a abrir dizendo o que o ponto não é.** Pedido do Gustavo, e é
+a mesma regra do ângulo do radar (§3.1.1): **desenho que parece mapa é lido como
+mapa.** Com divisa de região no fundo, um ponto dentro do Paraná convida a
+concluir que a viagem saiu de lá — e ele é a média das coordenadas dos aeroportos
+que a empresa usa naquela região, não cidade, não aeroporto, não origem de
+viagem. A frase vem antes de tudo na legenda porque é a primeira leitura errada
+possível, não uma ressalva de rodapé.
+
+**E a legenda foi cortada pela metade no mesmo passo.** Ela tinha crescido a cada
+decisão registrada nela — enquadramento, inserto, projeção, corredor mais pesado,
+duas procedências — até virar um parágrafo, e **parágrafo embaixo de desenho não
+se lê**: a ressalva do ponto ia junto para o lugar onde ninguém chega. Ficou em
+duas linhas, e a ordem é a leitura: primeiro a única coisa necessária para não
+ler o mapa errado, depois recorte e procedência, em corpo menor. O que saiu não
+era falso, era detalhe que o desenho já mostra ou que o painel da região explica.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (154 testes, 3 novos) e `next build` passam. Nenhum
+  servidor de desenvolvimento foi subido.
+- O contorno foi regerado e o desenho conferido no SVG: o Brasil sai nos dois
+  quadros, as cinco divisas saem só no inserto, a região aberta pinta, nenhuma
+  coordenada inválida e nenhum anel gira ao contrário dentro da própria origem.
+
+#### 2026-09-16 — Clicar no ponto do mapa
+
+Pedido do Gustavo, na versão agregada: mostrar o que aconteceu em cada região,
+simples, sem detalhar.
+
+**A decisão que ficou tomada, e por quê.** A alternativa era uma linha por
+viagem, com data exata. Ela não traz nome, mas deixaria de ser emissão por rota
+e viraria registro de deslocamento — e a §3.1.2 diz que a tela mostra emissão
+por rota, **nunca a lista**. O painel mostra, por corredor que toca a região,
+**quanto, quantos e quando**.
+
+**Sem JavaScript de cliente.** O ponto é uma âncora de SVG e o recorte vai para
+o endereço, como o seletor de ano: recarregar mantém a região aberta, o endereço
+pode ser enviado a outra pessoa, e o ponto continua clicável com script
+bloqueado. A entrada do painel é animação de CSS, que termina no estado final de
+qualquer jeito. Clicar na região já aberta fecha; o painel ganhou âncora para a
+rolagem voltar ao mapa depois do salto.
+
+**A região aberta é conferida contra o que existe.** O parâmetro chega da URL, e
+URL é entrada de fora: sem a conferência, qualquer texto no endereço viraria
+título de painel na tela.
+
+**Duas contas fáceis de errar em sentidos opostos**, e a nota do painel diz as
+duas:
+
+- **Pessoa não soma entre corredores.** Quem voou por dois conta uma vez no
+  total da região — somar as linhas contaria duas, que é o erro que a §9.10
+  impede na agregação. Por isso a contagem sai da camada, não de uma soma feita
+  na tela.
+- **Trecho entre duas regiões conta nas duas.** É o deslocamento que tocou
+  aquele lugar, não uma divisão da emissão entre eles; somar todas as regiões
+  passa do total do módulo, de propósito.
+
+Trechos e emissão, esses sim, fecham com o cabeçalho — e é isso que a
+conferência nova prende, região por região.
+
+**Acabamento de tabela, com o Gustavo olhando a tela.** As colunas não tinham
+folga horizontal nenhuma — só vertical —, e uma coluna numérica alinhada à
+direita encostava na coluna de texto seguinte: "Trechos" e "Período" se liam como
+um número só, no cabeçalho e em toda linha. A folga entrou na **peça
+compartilhada**, com as células das pontas zeradas para a tabela seguir rente à
+borda do painel; as tabelas de Método e Mobilidade ganham junto.
+
+A folga custa largura, e isso obrigou duas decisões:
+
+- **A grade assimétrica passou a dividir a partir de `lg`, não de `md`.** O que
+  vai à esquerda nela é largo por natureza — um radar, uma tabela de cinco
+  colunas —, e perto de 900px a coluna de 1,55fr já espremia coluna até número
+  encostar em data de novo. **Empilhado é melhor que espremido**, e vale igual
+  para a Mobilidade.
+- **A coluna de período deixou de ser `nowrap`.** Espremida, ela quebra no
+  travessão entre as duas datas, que é o único lugar onde a quebra não atrapalha.
+  Largura fixa faria a tabela estourar o painel.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (151 testes, 2 novos) e `next build` passam. Nenhum
+  servidor de desenvolvimento foi subido.
+- Conferido contra o banco com ensaio temporário, apagado em seguida: as oito
+  regiões fecham com os corredores que as tocam, todo corredor tem período, e
+  nenhum identificador de pessoa sai no mapa.
+
+#### 2026-09-16 — As faixas horizontais do mapa: a costura de ±180°
+
+O Gustavo viu três linhas atravessando o mapa de ponta a ponta, e uma dentro do
+inserto. **Não era grade, não era rota e não era o recorte de polígono.**
+
+**Era a costura do antimeridiano.** A origem representa a linha de ±180° com
+vértices dos dois lados dela — para a esfera é o mesmo lugar, e na esfera a
+aresta entre eles tem comprimento zero. Numa projeção equirretangular essa mesma
+aresta é desenhada **dando a volta pelo mundo inteiro**, virando uma faixa
+horizontal de ponta a ponta. Sete arestas assim existiam, em quatro anéis; três
+caíam dentro do enquadramento e eram as que apareciam.
+
+**O conserto é do gerador, não do desenho.** É propriedade do dado, não do
+enquadramento: o script passou a **cortar o anel nas arestas que saltam mais de
+180° de longitude**, e cada pedaço se fecha do lado do mundo onde mora. O corte
+vem depois do arredondamento, porque é ele que às vezes empurra um vértice da
+costura para o outro lado da linha.
+
+**Uma travessia só é o caso que engana.** Quebrar ali devolve o mesmo anel
+girado, e o salto passa da aresta explícita para o fechamento implícito — a
+faixa reaparece igual, e foi o que aconteceu na primeira tentativa. Anel que
+cruza a costura uma vez só é anel que **envolve um polo**, e o fechamento certo
+é subir pela costura, dar a volta pelo polo e voltar. É o que faz a Antártida ser
+uma calota e não uma tira.
+
+**Virou invariante testada, porque o arquivo é gerado e ninguém lê um diff de
+milhares de vértices.** O teste reprova qualquer aresta que salte mais de 180°,
+com a exceção da que passa pelo polo — lá a travessia é a borda do mundo, não uma
+linha no meio do desenho. Conferido contra o arquivo anterior: **reprova,
+apontando as sete arestas**, e as latitudes que ele imprime são exatamente as
+das linhas que apareciam na tela. Entrou junto a conferência de que a caixa
+envolvente de cada anel contém os pontos dele — é por ela que a tela descarta
+anel fora do enquadramento sem olhar ponto.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (149 testes, 2 novos) e `next build` passam. Nenhum
+  servidor de desenvolvimento foi subido.
+- O contorno foi regerado e o desenho conferido medindo os anéis do SVG: nenhuma
+  faixa de ponta a ponta sobrou, nem no quadro grande nem no inserto. O arquivo
+  gerado ficou do mesmo tamanho.
+
+#### 2026-09-16 — A §3.1.2 no código: a rota aparece, e o mapa ganha um inserto
+
+Implementação da mudança de escopo decidida na §3.1. O código ainda suprimia
+destino, rota e corredor por contagem de pessoas.
+
+**A supressão saiu de três lugares**, e de nenhum outro: a tabela de destinos, a
+tabela de rotas e o mapa de corredores. A mobilidade não foi tocada — o limite
+continua valendo lá, pelo motivo que a §3.1.1 escreve. A camada de consulta é
+onde essa diferença fica explícita, e agora ela tem um comentário dizendo por que
+`supressaoMinima()` não é chamado no módulo de viagens.
+
+**O `funcionarioId` continua sendo lido e continua morrendo na camada.** Tirar a
+supressão não arrastou junto a regra do agregado sair pronto do servidor: nenhum
+identificador entra na resposta, e há teste conferindo isso na saída serializada.
+
+**Tirar a supressão trocou um problema por outro, e o segundo é de leitura.** O
+recorte fino passou de poucas linhas para dezenas — a tabela de rotas tem agora
+mais linhas que o painel inteiro comporta. Entrou um corte de leitura: as maiores
+mais uma linha de resto.
+
+> **A linha de resto não é supressão, e a tela diz isso em texto.** As duas se
+> parecem e são coisas opostas: o balde da mobilidade existe para não identificar
+> ninguém e não pode ser aberto; este é corte de apresentação, e o que ele reúne
+> está inteiro nos totais da própria tela. Sem a frase, quem lembra da versão
+> anterior desta tela leria a linha como a supressão que acabou de sair.
+
+Duas decisões dentro do corte: **sobrando um recorte só, ele aparece** — "resto
+(1 destino)" ocupa o mesmo espaço e diz menos —, e **a contagem de pessoas do
+resto é de pessoas distintas**, não a soma das linhas, senão quem aparece em dois
+recortes contaria duas vezes.
+
+**As tabelas ganharam pessoas e período**, decisão do Gustavo. Quantas pessoas
+foram e entre que datas; **nunca quem**. O período vai da primeira à última
+viagem do recorte, em vez de uma data só: num grupo de várias viagens, data única
+não diz qual delas é. Recorte de uma viagem só devolve naturalmente uma data.
+
+A formatação do período fatia a string, sem passar por `Date`: a §9.1 guarda data
+como texto justamente para não repetir os bugs de fuso, e converter só para
+formatar os traria de volta pela janela — em São Paulo, o dia primeiro vira o
+último do mês anterior. O teste prende o dia exato, que é onde esse erro
+apareceria.
+
+**O mapa: enquadramento pelo dado, com inserto do doméstico.** Com o
+intercontinental desenhado, a moldura passou a cobrir quase meio planeta e o
+conjunto brasileiro virou um borrão. O quadro grande mostra o alcance; o inserto
+amplia o trecho marcado. O doméstico é desenhado nos dois — o inserto não tira
+nada do quadro principal.
+
+- **O inserto aparece por regra geométrica, não por lista de lugares.** Ele só
+  existe quando o conjunto brasileiro ocupa menos que uma fração da moldura e tem
+  mais de uma região. Num recorte só doméstico a moldura **é** o doméstico, e o
+  inserto seria o mesmo desenho repetido do lado.
+- **O que é "doméstico" sai da classificação que o cadastro já grava** (§10.3),
+  não de uma lista nova escrita na tela.
+- Continuam valendo o corredor por região, o ponto no centroide dos aeroportos
+  que a empresa de fato usa, o anel para corredor dentro da mesma região e o
+  corredor sem direção.
+
+**Um defeito de desenho encontrado ao conferir, que só aparece com dado real.** O
+quadro global empilhava os cinco rótulos brasileiros num quadrado de poucos
+pixels — ilegível. Com o inserto no ar, o quadro grande desenha os pontos
+domésticos **sem rótulo** e deixa os nomes para o inserto: o alcance não perde
+nada, e o que sai é o texto que não cabia. No inserto, o título estava por cima do
+ponto mais ao norte e desceu para o rodapé.
+
+**Layout.** A tela passou a seguir o protótipo: mapa na largura inteira, e a
+tabela de destinos ao lado do gráfico mensal. O empilhamento anterior era
+**omissão, não decisão** — ninguém tinha comparado esta tela com o desenho de
+referência. A coluna da tabela ficou mais larga que a metade do protótipo porque
+a tabela daqui tem cinco colunas e a de lá tem quatro, sem data.
+
+**Corrigido em seguida, com o Gustavo olhando a tela:** o gráfico mensal ficou
+pequeno e sobrou meia tela em branco dentro do painel. Eram duas coisas, e
+nenhuma é o gráfico em si.
+
+> **O `viewBox` não é tamanho, é escala.** A série pedia largura proporcional ao
+> número de meses, o que era razoável na largura inteira e virou o defeito na
+> metade: quanto mais largo o `viewBox`, mais o navegador encolhe tudo para caber
+> na coluna — inclusive rótulo e valor, que chegavam à tela com dois terços do
+> tamanho pedido. Mais estreito e mais alto, o mesmo gráfico chega maior.
+
+O vazio era outro: um painel curto ao lado de uma tabela de dez linhas é esticado
+pela grade, e a esticada é toda em branco. A coluna da direita passou a ser uma
+pilha de três painéis — **equilibrar duas colunas com conteúdo, não com vazio** —,
+e a tabela de rotas foi para a largura inteira, porque não havia painel do tamanho
+dela para pôr ao lado.
+
+**A supressão deixou de ser parâmetro "geral" na tela de Método.** Declará-la
+assim afirmaria que viagens e marítimo também suprimem, e nenhum dos dois
+suprime. Ela passou a ser parâmetro da mobilidade, com a observação dizendo o
+escopo — tela que promete regra que o código não aplica é pior que tela calada.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (147 testes, 13 novos) e `next build` passam. Nenhum
+  servidor de desenvolvimento foi subido.
+- **As duas metades da §3.1 têm teste, no mesmo arquivo e de propósito**: destino,
+  rota e corredor de uma pessoa aparecem nomeados; bairro de uma pessoa continua
+  virando "outros". As duas foram conferidas **desligando a regra**: reintroduzir
+  a supressão em viagens reprova as duas primeiras, tirá-la da mobilidade reprova
+  a terceira. Guarda que não morde não é guarda.
+- Conferido contra o banco carregado com ensaio temporário, apagado em seguida:
+  **toda a emissão aérea passou a ter lugar no mapa**, nada ficou sem geografia,
+  a soma dos trechos das tabelas reproduz o total em todos os recortes, e nenhum
+  identificador de pessoa sai na resposta.
+- O desenho foi conferido numericamente, renderizando o componente para arquivo
+  estático e medindo posição de ponto, de rótulo e de moldura. Foi assim que os
+  dois defeitos de legibilidade apareceram — nenhum deles seria pego por
+  typecheck, teste ou build, que é a mesma lição de 15/09.
+
+#### 2026-09-16 — Ano-base das viagens, e a saída do rabo de 2026
+
+**Decisão do Gustavo: o relatório é de 2025.** A base da agência trazia trechos com voo em
+janeiro de 2026 — passagem comprada num ano com voo no seguinte, o caso que a §7.2 já
+previa. São poucas reservas, mas entravam no seletor de período como se fossem um ano, e
+três semanas de dado apresentadas como um exercício é o mesmo erro que a §5 impede na visão
+geral.
+
+**Não foi uma exclusão manual, e o motivo importa.** Apagar os documentos resolveria até a
+próxima carga, que os traria de volta sem ninguém perceber. Entrou `VIAGENS_ANO_BASE`: as
+duas cargas administrativas descartam o trecho cujo **voo** cai fora do ano e dizem quantos
+descartaram, a tela de método declara qual é o ano, e o exemplo vem vazio porque ano
+plausível carregaria o período errado sem nenhum erro aparecer.
+
+**O escopo de recarga passou a ser fonte E ano.** Sem o ano ali, carregar um período
+apagaria o anterior inteiro — a recarga remove do escopo tudo que não está na carga nova
+(§9.9) —, e um inventário que só guarda um ano de cada vez não é um inventário. Com o ano
+no escopo, os períodos convivem.
+
+**E convivendo, precisavam de uma trava.** A conferência falha se houver trecho de ano
+diferente do ano-base, imprimindo quantos e de qual ano. As duas metades são de propósito:
+**o escopo torna possível guardar mais de um ano, a conferência mantém isso deliberado.**
+Foi essa conferência que apontou os trechos remanescentes depois da recarga, e a remoção
+deles foi então explícita, com simulação antes de gravar.
+
+**A premissa de fonte única reapareceu — agora no tempo.**
+
+> Os valores esperados das conferências saíam dos totais declarados no arquivo de origem.
+> Esses totais descrevem **o arquivo inteiro**, e o banco passou a guardar **um ano**:
+> quatro conferências começaram a acusar erro numa carga correta. É a mesma armadilha de
+> setembro, com outra dimensão — um esperado que embute "o banco tem tudo que está no
+> arquivo".
+
+A correção manteve as duas perguntas separadas, em vez de descartar uma: o **banco** é
+conferido contra um recálculo recortado pelo ano, e os **totais declarados** viraram
+conferência do arquivo contra ele mesmo, que é a única coisa que de fato descrevem. Nenhuma
+guarda foi perdida; as duas ficaram dizendo a verdade sobre coisas diferentes.
+
+Uma sutileza do recorte ficou no código: uma reserva conta quando **algum** trecho dela cai
+no ano. Viagem que sai em dezembro e volta em janeiro pertence aos dois relatórios, com os
+trechos repartidos entre eles.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` e `next build` passam. Nenhum servidor de desenvolvimento foi
+  subido.
+- A carga da agência foi reexecutada e o `verificar` fecha inteiro, incluindo as
+  conferências novas. A remoção rodou primeiro em simulação.
+
+**Consequência para a tela:** com um único ano carregado, o seletor de período não aparece
+— ele já se escondia sozinho com menos de dois anos. Não é defeito; é a tela dizendo que
+não há o que escolher.
 
 #### 2026-09-16 — Acabamento da tela de Viagens
 
@@ -2323,9 +2776,10 @@ de erro. Foi procurada e não existe barata: a serialização só acontece na re
 - **Contorno de continente no mapa.** Por último e separado: dado geográfico tem licença, e
   um contorno colado no repositório é coisa que entra sem ninguém olhar de onde veio. A
   opção será apresentada antes de qualquer arquivo entrar.
-- **Tabelas com colunas que a camada não entrega.** Destinos com número de viagens e kg por
-  viagem, contêineres por porto, e a barra empilhada de qualidade do dado. Ampliar a camada
-  para preencher desenho é decisão de escopo, não de acabamento.
+- **Tabelas com colunas que a camada não entrega.** Restam as do marítimo — contêineres por
+  porto e a barra empilhada de qualidade do dado. A de destinos foi fechada em 16/09, com
+  pessoas e período. Ampliar a camada para preencher desenho é decisão de escopo, não de
+  acabamento.
 
 #### 2026-09-15 — Os três itens em aberto do refinamento, fechados
 

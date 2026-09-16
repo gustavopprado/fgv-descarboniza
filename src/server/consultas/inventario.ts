@@ -31,11 +31,13 @@ import { COLECAO, firestore } from '../firestore'
 import {
   agrupar,
   emToneladas,
+  maioresRecortes,
   media,
   MESES_NO_ANO,
   serieMensal,
   somar,
   type Grupo,
+  type RecorteDeViagem,
 } from './agregacao'
 import {
   exigirModulo,
@@ -43,6 +45,17 @@ import {
   limiteDeEmpresa,
   type ContextoDeAcesso,
 } from './acesso'
+
+/**
+ * Quantas linhas próprias as tabelas de destino e de rota mostram antes do
+ * resto (§3.1.2).
+ *
+ * **É corte de leitura, não de privacidade.** Sem supressão, o recorte fino
+ * passou de poucas linhas para dezenas, e uma tabela de dezenas de linhas ao
+ * lado de um gráfico não se lê. O que ficar fora soma numa linha visível, e a
+ * tela diz que ela não é supressão.
+ */
+const MAIORES_NA_TABELA = 10
 
 const ROTULO_SEM_EMPRESA = 'Sem empresa'
 const ROTULO_SEM_BAIRRO = 'Sem bairro'
@@ -156,15 +169,15 @@ export async function consultarMobilidade(
 /**
  * Um corredor desenhável no mapa (§10.3).
  *
- * **A unidade do mapa é o corredor entre regiões, não a rota par-a-par.** A
- * troca não afrouxa a supressão da §3.1 — ela continua contando pessoas, e um
- * corredor voado por pouca gente continua fora. O que muda é que recortes que
- * sozinhos não chegavam ao limite passam a somar população suficiente, e o peso
- * doméstico deixa de ficar escondido no balde de "outras rotas".
+ * **A unidade do mapa é o corredor entre regiões, não a rota par-a-par.** É
+ * escolha de leitura: uma linha por par de aeroportos vira um emaranhado sobre
+ * o Sudeste, e o corredor diz o que a tela responde — para onde a empresa voa.
  *
- * **Agregar não cria população:** um destino para onde só uma pessoa foi
- * continua suprimido por mais grosso que seja o recorte, e é isso que mantém a
- * regra honesta.
+ * **Nenhum corredor é suprimido por contagem de pessoas** (§3.1.2). Rota é fato
+ * da operação da empresa, não dado pessoal de quem embarcou; suprimi-la
+ * escondia de onde vinha um terço da emissão aérea sem proteger ninguém, já que
+ * a emissão continuava no total. O que continua valendo é a primeira regra da
+ * §3.1: nada aqui identifica quem voou, e nenhum identificador sai desta camada.
  */
 export type CorredorNoMapa = {
   corredor: string
@@ -177,22 +190,46 @@ export type CorredorNoMapa = {
   co2Kg: number
   trechos: number
   pessoas: number
+  /** Datas extremas do corredor, em `AAAA-MM-DD`. */
+  primeira: string | null
+  ultima: string | null
+}
+
+/**
+ * O que aconteceu numa região — o agregado que a tela abre ao clicar no ponto.
+ *
+ * **A contagem de pessoas é da região, não a soma dos corredores dela.** Quem
+ * voou por dois corredores é uma pessoa, e somar as linhas contaria duas — o
+ * mesmo erro que a §9.10 impede na agregação. Por isso este número sai daqui, e
+ * não de uma conta feita na tela.
+ *
+ * Nada aqui diz quem: é quanto, quantos e quando (§3.1.2).
+ */
+export type RegiaoNoMapa = {
+  regiao: string
+  trechos: number
+  pessoas: number
+  co2Kg: number
+  primeira: string | null
+  ultima: string | null
 }
 
 export type MapaDeCorredores = {
   corredores: CorredorNoMapa[]
-  /** Corredores que existem e não podem ser desenhados por identificarem quem voou. */
-  suprimidos: number
   /**
-   * Fração da emissão aérea que está em corredor suprimido.
+   * Trechos descartados por aeroporto sem região ou sem coordenada.
    *
-   * A tela **precisa** declarar isto: sem o número, quem vê um mapa com poucas
-   * linhas conclui que falta dado. O motivo não é dado faltando — é deslocamento
-   * de pouca gente, que não pode ser desenhado sem apontar para ela.
+   * É o único motivo que restou para algo não ser desenhado, e por isso continua
+   * declarado na tela: aqui **é** dado faltando, ao contrário da supressão que
+   * saiu daqui — aquela escondia dado que existia.
    */
-  proporcaoSuprimida: number
-  /** Corredor descartado por aeroporto sem região ou sem coordenada. */
   semGeografia: number
+  /** Agregado por região, para o ponto do mapa poder ser aberto. */
+  regioes: RegiaoNoMapa[]
+  /** Emissão aérea que os corredores desenhados somam, para a tela conferir. */
+  co2KgDesenhado: number
+  /** Emissão aérea total do recorte. Igual à desenhada quando nada ficou fora. */
+  co2KgAereo: number
 }
 
 export type ResumoDeViagens = {
@@ -215,8 +252,9 @@ export type ResumoDeViagens = {
   co2ToneladasAno: number
   co2KgPorViagem: number
   porMes: { mes: string; co2Kg: number; documentos: number }[]
-  destinos: Grupo[]
-  rotas: Grupo[]
+  /** Maiores destinos e rotas, com o resto numa linha. Sem supressão (§3.1.2). */
+  destinos: RecorteDeViagem[]
+  rotas: RecorteDeViagem[]
   porEmpresa: Grupo[]
   porModal: Grupo[]
   alertas: { tipo: string; ocorrencias: number }[]
@@ -240,9 +278,14 @@ export async function consultarViagens(
   // Reserva duplicada no relatório da agência fica gravada, fora do total (§7.2).
   const trechos = todos.filter((t) => t.contabilizar)
 
-  const limite = supressaoMinima()
+  // **Sem `supressaoMinima()` aqui, e é de propósito** (§3.1.2). Ela continua
+  // valendo na mobilidade, onde o recorte é onde a pessoa mora; rota é fato
+  // operacional da empresa. O `funcionarioId` continua sendo lido e continua
+  // morrendo nesta camada: ele conta pessoas e nunca sai.
   const pessoa = (t: DocViagemTrecho) => t.funcionarioId
   const valor = (t: DocViagemTrecho) => t.co2Kg
+  // O trecho aéreo tem data de voo; o de carro, só a de ida.
+  const data = (t: DocViagemTrecho) => t.dataVoo ?? t.dataIda
 
   const co2Kg = somar(trechos, valor)
   const viagens = new Set(trechos.map((t) => t.reservaId)).size
@@ -254,7 +297,7 @@ export async function consultarViagens(
     }
   }
 
-  const mapa = await montarMapaDeCorredores(db, trechos, limite, valor, pessoa)
+  const mapa = await montarMapaDeCorredores(db, trechos, valor, pessoa, data)
 
   // **A série não se divide por fonte, e isso é a §0.1.** As duas fontes deste
   // módulo são administrativas, cobrem o mesmo tipo de registro e convivem sem
@@ -270,21 +313,23 @@ export async function consultarViagens(
     co2ToneladasAno: emToneladas(co2Kg),
     co2KgPorViagem: viagens === 0 ? 0 : co2Kg / viagens,
     porMes: serieMensal(trechos, (t) => t.mes, valor),
-    destinos: agrupar(trechos, {
+    destinos: maioresRecortes(trechos, {
       chave: (t) => t.destino,
       valor,
       pessoa,
+      data,
       rotuloNulo: 'Sem destino',
-      limite,
-      rotuloOutros: 'outros destinos',
+      quantos: MAIORES_NA_TABELA,
+      rotuloResto: (n) => `demais ${n} destinos`,
     }),
-    rotas: agrupar(trechos, {
+    rotas: maioresRecortes(trechos, {
       chave: (t) => `${t.origem} → ${t.destino}`,
       valor,
       pessoa,
+      data,
       rotuloNulo: 'Sem rota',
-      limite,
-      rotuloOutros: 'outras rotas',
+      quantos: MAIORES_NA_TABELA,
+      rotuloResto: (n) => `demais ${n} rotas`,
     }),
     porEmpresa: agrupar(trechos, {
       chave: (t) => t.empresa,
@@ -306,38 +351,38 @@ export async function consultarViagens(
 }
 
 /**
- * Junta rota agregada com coordenada de aeroporto.
+ * Agrega os trechos aéreos em corredores entre regiões e os posiciona no mapa.
  *
  * Só o trecho aéreo entra: o de carro guarda município em `origem` e `destino`,
  * e a coleção de municípios ainda não existe. Desenhar o aéreo e calar sobre o
  * rodoviário seria mentir por omissão, então a tela declara o recorte.
- *
- * A agregação é a mesma do resto da camada, com o mesmo limite de supressão —
- * o mapa não é uma porta lateral para ver o que a tabela esconde.
- */
-/**
- * Agrega os trechos aéreos em corredores entre regiões e os posiciona no mapa.
  *
  * O ponto de cada região é o **centroide dos aeroportos daquela região que
  * aparecem nos trechos** — não um ponto inventado para a região inteira. Assim a
  * linha sai de onde a empresa de fato voa, e o desenho continua derivado do
  * dado.
  *
- * Aeroporto sem região ou sem coordenada não vira corredor: entra na contagem
- * de descartados, para a tela poder dizer que existe algo fora do desenho em vez
- * de calar.
+ * **Nenhum corredor é suprimido** (§3.1.2). O que sobrou de motivo para algo não
+ * ser desenhado é aeroporto sem região ou sem coordenada — dado faltando de
+ * verdade —, e isso continua contado para a tela poder dizer em vez de calar.
  */
 async function montarMapaDeCorredores(
   db: Firestore,
   trechos: DocViagemTrecho[],
-  limite: number,
   valor: (t: DocViagemTrecho) => number,
   pessoa: (t: DocViagemTrecho) => string,
+  data: (t: DocViagemTrecho) => string | null,
 ): Promise<MapaDeCorredores> {
   const aereos = trechos.filter((t) => t.tipo === 'aereo')
-  const emissaoAerea = somar(aereos, valor)
+  const co2KgAereo = somar(aereos, valor)
   if (aereos.length === 0) {
-    return { corredores: [], suprimidos: 0, proporcaoSuprimida: 0, semGeografia: 0 }
+    return {
+      corredores: [],
+      regioes: [],
+      semGeografia: 0,
+      co2KgDesenhado: 0,
+      co2KgAereo: 0,
+    }
   }
 
   const aeroportos = new Map<string, DocAeroporto>()
@@ -384,17 +429,56 @@ async function montarMapaDeCorredores(
     valor,
     pessoa,
     rotuloNulo: 'Sem corredor',
-    limite,
+    // Sem `limite`: rota não é suprimida por contagem de pessoas (§3.1.2).
   })
 
-  const sobreviventes = grupos.filter((g) => !g.agrupadoPorSupressao)
-  const distintos = new Set(
-    comGeografia.map((t) => corredor(regiaoDe(t.origem)!, regiaoDe(t.destino)!)),
-  ).size
-  const suprimido = grupos.find((g) => g.agrupadoPorSupressao)
+  // Período por corredor e agregado por região, na mesma passada. A região não
+  // reaproveita a soma dos corredores porque pessoa não soma: quem voou por dois
+  // corredores é uma pessoa só.
+  const periodoDoCorredor = new Map<string, { primeira: string; ultima: string }>()
+  const porRegiao = new Map<
+    string,
+    { trechos: number; pessoas: Set<string>; co2Kg: number; primeira: string | null; ultima: string | null }
+  >()
+
+  for (const t of comGeografia) {
+    const regioes = [regiaoDe(t.origem)!, regiaoDe(t.destino)!]
+    const chave = corredor(regioes[0], regioes[1])
+    const d = data(t)
+
+    if (d !== null) {
+      const atual = periodoDoCorredor.get(chave)
+      if (atual === undefined) {
+        periodoDoCorredor.set(chave, { primeira: d, ultima: d })
+      } else {
+        if (d < atual.primeira) atual.primeira = d
+        if (d > atual.ultima) atual.ultima = d
+      }
+    }
+
+    // Um trecho toca duas regiões e conta uma vez em cada; dentro da mesma
+    // região ele conta uma só, senão a região doméstica contaria em dobro.
+    for (const regiao of new Set(regioes)) {
+      const atual = porRegiao.get(regiao) ?? {
+        trechos: 0,
+        pessoas: new Set<string>(),
+        co2Kg: 0,
+        primeira: null,
+        ultima: null,
+      }
+      atual.trechos += 1
+      atual.pessoas.add(pessoa(t))
+      atual.co2Kg += valor(t)
+      if (d !== null) {
+        if (atual.primeira === null || d < atual.primeira) atual.primeira = d
+        if (atual.ultima === null || d > atual.ultima) atual.ultima = d
+      }
+      porRegiao.set(regiao, atual)
+    }
+  }
 
   const corredores: CorredorNoMapa[] = []
-  for (const grupo of sobreviventes) {
+  for (const grupo of grupos) {
     const [origemRegiao, destinoRegiao] = grupo.chave.split(SEPARADOR)
     const a = pontos.get(origemRegiao)
     const b = pontos.get(destinoRegiao)
@@ -411,15 +495,26 @@ async function montarMapaDeCorredores(
       co2Kg: grupo.co2Kg,
       trechos: grupo.documentos,
       pessoas: grupo.pessoas,
+      primeira: periodoDoCorredor.get(grupo.chave)?.primeira ?? null,
+      ultima: periodoDoCorredor.get(grupo.chave)?.ultima ?? null,
     })
   }
 
   return {
     corredores: corredores.sort((x, y) => y.co2Kg - x.co2Kg),
-    suprimidos: distintos - sobreviventes.length,
-    proporcaoSuprimida:
-      emissaoAerea === 0 ? 0 : (suprimido?.co2Kg ?? 0) / emissaoAerea,
+    regioes: [...porRegiao.entries()]
+      .map(([regiao, v]) => ({
+        regiao,
+        trechos: v.trechos,
+        pessoas: v.pessoas.size,
+        co2Kg: v.co2Kg,
+        primeira: v.primeira,
+        ultima: v.ultima,
+      }))
+      .sort((x, y) => y.co2Kg - x.co2Kg),
     semGeografia,
+    co2KgDesenhado: somar(corredores, (c) => c.co2Kg),
+    co2KgAereo,
   }
 }
 

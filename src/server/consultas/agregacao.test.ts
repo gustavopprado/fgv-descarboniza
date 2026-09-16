@@ -13,6 +13,7 @@ import { test } from 'node:test'
 import {
   agrupar,
   emToneladas,
+  maioresRecortes,
   media,
   mesesEntre,
   serieMensal,
@@ -187,3 +188,133 @@ test('a contagem de meses atravessa a virada do ano', () => {
  * A autorização saiu daqui: ela ganhou arquivo próprio em `acesso.test.ts`
  * quando a visão geral passou a ser mais estreita que o inventário (§5).
  */
+
+/* ------------------------------------ recortes de viagem, sem supressão */
+
+/**
+ * O outro lado da §3.1: **rota não é suprimida por contagem de pessoas**
+ * (§3.1.2). Estes testes existem porque a regra difere entre os módulos de
+ * propósito, e "uniformizar" é exatamente o que a §3.1 avisa para não fazer —
+ * um teste que passasse com supressão aqui deixaria a uniformização silenciosa.
+ *
+ * **Massa fictícia, inventada do zero** (§2.2).
+ */
+type Trecho = { destino: string | null; pessoa: string; data: string | null; co2: number }
+
+function trechos(...linhas: [string | null, string, string | null, number][]): Trecho[] {
+  return linhas.map(([destino, pessoa, data, co2]) => ({ destino, pessoa, data, co2 }))
+}
+
+const opcoesDeRecorte = {
+  chave: (t: Trecho) => t.destino,
+  valor: (t: Trecho) => t.co2,
+  pessoa: (t: Trecho) => t.pessoa,
+  data: (t: Trecho) => t.data,
+  rotuloNulo: 'Sem destino',
+  quantos: 2,
+  rotuloResto: (n: number) => `demais ${n} destinos`,
+}
+
+test('recorte de uma pessoa só continua aparecendo, com o nome do lugar', () => {
+  const linhas = maioresRecortes(
+    trechos(
+      ['AAA', 'p1', '2031-03-04', 900],
+      ['BBB', 'p2', '2031-05-09', 50],
+    ),
+    opcoesDeRecorte,
+  )
+
+  const solitario = linhas.find((l) => l.rotulo === 'AAA')
+  assert.equal(solitario?.pessoas, 1)
+  assert.equal(solitario?.co2Kg, 900)
+  assert.equal(
+    linhas.some((l) => l.resto),
+    false,
+    'nada a agrupar, nada de linha de resto',
+  )
+})
+
+test('a linha de resto soma o que sobrou e se declara como resto', () => {
+  const linhas = maioresRecortes(
+    trechos(
+      ['AAA', 'p1', '2031-01-10', 100],
+      ['BBB', 'p2', '2031-02-10', 90],
+      ['CCC', 'p3', '2031-03-10', 8],
+      ['DDD', 'p3', '2031-04-10', 5],
+      ['EEE', 'p4', '2031-05-10', 2],
+    ),
+    opcoesDeRecorte,
+  )
+
+  assert.equal(linhas.length, 3)
+  const resto = linhas.at(-1)
+  assert.equal(resto?.resto, true)
+  assert.equal(resto?.recortes, 3)
+  assert.equal(resto?.trechos, 3)
+  assert.equal(resto?.co2Kg, 15)
+  // Pessoas distintas, não a soma das linhas: p3 aparece em dois recortes.
+  assert.equal(resto?.pessoas, 2)
+})
+
+test('sobrando um recorte só, ele aparece em vez de virar linha de resto', () => {
+  const linhas = maioresRecortes(
+    trechos(
+      ['AAA', 'p1', '2031-01-10', 100],
+      ['BBB', 'p2', '2031-02-10', 90],
+      ['CCC', 'p3', '2031-03-10', 8],
+    ),
+    opcoesDeRecorte,
+  )
+
+  assert.deepEqual(
+    linhas.map((l) => l.rotulo),
+    ['AAA', 'BBB', 'CCC'],
+  )
+})
+
+test('nenhum trecho some no corte de leitura', () => {
+  const linhas = maioresRecortes(
+    trechos(
+      ['AAA', 'p1', '2031-01-10', 100],
+      ['AAA', 'p1', '2031-02-10', 100],
+      ['BBB', 'p2', '2031-02-10', 90],
+      ['CCC', 'p3', '2031-03-10', 8],
+      [null, 'p4', '2031-03-11', 3],
+      ['EEE', 'p5', '2031-04-10', 1],
+    ),
+    opcoesDeRecorte,
+  )
+
+  assert.equal(
+    linhas.reduce((s, l) => s + l.trechos, 0),
+    6,
+    'a soma das linhas tem que reproduzir o que entrou, resto inclusive',
+  )
+  // Nulo continua sendo categoria visível, aqui como em qualquer agrupamento.
+  const rotulos = linhas.flatMap((l) => (l.resto ? [] : [l.rotulo]))
+  assert.equal(
+    rotulos.includes('Sem destino') || linhas.some((l) => l.resto),
+    true,
+  )
+})
+
+test('o período vai da primeira à última data do recorte', () => {
+  const linhas = maioresRecortes(
+    trechos(
+      ['AAA', 'p1', '2031-07-20', 10],
+      ['AAA', 'p2', '2031-02-03', 10],
+      ['AAA', 'p3', null, 10],
+      ['BBB', 'p4', null, 5],
+    ),
+    opcoesDeRecorte,
+  )
+
+  const a = linhas.find((l) => l.rotulo === 'AAA')
+  assert.equal(a?.primeira, '2031-02-03')
+  assert.equal(a?.ultima, '2031-07-20')
+
+  // Recorte sem data nenhuma não inventa uma: fica nulo e a tela mostra traço.
+  const b = linhas.find((l) => l.rotulo === 'BBB')
+  assert.equal(b?.primeira, null)
+  assert.equal(b?.ultima, null)
+})

@@ -29,3 +29,27 @@ export function proporcao(valor: number, casas = 1): string {
 export function plural(quantos: number, singular: string, plural_: string): string {
   return `${inteiro(quantos)} ${quantos === 1 ? singular : plural_}`
 }
+
+/**
+ * Período de um recorte, a partir de duas datas `AAAA-MM-DD`.
+ *
+ * As datas são fatiadas como texto, sem passar por `Date`: a §9.1 guarda data em
+ * string justamente para não repetir os bugs de fuso, e converter só para
+ * formatar os traria de volta pela janela — em São Paulo, `new Date('2025-03-12')`
+ * é 11 de março.
+ *
+ * Recorte de uma viagem só devolve uma data. O intervalo omite o ano da primeira
+ * quando as duas caem no mesmo, que é o caso comum de um relatório anual.
+ */
+export function periodo(primeira: string | null, ultima: string | null): string {
+  if (primeira === null || ultima === null) return '—'
+
+  const dia = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`
+  const completa = (d: string) => `${dia(d)}/${d.slice(0, 4)}`
+
+  if (primeira === ultima) return completa(primeira)
+  if (primeira.slice(0, 4) === ultima.slice(0, 4)) {
+    return `${dia(primeira)}–${completa(ultima)}`
+  }
+  return `${completa(primeira)}–${completa(ultima)}`
+}

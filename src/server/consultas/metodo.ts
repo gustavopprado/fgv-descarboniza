@@ -147,17 +147,22 @@ function parametros(
   const env = parametrosDeclarados()
   const lista: ParametroDeclarado[] = []
 
-  const supressao = texto(opcional('MOBILIDADE_SUPRESSAO_MINIMA') ?? null)
-  lista.push({
-    rotulo: 'Supressão de grupos pequenos',
-    valor: supressao.definido ? `${supressao.valor} pessoas` : NAO_DEFINIDO,
-    definido: supressao.definido,
-    observacao:
-      'Recorte com menos pessoas que isso não é exibido: vira "outros". A contagem é de pessoas, não de registros — dez viagens de uma pessoa continuam identificando essa pessoa.',
-    escopo: 'geral',
-  })
-
   if (visiveis.includes('mobilidade')) {
+    // **A supressão é parâmetro da mobilidade, não do inventário inteiro**
+    // (§3.1.1, §3.1.2). Declará-la como "geral" afirmaria que viagens e marítimo
+    // também suprimem, e nenhum dos dois suprime: rota é fato da operação da
+    // empresa e embarque não tem pessoa. O escopo aqui é o que impede a tela de
+    // prometer uma regra que o código não aplica.
+    const supressao = texto(opcional('MOBILIDADE_SUPRESSAO_MINIMA') ?? null)
+    lista.push({
+      rotulo: 'Supressão de grupos pequenos',
+      valor: supressao.definido ? `${supressao.valor} pessoas` : NAO_DEFINIDO,
+      definido: supressao.definido,
+      observacao:
+        'Vale só na mobilidade: bairro ou cidade com menos pessoas que isso vira "outros", porque onde alguém mora não é fato da operação e um recorte pequeno identifica quem está nele. A contagem é de pessoas, não de registros. Viagens não suprime rota nem destino, e o marítimo não tem pessoa a suprimir.',
+      escopo: 'mobilidade',
+    })
+
     const geo = texto(env.geocodeProvedor)
     lista.push({
       rotulo: 'Geocodificação',
@@ -249,6 +254,15 @@ function parametros(
   }
 
   if (visiveis.includes('viagens')) {
+    const anoBase = texto(env.viagensAnoBase)
+    lista.push({
+      rotulo: 'Ano-base do inventário de viagens',
+      ...anoBase,
+      observacao:
+        'O trecho entra pelo ano do voo, não pelo da emissão da passagem: há passagem comprada num ano com voo no seguinte. Trecho de outro ano não é carregado — ele pertence ao relatório daquele ano, e uma carga com outro ano-base o traz sem derrubar este.',
+      escopo: 'viagens',
+    })
+
     lista.push({
       rotulo: 'Classe da cabine',
       valor: 'econômica, assumida',

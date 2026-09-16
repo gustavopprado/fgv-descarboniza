@@ -51,8 +51,15 @@ const GRADE = {
   tres: 'grid gap-4 md:grid-cols-3',
   /** Duas colunas iguais. */
   duas: 'grid gap-4 md:grid-cols-2',
-  /** Assimétrica: o desenho grande à esquerda, o gráfico à direita. */
-  larga: 'grid gap-4 md:grid-cols-[1.55fr_1fr]',
+  /**
+   * Assimétrica: o desenho grande à esquerda, o gráfico à direita.
+   *
+   * Divide só a partir de `lg`, e não de `md` como as outras. O que vai à
+   * esquerda aqui é largo por natureza — um radar, uma tabela de cinco colunas —,
+   * e em 900px a coluna de 1,55fr já é estreita demais para ele: a tabela
+   * espreme coluna até número encostar em data. Empilhado é melhor que espremido.
+   */
+  larga: 'grid gap-4 lg:grid-cols-[1.55fr_1fr]',
 } as const
 
 export function Grade({
@@ -78,16 +85,20 @@ export function Painel({
   titulo,
   descricao,
   className,
+  id,
   children,
 }: {
   titulo?: string
   descricao?: string
   className?: string
+  /** Âncora, para um recorte que troca de endereço devolver a rolagem aqui. */
+  id?: string
   children: React.ReactNode
 }) {
   return (
     <section
-      className={`rounded-[var(--radius-painel)] border border-[var(--color-linha)] bg-[var(--color-superficie)] px-[22px] py-5 ${className ?? ''}`}
+      id={id}
+      className={`scroll-mt-6 rounded-[var(--radius-painel)] border border-[var(--color-linha)] bg-[var(--color-superficie)] px-[22px] py-5 ${className ?? ''}`}
     >
       {titulo !== undefined && (
         <h2 className="text-[14.5px] font-semibold text-[var(--color-tinta)]">
@@ -217,14 +228,21 @@ export function Cartao({
  * Tabela com componente para cada célula fica ilegível no lugar onde é escrita,
  * e o ganho seria só não repetir uma string. As classes mantêm o markup natural
  * e a aparência num lugar só.
+ *
+ * **Toda célula tem folga horizontal, e as das pontas não.** Sem ela, uma coluna
+ * numérica alinhada à direita encosta na coluna de texto seguinte e os dois
+ * valores se leem como um só — foi o que aconteceu entre "Trechos" e "Período"
+ * nas tabelas de viagem, inclusive no cabeçalho. Zerar a folga na primeira e na
+ * última mantém a tabela rente à borda do painel, como o protótipo desenha.
  */
+const FOLGA = 'px-2 first:pl-0 last:pr-0'
+
 export const TABELA = {
   tabela: 'w-full border-collapse text-[13px]',
-  th: 'border-b border-[var(--color-linha)] pb-2.5 text-left text-[11.5px] font-medium text-[var(--color-apoio)]',
-  thNum:
-    'border-b border-[var(--color-linha)] pb-2.5 text-right text-[11.5px] font-medium text-[var(--color-apoio)]',
-  td: 'border-b border-[#EDF2EB] py-2.5',
-  tdNum: 'border-b border-[#EDF2EB] py-2.5 text-right tabular-nums',
+  th: `border-b border-[var(--color-linha)] pb-2.5 ${FOLGA} text-left text-[11.5px] font-medium text-[var(--color-apoio)]`,
+  thNum: `border-b border-[var(--color-linha)] pb-2.5 ${FOLGA} text-right text-[11.5px] font-medium text-[var(--color-apoio)]`,
+  td: `border-b border-[#EDF2EB] py-2.5 ${FOLGA}`,
+  tdNum: `border-b border-[#EDF2EB] py-2.5 ${FOLGA} text-right tabular-nums`,
 } as const
 
 /** Nota de rodapé de painel, acima de uma linha. */

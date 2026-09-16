@@ -9,8 +9,11 @@
  * A métrica exibida é **kg CO₂ por viagem** (§1), e viagem aqui é a reserva: a
  * unidade de cálculo é o trecho, mas quem lê o painel conta viagens.
  *
- * Nada identifica ninguém (§3.1): destinos, rotas e mapa já vêm com supressão
- * de recorte pequeno, e a rota suprimida não vira linha no mapa.
+ * **Nada identifica ninguém, e rota não é supressa** (§3.1.2). Nome, matrícula,
+ * e-mail e qualquer identificador continuam fora, e nenhum deles trafega para o
+ * cliente — o agregado sai pronto do servidor. O que mudou é que destino,
+ * corredor e rota aparecem: são fato da operação da empresa, e escondê-los
+ * deixava um terço da emissão aérea sem lugar no mapa sem proteger ninguém.
  */
 import { plural } from '@/lib/formato'
 import { AcessoNegadoError } from '@/server/consultas/acesso'
@@ -28,7 +31,9 @@ import {
   Vazio,
 } from '../componentes'
 import { MapaDeRotasSvg, NaoDesenhado } from './mapa-de-rotas'
+import { RegiaoAberta } from './regiao-aberta'
 import { SerieMensal } from './serie-mensal'
+import { TabelaDeRecortes } from './tabela-de-recortes'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,10 +46,11 @@ function anoDe(parametro: string | undefined): number | undefined {
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ ano?: string }>
+  searchParams: Promise<{ ano?: string; regiao?: string }>
 }) {
   const ctx = await exigirSessao()
-  const ano = anoDe((await searchParams).ano)
+  const parametros = await searchParams
+  const ano = anoDe(parametros.ano)
 
   let dados
   try {
@@ -58,6 +64,21 @@ export default async function Page({
       )
     }
     throw erro
+  }
+
+  // **A região aberta no mapa é conferida contra o que existe, não aceita como
+  // veio.** O parâmetro chega do endereço, e endereço é entrada de fora: sem
+  // esta linha, qualquer texto na URL viraria título de painel na tela.
+  const regiao =
+    dados.mapa.regioes.find((r) => r.regiao === parametros.regiao)?.regiao ?? null
+
+  const enderecoDoMapa = (proxima: string | null): string => {
+    const busca = new URLSearchParams()
+    if (ano !== undefined) busca.set('ano', String(ano))
+    if (proxima !== null) busca.set('regiao', proxima)
+    const consulta = busca.toString()
+    // A âncora devolve a rolagem ao mapa depois do salto de página.
+    return `/viagens${consulta === '' ? '' : `?${consulta}`}#mapa`
   }
 
   // Os anos disponíveis saem da própria série: não custa uma consulta a mais.
@@ -113,72 +134,105 @@ export default async function Page({
             </Grade>
           </Revelar>
 
+          {/* A ordem é a do protótipo: o mapa ocupa a largura inteira e a
+              tabela de destinos fica ao lado do gráfico mensal. O empilhamento
+              anterior era omissão, não decisão — ninguém tinha comparado esta
+              tela com o desenho de referência. */}
           <Revelar ordem={1} className="mt-4">
             <Painel
-              titulo="Emissão por mês"
-              descricao="Pela data do voo ou da viagem, nunca pela data de lançamento da passagem."
-            >
-              <SerieMensal serie={dados.porMes} />
-            </Painel>
-          </Revelar>
-
-          <Revelar ordem={2} className="mt-4">
-            <Painel
+              id="mapa"
               titulo="Para onde a empresa voa"
-              descricao="Por corredor entre regiões. O mapa usa uma unidade mais grossa que a tabela de destinos de propósito: uma linha precisa de dois lugares, e o agrupamento de recortes pequenos não tem lugar nenhum — ele sumiria do desenho levando junto o peso que carrega."
+              descricao="Por corredor entre regiões — unidade mais grossa que a da tabela ao lado, porque uma linha precisa de dois lugares e o mapa responde para onde se voa, não com que frequência."
             >
               {dados.mapa.corredores.length === 0 ? (
                 <Vazio>
-                  Nenhum corredor pôde ser desenhado.{' '}
-                  <NaoDesenhado mapa={dados.mapa} />
+                  Nenhum corredor pôde ser desenhado. <NaoDesenhado mapa={dados.mapa} />
                 </Vazio>
               ) : (
-                <MapaDeRotasSvg mapa={dados.mapa} />
+                <>
+                  <MapaDeRotasSvg
+                    mapa={dados.mapa}
+                    aberta={regiao}
+                    href={(r) => enderecoDoMapa(r === regiao ? null : r)}
+                  />
+                  {regiao !== null && (
+                    <RegiaoAberta
+                      mapa={dados.mapa}
+                      regiao={regiao}
+                      fechar={enderecoDoMapa(null)}
+                    />
+                  )}
+                </>
               )}
             </Painel>
           </Revelar>
 
-          <Revelar ordem={3} className="mt-4">
-            <Grade tipo="duas">
+          {/* `larga` em vez de duas colunas iguais: a tabela tem cinco colunas
+              e o gráfico é elástico. O protótipo divide meio a meio porque a
+              tabela dele tem quatro colunas e nenhuma de data.
+
+              **A coluna da direita é uma pilha de três painéis, e o motivo é de
+              altura.** Com um painel só ao lado de uma tabela de dez linhas, a
+              grade esticava o painel curto e sobrava meia tela em branco dentro
+              dele. Empilhar equilibra as duas colunas com conteúdo, em vez de
+              equilibrar com vazio. */}
+          <Revelar ordem={2} className="mt-4">
+            <Grade tipo="larga">
               <Painel
                 titulo="Destinos mais frequentes"
-                descricao="Por aeroporto, não por região: aqui o agrupamento de recortes pequenos é uma linha que soma e aparece, então a unidade fina cabe — ao contrário do mapa, onde ela sumiria."
+                descricao="Por aeroporto de chegada. Quantas pessoas desembarcaram ali e em que período — nunca quem."
               >
-                <ListaDeGrupos grupos={dados.destinos} />
+                <TabelaDeRecortes
+                  recortes={dados.destinos}
+                  cabecalho="Destino"
+                  nota="Cada trecho tem um destino só, então a coluna de trechos fecha com o total dos cartões. Uma pessoa que foi ao mesmo lugar duas vezes conta uma."
+                />
               </Painel>
-              <Painel
-                titulo="Rotas"
-                descricao="Pelo par de aeroportos, pelo mesmo motivo dos destinos."
-              >
-                <ListaDeGrupos grupos={dados.rotas} />
-              </Painel>
+              <div className="space-y-4">
+                <Painel
+                  titulo="Emissão por mês"
+                  descricao="Pela data do voo ou da viagem, nunca pela data de lançamento da passagem."
+                >
+                  <SerieMensal serie={dados.porMes} />
+                </Painel>
+                <Painel titulo="Por modal">
+                  <ListaDeGrupos grupos={dados.porModal} mostrarPessoas={false} />
+                </Painel>
+                <Painel titulo="Por empresa">
+                  {empresaConhecida ? (
+                    <ListaDeGrupos grupos={dados.porEmpresa} mostrarPessoas={false} />
+                  ) : (
+                    <Vazio>
+                      A base de viagens ainda não informa a empresa por trecho, então
+                      tudo aparece como &ldquo;sem empresa&rdquo;. O campo existe desde
+                      já para não exigir migração quando a origem passar a informá-lo.
+                    </Vazio>
+                  )}
+                </Painel>
+              </div>
             </Grade>
           </Revelar>
 
-          <Revelar ordem={4} className="mt-4">
-            <Grade tipo="duas">
-              <Painel titulo="Por modal">
-                <ListaDeGrupos grupos={dados.porModal} mostrarPessoas={false} />
-              </Painel>
-              <Painel titulo="Por empresa">
-                {empresaConhecida ? (
-                  <ListaDeGrupos grupos={dados.porEmpresa} mostrarPessoas={false} />
-                ) : (
-                  <Vazio>
-                    A base de viagens ainda não informa a empresa por trecho, então
-                    tudo aparece como &ldquo;sem empresa&rdquo;. O campo existe desde
-                    já para não exigir migração quando a origem passar a informá-lo.
-                  </Vazio>
-                )}
-              </Painel>
-            </Grade>
+          {/* Rotas ocupa a largura inteira: é a mesma tabela de cinco colunas,
+              e sem um painel do tamanho dela para pôr ao lado, meia tela seria
+              o mesmo vazio de novo. */}
+          <Revelar ordem={3} className="mt-4">
+            <Painel
+              titulo="Rotas"
+              descricao="Pelo par de aeroportos, com direção: ida e volta são duas linhas aqui, ao contrário do mapa, onde o corredor não tem sentido."
+            >
+              <TabelaDeRecortes recortes={dados.rotas} cabecalho="Rota" />
+            </Painel>
           </Revelar>
 
           <p className="mt-6 max-w-[80ch] text-[12px] text-[var(--color-apoio)]/85">
-            Recorte com poucas pessoas é agrupado em &ldquo;outros&rdquo;. A classe
-            econômica é assumida em todos os trechos do histórico, porque o relatório
-            da agência não informa a cabine — essa e as demais escolhas que mudam o
-            número estão na tela de Método.
+            Rota, corredor e destino não são suprimidos por contagem de pessoas: são
+            fato da operação da empresa, e a emissão deles já estava no total —
+            escondê-los omitia de onde ela vinha, não quanto foi. Nenhuma tela do
+            inventário exibe nome, matrícula ou e-mail, e nenhum identificador chega
+            ao navegador. A classe econômica é assumida em todos os trechos do
+            histórico, porque o relatório da agência não informa a cabine — essa e as
+            demais escolhas que mudam o número estão na tela de Método.
           </p>
         </>
       )}
