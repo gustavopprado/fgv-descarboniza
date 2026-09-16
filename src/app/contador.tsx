@@ -16,9 +16,32 @@
  * isso porque lá o zero já está no HTML; aqui o zero não pode estar, então o
  * salto precisa acontecer no quadro anterior ao primeiro visível.
  *
- * Quem pede menos movimento não vê contagem nenhuma.
+ * **Não existe trava de "já animei", e a ausência dela é o conserto.** A versão
+ * anterior guardava um `ref` para animar uma vez só. A trava jogava fora
+ * justamente o número certo que este arquivo tinha acabado de colocar no HTML,
+ * por dois caminhos independentes:
+ *
+ *  - **em desenvolvimento o React executa todo efeito duas vezes.** A primeira
+ *    execução zerava o texto e agendava o quadro; a limpeza cancelava o quadro;
+ *    a segunda saía na primeira linha, pela trava. O número ficava **em zero
+ *    para sempre** — em todos os cartões de todas as telas;
+ *  - **ao trocar o ano por um link, o componente não remonta.** O inicializador
+ *    do estado não roda de novo e o efeito saía pela trava, então o número
+ *    exibido **não acompanhava a prop nova**.
+ *
+ * Sem a trava, os dois casos se resolvem pelo mesmo caminho: o efeito recomeça a
+ * contagem do zero e termina no valor atual. Reanimar de vez em quando é barato;
+ * exibir zero num inventário de emissões não é.
+ *
+ * Quem pede menos movimento não vê contagem nenhuma — e, mesmo aí, o efeito
+ * escreve o valor atual, senão a troca de ano deixaria o número anterior na
+ * tela.
+ *
+ * **Esta classe de erro não tem guarda automática honesta.** `tsc`, `npm test` e
+ * `next build` passam com e sem o defeito: ciclo de efeito e ordem de pintura só
+ * existem quando há navegador pintando. Quem exercita isto é quem abre a tela.
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 
 import { numero } from '@/lib/formato'
 
@@ -41,16 +64,19 @@ export function Contador({
   className?: string
 }) {
   const [texto, setTexto] = useState(() => numero(valor, casas))
-  const jaAnimou = useRef(false)
 
   useEfeitoDeLayout(() => {
-    if (jaAnimou.current) return
-    jaAnimou.current = true
-
     const querMenosMovimento = window.matchMedia(
       '(prefers-reduced-motion: reduce)',
     ).matches
-    if (querMenosMovimento || valor === 0) return
+
+    if (querMenosMovimento || valor === 0) {
+      // Sem animação, mas ainda assim escrevendo: na primeira montagem isto é
+      // o mesmo texto e o React nem re-renderiza; numa troca de recorte é o que
+      // impede o número anterior de ficar na tela.
+      setTexto(numero(valor, casas))
+      return
+    }
 
     // Antes de qualquer pintura: o zero entra aqui, não no HTML do servidor.
     setTexto(numero(0, casas))

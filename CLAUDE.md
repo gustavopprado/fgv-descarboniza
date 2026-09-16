@@ -851,6 +851,42 @@ documento.
 
 <!-- adicionar entradas abaixo -->
 
+#### 2026-09-16 — Contador congelado em zero
+
+Defeito só de navegador: os cartões de indicador exibiam zero, enquanto o
+gráfico da mesma tela mostrava o período inteiro. Conferido contra o banco antes
+de mexer — a camada de consulta devolve o valor certo com e sem ano escolhido, e
+o servidor manda esse valor no HTML. O zero aparecia depois da hidratação.
+
+**A causa era uma trava de "já animei".** Ela jogava fora justamente o número
+certo que o próprio componente tinha colocado no HTML, por dois caminhos
+independentes:
+
+- em desenvolvimento o React executa todo efeito duas vezes. A primeira zerava o
+  texto e agendava o quadro, a limpeza cancelava o quadro, e a segunda saía na
+  trava — **o número ficava em zero para sempre**, em todos os cartões de todas
+  as telas;
+- ao trocar o ano por um link o componente não remonta, então o inicializador do
+  estado não roda de novo e o efeito saía pela trava: o número exibido **não
+  acompanhava a prop nova**.
+
+Sem a trava, os dois casos se resolvem pelo mesmo caminho — o efeito recomeça a
+contagem do zero e termina no valor atual. O ramo de `prefers-reduced-motion`
+ganhou uma linha que antes não existia: ele escreve o valor atual antes de sair,
+senão a troca de recorte deixaria o número anterior na tela para quem pede menos
+movimento. A trava escondia esse caso porque nunca chegava a acontecer duas
+vezes.
+
+**Efeito colateral aceito:** o contador reanima a cada troca de recorte, e antes
+animava uma vez por montagem. Para não reanimar seria preciso distinguir "mesmo
+valor, nova montagem" de "valor novo" — e é exatamente essa distinção que
+reintroduz a chance de o número ficar parado no recorte anterior.
+
+**Sobre a validação:** `tsc`, `npm test` e `next build` passam com e sem o
+defeito, e isso está escrito no cabeçalho do arquivo. Ciclo de efeito e ordem de
+pintura só existem quando há navegador pintando — é a mesma lição de 15/09, e
+continua sem guarda automática honesta.
+
 #### 2026-09-16 — Separação entre inventário e programa de viagens
 
 **Mudança de premissa, decidida pelo Gustavo. É a maior deste documento até agora.**
