@@ -28,6 +28,39 @@ comentário de código, para mensagem de commit ou para teste.**
 
 ---
 
+## 0.1 A separação que governa tudo
+
+**Este repositório abriga dois sistemas que compartilham casca, sessão e visual, e
+nada mais.** Quem confundir os dois vai produzir número errado, e já produziu.
+
+| | **Inventário** | **Programa de viagens** |
+|---|---|---|
+| O que é | Relatório de emissões da empresa | Registro voluntário de viagem pelo colaborador |
+| Telas | Visão geral, Mobilidade, Viagens, Marítimo, Método | Registrar viagem, Emissões registradas |
+| Origem do dado | Planilha, carga controlada, fora da aplicação | Formulário, escrita pela aplicação |
+| Completude | Fonte administrativa completa do período | Adesão parcial e voluntária |
+| Coleções | `trecho`, `embarque`, `respostaMobilidade` | `viagemRegistrada` |
+
+**Os dados do programa nunca entram no inventário.** Não somam, não aparecem em
+série do inventário, não entram em indicador de inventário, não são comparados
+lado a lado. Uma consulta do inventário que leia a coleção do programa é defeito,
+não decisão de produto.
+
+**Por que a separação é obrigatória, e não preferência.** Somar uma fonte
+administrativa completa com uma autodeclaração voluntária produz série sem
+significado: a variação mede quanta gente preencheu, não quanta emissão houve.
+Uma queda seria lida como redução de emissão quando é queda de adesão. Em
+relatório que alguém assina, isso é pior que não ter o dado.
+
+**O que isso apaga da versão anterior deste documento.** O §7 dizia que agência e
+formulário eram a mesma série separadas por uma data de corte. Estava errado, e
+foi a origem da maior parte da complexidade acidental do sistema: contagem de
+trecho por fonte, marca de virada na série mensal, data de corte como parâmetro,
+declaração de fonte na tela de Método e o defeito da subtração. Nada disso tem
+razão de existir depois desta separação.
+
+---
+
 ## 1. O que este sistema é
 
 Um inventário de emissões com três módulos e um painel consolidado.
@@ -228,17 +261,26 @@ motorizado, ou vazio em modal motorizado, é erro de entrada e deve ser sinaliza
 
 ---
 
-## 7. Módulo Viagens corporativas
+## 7. Módulo Viagens corporativas (inventário)
 
-Cobre **aéreo** e **carro**, com duas fontes separadas por data.
+Cobre **aéreo** e **carro**. Faz parte do **inventário** (§0.1) e tem **duas fontes,
+ambas administrativas**:
 
-| Período | Fonte | Situação |
-|---|---|---|
-| Até a data de corte | Relatório da agência | Histórico congelado, carga única, **imutável** |
-| Até a data de corte | Planilha do cartão empresarial | Viagem que não passa pela agência |
-| A partir da data de corte | Formulário do viajante | Fonte oficial |
+| Fonte | Situação |
+|---|---|
+| Relatório da agência | Carga única, **imutável** |
+| Planilha do cartão empresarial | Viagem que não passa pela agência |
 
-**A planilha do cartão é uma terceira fonte, não um complemento da agência.** São
+**O formulário do viajante não é fonte deste módulo.** Ele alimenta o programa de
+viagens (§7.5), que tem coleção e telas próprias. Não há data de corte, não há troca de
+fonte na série, não há marca de virada: as duas fontes deste módulo são administrativas,
+cobrem o mesmo tipo de registro e convivem sem ressalva.
+
+O campo `fonte` (`agencia` | `cartao`) continua existindo, mas **por causa do escopo de
+recarga**, não para dividir a série. Regravar uma fonte não pode enxergar nem apagar a
+outra.
+
+**A planilha do cartão é uma segunda fonte administrativa, não um complemento da agência.** São
 viagens pagas no cartão empresarial, que por isso não aparecem no relatório da agência —
 foi assim que as viagens intercontinentais entraram no inventário. Ela tem escopo de recarga
 próprio (`fonte = cartao`), então regravá-la não enxerga nem apaga o que veio das outras
@@ -257,19 +299,12 @@ Três coisas dela mudam o número e ficam declaradas na tela de método:
   pessoas distintas que sustenta a supressão (§3.1). Quem não casa com o cadastro entra como
   registro próprio desta fonte, com alerta no trecho.
 
-**A data de corte ainda não está definida.** O `30/09/2026` que circulou em versões
-anteriores deste documento era exemplo, não compromisso. Enquanto a data real não for
-decidida, ela é **parâmetro de ambiente**, nunca constante no código nem literal em teste —
-o mesmo tratamento dado à coordenada da fábrica. Quem define é o Gustavo, junto com o
-anúncio do programa aos colaboradores.
+**Não existe data de corte.** O `VIAGENS_CORTE_FONTE` e tudo que dependia dele saem: a
+premissa que os justificava foi apagada pela §0.1. Variável de ambiente que ninguém lê é
+armadilha esperando alguém encontrar.
 
-**O corte é pela data do voo ou da viagem, não pela data de preenchimento nem pela data de
-lançamento da passagem.** O formulário recusa viagem com partida anterior à data de corte.
-
-Toda viagem carrega `fonte` (`agencia` | `formulario`).
-
-**Na série mensal, marcar visualmente a troca de fonte no mês da data de corte.** Nos
-primeiros meses a adesão será parcial e a emissão vai parecer cair sem ter caído.
+**O inventário agrupa pela data do voo ou da viagem, nunca pela data de lançamento da
+passagem.**
 
 ### 7.1 Base histórica
 
@@ -305,7 +340,19 @@ de distância. Os valores vêm do JSON da base, carregados para a coleção `fat
 Na base de origem, quem aprovou a passagem às vezes é a agência e às vezes o próprio
 passageiro. **Para emissão, o que vale é quem viajou, não quem aprovou.**
 
-### 7.3 Formulário de viagens
+### 7.5 Programa de viagens (não é inventário)
+
+**Sistema separado, sob as mesmas casca, sessão e paleta.** Vale tudo o que a §0.1 diz:
+coleção própria (`viagemRegistrada`), telas próprias, e **nenhum dado daqui entra em
+consulta, indicador, série ou mapa do inventário**.
+
+O objetivo é centralizar num lugar só a informação de deslocamento que hoje não está em
+sistema nenhum, e dar ao colaborador o retorno imediato da própria emissão. Não é fonte
+de relatório: é adesão voluntária, e tratar adesão como medição produz série que mede
+preenchimento, não emissão.
+
+O cálculo reaproveita os mesmos fatores e as mesmas funções de emissão do inventário —
+o que não se compartilha é o **dado**, não a matemática.
 
 Quem viajou preenche. **Não há fluxo de aprovação** — se a viagem aconteceu, já foi aprovada
 antes. O viajante vê apenas as próprias submissões e pode editar enquanto o período não for
@@ -622,11 +669,17 @@ provedor de geocodificação e de roteamento (§7.4), base de data escolhida no 
 mobilidade (§6.2), repetição do valor anual da mobilidade nos doze meses (§9.5), fatores
 com fonte e vigência, e a lista de exceções com motivo.
 
-**Programa de viagens**
+**Programa de viagens** — sistema separado (§0.1, §7.5). Estas duas telas leem
+`viagemRegistrada` e **nenhuma coleção do inventário**; as cinco de cima leem o inventário
+e **nunca** `viagemRegistrada`.
 
 6. **Registrar viagem** — formulário, com resultado imediato da emissão.
 7. **Emissões registradas** — registradas no período, emissão acumulada, cobertura, últimas
    viagens, participação de avião e carro.
+
+**Nenhuma tela mistura as duas origens**, nem lado a lado, nem como comparação, nem como
+total somado. Se um dia alguém quiser os dois números na mesma página, isso é decisão nova
+e exige rediscutir a §0.1 — não é ajuste de tela.
 
 Comportamento visual, animações e detalhe de layout: seguir o protótipo.
 
@@ -752,8 +805,8 @@ Coisas que provavelmente vão acontecer, mas não agora.
   (§9.10), não como registro ausente.
 - **Fatores da mobilidade** não vêm de nenhuma base do inventário: são escolha
   metodológica de quem assina o relatório e entram por arquivo próprio.
-- **Data de corte entre agência e formulário** (§7) — ainda não decidida. Depende do
-  anúncio do programa aos colaboradores, não do código.
+- **A data de corte deixou de existir** (§0.1, §7). Agência e formulário não são a mesma
+  série, então não há o que cortar.
 - **Módulo marítimo não começou.** É o que falta para o painel consolidado deixar de ser
   parcial.
 - **Chaves do Google separadas por função e por destino** (§11.8). Já estão separadas por
@@ -768,10 +821,20 @@ Coisas que provavelmente vão acontecer, mas não agora.
   método declara a configuração **atual** do ambiente, e não necessariamente a que produziu
   a carga que está no banco. Enquanto a carga for manual e rara, a diferença é teórica;
   quando deixar de ser, o caminho é carimbar o provedor junto do fator.
-- **Das sete telas da §10, só a de Método existe**, junto da entrada e da casca de
-  navegação. Faltam Visão geral, Mobilidade, Viagens, Marítimo e as duas do programa de
-  viagens. A Visão geral fica por último de propósito: enquanto o marítimo não existir, ela
-  mostraria dois terços do inventário como se fosse o total.
+- **Das sete telas da §10, três existem**: Método, Mobilidade e Viagens, junto da entrada
+  e da casca de navegação. Faltam Visão geral, Marítimo e as duas do programa de viagens. A
+  Visão geral fica por último de propósito: enquanto o marítimo não existir, ela mostraria
+  dois terços do inventário como se fosse o total.
+- **A tela de Viagens tem defeito aberto.** Com "Todos os anos" selecionado os três cartões
+  de indicador vêm zerados enquanto o gráfico da mesma tela soma o período inteiro; o
+  terceiro cartão duplica o segundo em outra unidade; e o mapa continua desenhando rota
+  par-a-par em vez de corredor por região.
+- **O denominador da cobertura do programa não está definido.** Hoje seria o total da
+  coleção de funcionários, que inclui gente que só aparece como aprovador de passagem.
+  Indicador com denominador errado é pior que indicador ausente, porque parece funcionar.
+- **Rotação da chave da service account** — pendente desde 14/09, depois de a credencial ter
+  ido parar no `.env.example` duas vezes. Operação, não código: rotacionar, atualizar as
+  variáveis na Vercel, redeploy, e só então apagar a chave antiga.
 
 ---
 
@@ -787,6 +850,30 @@ documento.
 ### Histórico
 
 <!-- adicionar entradas abaixo -->
+
+#### 2026-09-16 — Separação entre inventário e programa de viagens
+
+**Mudança de premissa, decidida pelo Gustavo. É a maior deste documento até agora.**
+
+O §7 dizia, desde a primeira versão, que o relatório da agência e o formulário do
+viajante eram a mesma série, separadas por uma data de corte. **Está errado, e nunca foi
+o que se queria.** São dois sistemas: um inventário alimentado por planilha e um programa
+de registro voluntário, que compartilham casca, sessão e visual, e nada além disso.
+
+**Por que importa.** Somar fonte administrativa completa com autodeclaração voluntária
+produz série que mede adesão, não emissão. Uma queda seria lida como redução de emissão
+quando é queda de preenchimento — num relatório que alguém assina.
+
+**O que essa premissa errada tinha gerado.** Contagem de trecho por fonte na série, marca
+de virada no gráfico mensal, data de corte como parâmetro de ambiente, declaração de
+origem por fonte na tela de Método, e o defeito da subtração encontrado na varredura —
+"trechos do formulário" calculado como total menos agência. Toda essa complexidade era
+acidental: existia só para sustentar uma junção que não devia acontecer.
+
+A §0.1 passou a abrir o documento, porque é a regra da qual as outras dependem. O §7 foi
+reescrito com duas fontes administrativas e sem corte. O formulário virou §7.5 e está
+declarado como sistema separado. O §10 diz qual tela lê qual coleção.
+
 
 #### 2026-09-14 — Fundação e carga de viagens
 
@@ -845,7 +932,7 @@ Etapa de fundação e dados. Nenhuma tela construída.
 - **Vigência do fator é informada na carga**, por variável de ambiente ou
   argumento. Sem vigência o script recusa a carga em vez de escolher uma data.
 - **O escopo do aéreo é gravado como 3** e o resolvido do carro sai de
-  `propriedade_veiculo`, conforme §7.3.
+  `propriedade_veiculo`, conforme §7.5.
 - **Alerta de fonte sobreposta.** A carga marca a viagem cujo voo cai em
   `VIAGENS_CORTE_FONTE` ou depois — período em que a fonte oficial já é o
   formulário.
@@ -986,7 +1073,7 @@ estão: são registro do que foi feito, não especificação vigente. A especifi
 - §5: cinco papéis mantidos. Nova §5.1 fixa o `colaborador` como papel de menor
   privilégio, com escopo fechado — cria e lê só o próprio, não acessa painel, e a
   verificação é o filtro por uid na consulta.
-- §7.3: formulário do colaborador reduzido ao mínimo que calcula emissão. Saiu o
+- §7.5: formulário do colaborador reduzido ao mínimo que calcula emissão. Saiu o
   campo de motivo; ficam os três campos do carro, que entram na conta.
 - §9: reescrita inteira. Coleções, envelope comum, IDs determinísticos, alertas em
   dois campos, validação na escrita e camada única de consulta agregada.
@@ -1923,7 +2010,7 @@ encontrados, e nenhum foi seguido:
   distância, bairro e cidade — e um ponto com raio e ângulo reais é um localizador quase
   único, o que a §3.1 proíbe justamente por permitir isolar um indivíduo. O radar
   construído usa ângulo sem significado, declarado na legenda.
-- **Campo de motivo da viagem no formulário.** A §7.3 pede o mínimo que calcula emissão e
+- **Campo de motivo da viagem no formulário.** A §7.5 pede o mínimo que calcula emissão e
   diz explicitamente para não pedir justificativa; o campo já havia sido retirado na
   migração.
 - **Métricas fora da lista da §10.** O protótipo tem cartões de "viagem mais longa" e
@@ -2412,4 +2499,3 @@ não existiria.
 - Os testes novos cobrem a classificação pelos dois critérios, a precedência do `uf` sobre
   a coordenada, coordenada fora de todas as faixas, e o corredor sem direção — ida e volta
   precisam ser o mesmo recorte, senão a supressão contaria cada sentido separado.
-
