@@ -43,13 +43,29 @@ import {
   emiteZero,
 } from '../src/lib/calculo/mobilidade'
 import { lerCartao } from '../src/lib/cartao'
-import { anoBaseViagens } from '../src/lib/env'
+import {
+  anoBaseViagens,
+  maritimoAmostraMinimaCorredor,
+  maritimoLimiarAtipico,
+  maritimoLimiarImpossivel,
+} from '../src/lib/env'
 import { chaveNormalizada } from '../src/lib/texto'
 import { anoDe } from '../src/server/documentos/tipos'
-import type { DocMobilidade, DocViagemTrecho } from '../src/server/documentos/tipos'
+import type {
+  DocEmbarque,
+  DocMobilidade,
+  DocPorto,
+  DocViagemTrecho,
+} from '../src/server/documentos/tipos'
+import { MOTIVO_DO_ALERTA } from '../src/server/consultas/metodo'
 import { carregarFatores } from '../src/server/fatores'
 import { COLECAO } from '../src/server/firestore'
 import { lerPlanilha } from './ingest-cartao'
+import {
+  lerRelatorioDoArquivo,
+  montarEmbarques,
+  type Parametros,
+} from './ingest-maritimo'
 import {
   caminhoDaBase,
   conectarFirestore,
@@ -638,6 +654,260 @@ async function conferirCoberturaDasFontes(
   )
 }
 
+/* ---------------------------------------------------------------- marítimo */
+
+/**
+ * Conferência de **cobertura do módulo marítimo** — §8.4.
+ *
+ * Ela entra na mesma leva do script de ingestão, nunca depois. A pergunta é
+ * *"chegou tudo?"*, que coerência e plausibilidade não fazem — e é a única que
+ * pega uma fonte inteira ficando de fora. Custou duas vezes neste projeto, e na
+ * segunda só apareceu porque alguém notou por acaso (§14).
+ *
+ * **A contagem é por bloco de origem, nunca contra o arquivo inteiro.** Comparar
+ * total de coleção com total de uma fonte é a premissa de fonte única
+ * disfarçada de conferência, e já foi encontrada exatamente nessa forma.
+ *
+ * A identidade que ela prende é: **linhas úteis na origem = documentos no banco
+ * + recusas declaradas.** Sem o segundo termo, um descarte silencioso passaria
+ * por cobertura correta; com ele, um embarque que sumiu na leitura falha.
+ */
+async function conferirMaritimo(db: Firestore): Promise<number> {
+  const inteiro = { tolerancia: 0, casas: 0 }
+  const conferencias: Conferencia[] = []
+  let falhas = 0
+
+  tituloDaEtapa('Conferência — cobertura do marítimo')
+
+  const noBanco = (
+    await db
+      .collection(COLECAO.embarque)
+      .select('bloco', 'agente', 'nivelDado', 'etd', 'mes')
+      .get()
+  ).docs.map((d) => d.data() as EmbarqueConferido)
+
+  const caminho = caminhoDaBase(undefined, 'BASE_MARITIMO_PATH', 'dados/relatorio-maritimo.xlsx')
+  if (!existsSync(caminho)) {
+    console.log(
+      `  arquivo de origem não encontrado; ${noBanco.length} embarque(s) no banco não ` +
+        'puderam ser conferidos.',
+    )
+    return conferirIntegridadeMaritima(noBanco, conferencias, inteiro, falhas)
+  }
+
+  let parametros: Parametros
+  try {
+    parametros = {
+      limiarAtipico: maritimoLimiarAtipico(),
+      limiarImpossivel: maritimoLimiarImpossivel(),
+      amostraMinimaDoCorredor: maritimoAmostraMinimaCorredor(),
+    }
+  } catch (erro) {
+    // Sem os limiares não dá para reproduzir quais linhas foram recusadas, e sem
+    // isso a identidade da cobertura não fecha. Com o banco vazio isso é só uma
+    // nota; com embarques dentro, é exatamente o ponto cego que esta conferência
+    // existe para não ter.
+    const motivo = erro instanceof Error ? erro.message : String(erro)
+    console.log(`  parâmetros do módulo ausentes: ${motivo}`)
+    if (noBanco.length > 0) {
+      console.log(
+        `  FALHA ${noBanco.length} embarque(s) no banco e nenhuma conferência possível.`,
+      )
+      return falhas + 1
+    }
+    return falhas
+  }
+
+  const portosLidos = await db.collection(COLECAO.porto).get()
+  const portos = new Map<string, DocPorto>(
+    portosLidos.docs.map((d) => [d.id, d.data() as DocPorto]),
+  )
+
+  const montagem = montarEmbarques(await lerRelatorioDoArquivo(caminho), portos, parametros)
+
+  console.log('  Blocos conferidos; um bloco que não esteja nesta lista não é visto por')
+  console.log('  conferência nenhuma. O escopo é a aba de origem, nunca o ano (§8.4).')
+
+  const conhecidos = new Set(montagem.blocos.map((b) => b.bloco))
+  for (const bloco of montagem.blocos) {
+    const doBanco = noBanco.filter((d) => d.bloco === bloco.bloco).length
+    const recusadas = montagem.recusas.filter((r) => r.bloco === bloco.bloco).length
+    conferencias.push({
+      item: `bloco ${bloco.bloco}`,
+      esperado: bloco.embarques.length,
+      obtido: doBanco + recusadas,
+      origem: 'origem × banco + recusas',
+      ...inteiro,
+    })
+    if (recusadas > 0) {
+      console.log(
+        `  ${bloco.bloco}: ${recusadas} linha(s) recusada(s) e declarada(s); elas não ` +
+          'estão no banco de propósito (§8.1.1).',
+      )
+    }
+  }
+
+  // Bloco gravado no banco que ninguém confere é o mesmo ponto cego do outro
+  // lado: dado que entrou e não tem quem o confronte com a origem.
+  for (const bloco of new Set(noBanco.map((d) => d.bloco))) {
+    if (!conhecidos.has(bloco)) {
+      console.log(
+        `  ATENÇÃO: há embarques do bloco "${bloco}" no banco, e o arquivo de origem ` +
+          'não o contém mais.',
+      )
+    }
+  }
+
+  /**
+   * **Bloco de agente conhecido e ausente é conferido, não é nota de rodapé.**
+   *
+   * Um agente que não entrega detalhe linha a linha fica inteiro fora do
+   * inventário. Tratá-lo como as abas de template — uma linha de texto entre
+   * outras — é exatamente o silêncio que esta conferência existe para impedir:
+   * fonte inteira faltando parece, no relatório, igual a lixo do sistema de
+   * origem.
+   *
+   * Ela **não falha**, e isso é decisão: o que falta não é corrigível por
+   * código, é detalhe a pedir à origem (§13). Conferência que reprova o que
+   * ninguém pode consertar vira ruído que se aprende a ignorar. O que ela prende
+   * é o outro lado — documento no banco de um bloco que hoje não tem detalhe —,
+   * e esse sim é defeito.
+   */
+  if (montagem.semDetalhe.length > 0) {
+    console.log(
+      `  ${montagem.semDetalhe.length} bloco(s) de agente SEM detalhe linha a linha. O ` +
+        'volume deles não está no total: é ausência de FONTE, não de qualidade (§8.2), e a',
+    )
+    console.log(
+      '  saída é pedir detalhe por embarque à origem — os totais da aba de resumo não ' +
+        'servem, porque a conta de lá é circular (§8.1).',
+    )
+    for (const bloco of montagem.semDetalhe) {
+      conferencias.push({
+        item: `bloco ${bloco} sem detalhe — documentos no banco`,
+        esperado: 0,
+        obtido: noBanco.filter((d) => d.bloco === bloco).length,
+        origem: 'fonte ausente',
+        ...inteiro,
+      })
+    }
+  }
+  if (montagem.ignoradas.length > 0) {
+    console.log(
+      `  Abas ignoradas, sem forma de detalhe nem nome de bloco: ` +
+        `${montagem.ignoradas.join(', ')}.`,
+    )
+  }
+  console.log(`  O arquivo enxerga o que aconteceu até ${montagem.referencia ?? '—'} (§8.3).`)
+
+  const porNivel = new Map<string, number>()
+  for (const d of noBanco) porNivel.set(d.nivelDado, (porNivel.get(d.nivelDado) ?? 0) + 1)
+  console.log(
+    `  Qualidade do dado no banco: ${[...porNivel].map(([k, v]) => `${k} ${v}`).join(', ') || '—'}`,
+  )
+
+  for (const c of conferencias) {
+    if (Math.abs(c.obtido - c.esperado) > c.tolerancia) falhas++
+    console.log(linhaDeConferencia(c))
+  }
+  conferencias.length = 0
+
+  return conferirIntegridadeMaritima(noBanco, conferencias, inteiro, falhas)
+}
+
+type EmbarqueConferido = Pick<DocEmbarque, 'bloco' | 'agente' | 'nivelDado' | 'etd' | 'mes'>
+
+/**
+ * Integridade do que está no banco, independente da origem.
+ *
+ * Vale para **todos os embarques, de qualquer bloco** — a lição de que
+ * integridade conferida em parte da coleção não é integridade (§14).
+ */
+function conferirIntegridadeMaritima(
+  noBanco: EmbarqueConferido[],
+  conferencias: Conferencia[],
+  inteiro: { tolerancia: number; casas: number },
+  falhas: number,
+): number {
+  const niveis = new Set(['medido', 'estimado_corredor', 'estimado_media', 'estimado_peso'])
+
+  conferencias.push({
+    item: 'embarques com nível de dado inválido',
+    esperado: 0,
+    obtido: noBanco.filter((d) => !niveis.has(d.nivelDado)).length,
+    origem: 'integridade',
+    ...inteiro,
+  })
+
+  // Mês desnormalizado que não bate com a data de referência faz o corte por
+  // período mentir sem nenhum sinal (§9.9).
+  conferencias.push({
+    item: 'mês ≠ mês do ETD',
+    esperado: 0,
+    obtido: noBanco.filter((d) => d.etd === null || d.mes !== d.etd.slice(0, 7)).length,
+    origem: 'integridade',
+    ...inteiro,
+  })
+
+  conferencias.push({
+    item: 'embarques sem bloco de origem',
+    esperado: 0,
+    obtido: noBanco.filter((d) => !d.bloco).length,
+    origem: 'integridade',
+    ...inteiro,
+  })
+
+  let total = falhas
+  for (const c of conferencias) {
+    if (Math.abs(c.obtido - c.esperado) > c.tolerancia) total++
+    console.log(linhaDeConferencia(c))
+  }
+  return total
+}
+
+/**
+ * **Todo alerta que está no banco tem motivo escrito na tela de método.**
+ *
+ * A guarda estática varre o código-fonte e pega o código escrito lá. Esta varre
+ * o **banco**, e é a que de fato morde: quatro alertas chegaram à tela sem
+ * explicação porque moravam como chave de um `Record` de severidade, e a
+ * varredura do fonte não os via. O código deles existia, a carga os gravava, e a
+ * tela dizia deles o que diz de um alerta desconhecido.
+ *
+ * É a mesma família da cobertura (§8.4): coerência responde "a conta fecha?", e
+ * esta responde "chegou tudo?" — aqui, chegou explicação para tudo que o banco
+ * guarda. Alerta que ninguém entende é alerta que se aprende a ignorar.
+ */
+async function conferirMotivosDosAlertas(
+  db: Firestore,
+  conferencias: Conferencia[],
+): Promise<void> {
+  const codigos = new Set<string>()
+  for (const nome of [COLECAO.mobilidade, COLECAO.viagemTrecho, COLECAO.embarque]) {
+    for (const doc of (await db.collection(nome).get()).docs) {
+      for (const codigo of (doc.data() as { alertasCodigos?: string[] }).alertasCodigos ??
+        []) {
+        codigos.add(codigo)
+      }
+    }
+  }
+
+  const semMotivo = [...codigos].filter((c) => !(c in MOTIVO_DO_ALERTA)).sort()
+  if (semMotivo.length > 0) {
+    console.log(
+      `  alertas no banco sem motivo declarado na tela de método: ${semMotivo.join(', ')}`,
+    )
+  }
+  conferencias.push({
+    item: 'alertas no banco sem motivo na tela de método',
+    esperado: 0,
+    obtido: semMotivo.length,
+    origem: 'auditoria',
+    tolerancia: 0,
+    casas: 0,
+  })
+}
+
 async function principal(): Promise<void> {
   const caminho = caminhoDaBase(
     argumentoPosicional(),
@@ -833,6 +1103,8 @@ async function principal(): Promise<void> {
       ...inteiro,
     })
 
+    await conferirMotivosDosAlertas(db, conferencias)
+
     await conferirCoberturaDasFontes(db, conferencias)
 
     tituloDaEtapa('Conferência — viagens (agência)')
@@ -878,6 +1150,10 @@ async function principal(): Promise<void> {
     /* ------------------------------------------------------- mobilidade */
 
     falhas += await conferirMobilidade(db, tol)
+
+    /* --------------------------------------------------------- marítimo */
+
+    falhas += await conferirMaritimo(db)
 
     /* ------------------------------------------------------------ veredito */
 

@@ -84,6 +84,8 @@ export const COLECAO = {
   containerPortoMes: 'containerPortoMes',
   fatorEmissao: 'fatorEmissao',
   aeroporto: 'aeroporto',
+  /** Portos, pelo código UN/LOCODE. Cadastro de apoio do módulo marítimo. */
+  porto: 'porto',
   municipio: 'municipio',
   rotaCache: 'rotaCache',
   usuarioPerfil: 'usuarioPerfil',

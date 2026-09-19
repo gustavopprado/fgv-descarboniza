@@ -31,7 +31,15 @@ export type ItemDeNavegacao = {
  * As telas já construídas. Enquanto uma tela não está aqui, ela aparece no menu
  * desabilitada — o mapa do sistema fica visível sem prometer link que não abre.
  */
-const CONSTRUIDAS: ReadonlySet<string> = new Set(['/mobilidade', '/viagens', '/metodo'])
+const CONSTRUIDAS: ReadonlySet<string> = new Set([
+  '/mobilidade',
+  '/viagens',
+  '/maritimo',
+  '/metodo',
+  '/programa/registrar',
+  '/programa/emissoes',
+  '/programa/minhas-viagens',
+])
 
 function item(
   rotulo: string,

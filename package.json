@@ -12,12 +12,15 @@
     "rules:deploy": "tsx scripts/rules-deploy.ts",
     "perfil": "tsx scripts/definir-perfil.ts",
     "gerar:contorno": "tsx scripts/gerar-contorno.ts",
+    "gerar:municipios": "tsx scripts/gerar-municipios.ts",
     "seed:fatores": "tsx scripts/seed-fatores.ts",
     "seed:fatores-mobilidade": "tsx scripts/seed-fatores-mobilidade.ts",
     "seed:aeroportos": "tsx scripts/seed-aeroportos.ts",
+    "seed:portos": "tsx scripts/seed-portos.ts",
     "ingest:viagens": "tsx scripts/ingest-viagens.ts",
     "ingest:mobilidade": "tsx scripts/ingest-mobilidade.ts",
     "ingest:cartao": "tsx scripts/ingest-cartao.ts",
+    "ingest:maritimo": "tsx scripts/ingest-maritimo.ts",
     "verificar": "tsx scripts/verificar.ts"
   },
   "dependencies": {

@@ -145,6 +145,53 @@ h3 {
   animation: desenhar 1.6s var(--ease-suave) both;
 }
 
+/* O navio percorrendo o corredor — CLAUDE.md §10.4.
+
+   **Aqui o movimento carrega dado, e é essa a diferença para a varredura do
+   radar.** Importação tem sentido: a carga sai de um porto e chega no outro, e
+   isso é fato do embarque, não acidente de desenho. O ponto que percorre a
+   linha encena exatamente esse sentido.
+
+   O que ele NÃO encena, de propósito:
+
+   - **velocidade não é duração de viagem.** Todo corredor leva o mesmo tempo
+     aqui. O protótipo derivava a duração da ordem da linha, que é ordenada por
+     emissão — um canal a mais dizendo algo que o dado não diz. Tempo de
+     travessia existe no documento e não é o assunto desta tela;
+   - **a linha não é a derrota do navio.** O arco é geometria entre dois pontos,
+     como a legenda declara; um ponto que percorre um arco por cima de um
+     continente não vira rota náutica por andar.
+
+   E ele **passa uma vez e some**, em vez de repetir para sempre: repetição
+   sugere tráfego acontecendo agora, e o que está na tela é um período fechado.
+   Some chegando — a opacidade cai no fim do trajeto, então ele se dissolve no
+   ponto do porto em vez de virar uma sujeira parada em cima dele.
+
+   É animação de CSS, não SMIL: `animateMotion` ignoraria o bloco de movimento
+   reduzido logo abaixo, que é o que zera duração e atraso de tudo. */
+@keyframes navegar {
+  from {
+    offset-distance: 0%;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  to {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+
+.navegar {
+  offset-path: var(--rota);
+  offset-rotate: 0deg;
+  animation: navegar 1.6s var(--ease-suave) both;
+}
+
 /* Varredura do radar.
 
    Uma volta só, e some. A cunha gira e os pontos vão aparecendo no instante em
@@ -202,7 +249,82 @@ h3 {
   .crescer,
   .surgir,
   .desenhar,
+  .navegar,
   .varrer {
     animation-duration: 0.001ms !important;
+  }
+}
+
+/* Tabela que vira lista no celular — CLAUDE.md §10.
+
+   **No celular nada rola de lado.** Cinco colunas não cabem em 308px úteis: a
+   tentativa anterior foi deixar a tabela rolar dentro do painel, e o efeito foi
+   que as duas colunas que mais importam — período e emissão — nasciam fora da
+   tela. Numa tabela de emissão, esconder a emissão por padrão é o pior corte
+   possível, e exigir arrasto para chegar nela é pior ainda.
+
+   Aqui a tabela deixa de ser tabela: cada linha vira um bloco, e cada célula
+   vira um par rótulo–valor. **Nada é escondido** — o que era coluna passa a ser
+   linha, e o rótulo da coluna acompanha o valor, vindo de `data-rotulo`. Célula
+   sem rótulo declarado (a primeira, que é o nome da linha) fica sozinha, em
+   destaque, como cabeçalho do bloco. */
+@media (max-width: 639px) {
+  .tabela-empilha,
+  .tabela-empilha tbody,
+  .tabela-empilha tr {
+    display: block;
+    width: 100%;
+  }
+
+  .tabela-empilha thead {
+    display: none;
+  }
+
+  .tabela-empilha tr {
+    border-bottom: 1px solid var(--color-linha);
+    padding: 10px 0;
+  }
+
+  .tabela-empilha tr:last-child {
+    border-bottom: 0;
+  }
+
+  .tabela-empilha td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    border: 0;
+    padding: 2px 0;
+    text-align: left;
+  }
+
+  /* O rótulo da coluna vem junto do valor, porque o cabeçalho sumiu. */
+  .tabela-empilha td[data-rotulo]::before {
+    content: attr(data-rotulo);
+    color: var(--color-apoio);
+    font-size: 11.5px;
+    flex: none;
+  }
+
+  /* A primeira célula é o nome da linha: ocupa o bloco inteiro, sem rótulo. */
+  .tabela-empilha td:first-child {
+    display: block;
+    padding-bottom: 6px;
+    font-weight: 500;
+  }
+}
+
+/* O mínimo do `Rolavel` só a partir de `sm`.
+
+   Abaixo disso ele é zero e nada rola de lado: no celular, quem se adapta é o
+   conteúdo, não o leitor. Ver o comentário da peça em `componentes.tsx`. */
+.rolavel > * {
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .rolavel > * {
+    min-width: var(--minimo, 0);
   }
 }

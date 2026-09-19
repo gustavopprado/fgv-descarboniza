@@ -25,6 +25,7 @@ import type {
   DocEmbarque,
   DocFatorEmissao,
   DocMobilidade,
+  DocPorto,
   DocViagemRegistrada,
   DocViagemTrecho,
 } from './tipos'
@@ -34,6 +35,7 @@ import {
   validarEmbarque,
   validarFatorEmissao,
   validarMobilidade,
+  validarPorto,
   validarViagemRegistrada,
   validarViagemTrecho,
 } from './validacao'
@@ -439,23 +441,29 @@ function embarque(): DocEmbarque {
     ...montarAlertas([]),
     atualizadoEm: '2031-06-01',
     agente: 'Agente Fictício',
+    bloco: 'FICT_2031',
     shipmentId: 'SHP-FICT-0001',
     houseRef: null,
     trans: null,
     mode: null,
-    portoOrigem: 'Porto Fictício A',
-    portoDestino: 'Porto Fictício B',
+    portoOrigem: 'XXAAA',
+    portoDestino: 'XXBBB',
+    portoOrigemNome: 'Porto Fictício A',
+    portoDestinoNome: 'Porto Fictício B',
     navioPartida: null,
     navioTransbordo: null,
     etd: '2031-05-04',
     eta: '2031-06-20',
     atd: null,
     ata: null,
+    ataFinal: null,
     pesoKg: 1000,
     volumeM3: 10,
     containers: 1,
-    co2Kg: 0,
+    containersFonte: 'coluna',
+    co2Kg: 2000,
     nivelDado: 'medido',
+    baseDaEstimativa: null,
     status: null,
     previsao: false,
   }
@@ -470,11 +478,93 @@ test('embarque válido passa, inclusive com carga aérea de fornecedor', () => {
 test('embarque recusa identificador vazio e número negativo', () => {
   recusa(() => validarEmbarque('x', { ...embarque(), shipmentId: '' }))
   recusa(() => validarEmbarque('x', { ...embarque(), agente: '' }))
+  recusa(() => validarEmbarque('x', { ...embarque(), bloco: '' }))
   recusa(() => validarEmbarque('x', { ...embarque(), containers: -1 }))
   recusa(() => validarEmbarque('x', { ...embarque(), etd: '2031-05-32' }))
   recusa(() =>
     validarEmbarque('x', { ...embarque(), modal: 'terrestre' } as unknown as DocEmbarque),
   )
+})
+
+test('embarque medido tem emissão sem fator, e é o único que pode', () => {
+  // O número é do agente, não de fator × atividade (§8.1). Nas outras coleções
+  // fator nulo com emissão não-zero é recusado, e continua sendo.
+  validarEmbarque('x', embarque())
+  recusa(() => validarEmbarque('x', { ...embarque(), fator: fatorDaMedia() }))
+  recusa(() => validarEmbarque('x', { ...embarque(), baseDaEstimativa: 3 }))
+})
+
+test('embarque estimado precisa carimbar a média e o tamanho da amostra', () => {
+  // Sem os dois, a estimativa não é reproduzível a partir do documento: a mesma
+  // média recalculada sobre base maior daria outro número (§8.2, §9.1).
+  const estimado = {
+    ...embarque(),
+    nivelDado: 'estimado_corredor' as const,
+    fator: fatorDaMedia(),
+    baseDaEstimativa: 4,
+  }
+  validarEmbarque('x', estimado)
+  recusa(() => validarEmbarque('x', { ...estimado, fator: null }))
+  recusa(() => validarEmbarque('x', { ...estimado, baseDaEstimativa: null }))
+  recusa(() => validarEmbarque('x', { ...estimado, baseDaEstimativa: 0 }))
+})
+
+test('contagem de contêineres não entra sem dizer de onde veio', () => {
+  recusa(() => validarEmbarque('x', { ...embarque(), containersFonte: null }))
+  // Sem contagem nenhuma, não há procedência a declarar.
+  validarEmbarque('x', { ...embarque(), containers: null, containersFonte: null })
+})
+
+test('ano e mês do embarque batem com a data de partida prevista', () => {
+  // Campo de filtro desnormalizado que não bate com o dado faz o corte por
+  // período mentir sem nenhum sinal (§9.9).
+  recusa(() => validarEmbarque('x', { ...embarque(), mes: '2031-04' }))
+  recusa(() => validarEmbarque('x', { ...embarque(), ano: 2030, mes: '2030-05' }))
+})
+
+function fatorDaMedia(): DocEmbarque['fator'] {
+  return {
+    categoria: 'maritimo_media_corredor',
+    chave: 'XXAAA-XXBBB',
+    versao: 'FICT_2031',
+    valor: 1500,
+    unidade: 'kg CO2e/contêiner',
+    vigenciaInicio: '2031-06-01',
+  }
+}
+
+/* ------------------------------------------------------------------ portos */
+
+function porto(): DocPorto {
+  return {
+    locode: 'XXAAA',
+    nome: 'Porto Fictício A',
+    pais: 'XX',
+    subdivisao: null,
+    latitude: -25.5,
+    longitude: -48.5,
+    funcao: '1-------',
+    ehPorto: true,
+    fonte: 'lista fictícia 2031-1',
+  }
+}
+
+test('porto exige código, nome e procedência', () => {
+  validarPorto('XXAAA', porto())
+  recusa(() => validarPorto('x', { ...porto(), locode: 'XX' }))
+  recusa(() => validarPorto('x', { ...porto(), nome: '' }))
+  recusa(() => validarPorto('x', { ...porto(), fonte: '' }))
+})
+
+test('porto aceita coordenada ausente, mas não pela metade', () => {
+  // Parte dos registros da lista oficial não traz coordenada, e o porto entra
+  // assim mesmo. O que não pode é um lado nulo e o outro preenchido: isso
+  // desenharia o ponto sobre o equador ou sobre o meridiano — plausível e errado.
+  validarPorto('x', { ...porto(), latitude: null, longitude: null })
+  recusa(() => validarPorto('x', { ...porto(), latitude: null }))
+  recusa(() => validarPorto('x', { ...porto(), longitude: null }))
+  recusa(() => validarPorto('x', { ...porto(), latitude: 91 }))
+  recusa(() => validarPorto('x', { ...porto(), longitude: -181 }))
 })
 
 /* --------------------------------------------------------------- fatores */

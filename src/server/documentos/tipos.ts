@@ -257,23 +257,64 @@ export type DocEmbarque = EnvelopeEmissao & {
   modulo: 'maritimo'
   periodicidade: 'evento'
   agente: string
+  /**
+   * Bloco de origem — a aba do relatório de onde o embarque veio.
+   *
+   * **É o escopo de recarga** (§8.4), e não o ano: um bloco atravessa a virada
+   * do ano, então dois blocos do mesmo agente contêm documentos do mesmo ano.
+   * Com o ano no escopo, recarregar um bloco apagaria os documentos do outro que
+   * caíssem naquele ano.
+   */
+  bloco: string
   shipmentId: string
   houseRef: string | null
   trans: string | null
   mode: string | null
+  /** Código UN/LOCODE, que é o que liga o embarque ao cadastro de portos. */
   portoOrigem: string | null
   portoDestino: string | null
+  /**
+   * O nome do lugar como o relatório o trouxe.
+   *
+   * Viaja ao lado do código porque os dois às vezes discordam — em embarque
+   * aéreo e em transbordo, o código é o ponto de carregamento e o nome é a
+   * origem real. Guardar os dois é o que permite sinalizar o desacordo em vez de
+   * escolher um em silêncio.
+   */
+  portoOrigemNome: string | null
+  portoDestinoNome: string | null
   navioPartida: string | null
   navioTransbordo: string | null
   etd: DataIso | null
   eta: DataIso | null
   atd: DataIso | null
   ata: DataIso | null
+  /**
+   * Chegada efetiva ao último desembarque.
+   *
+   * Existe no documento porque é **a única prova de fato que o frete aéreo
+   * tem** — as colunas de navio nunca são preenchidas nesse modal. Sem ela
+   * gravada, `previsao` não seria reproduzível a partir do documento: quem
+   * conferisse depois veria um embarque aéreo sem partida efetiva e não teria
+   * como saber por que ele não foi tratado como previsão (§8.3).
+   */
+  ataFinal: DataIso | null
   pesoKg: number | null
   volumeM3: number | null
   containers: number | null
+  /** De onde saiu a contagem: a coluna numérica ou o texto de tipo (§8.3). */
+  containersFonte: 'coluna' | 'tipo' | null
   co2Kg: number
   nivelDado: NivelDado
+  /**
+   * Quantos embarques medidos entraram na média carimbada em `fator`.
+   *
+   * Nulo em `medido`, onde não há média. Nos níveis estimados ele é o que torna
+   * a conta **reproduzível a partir do documento**: a mesma média recalculada
+   * depois, sobre uma base maior, daria outro número, e sem este campo o
+   * documento não teria como dizer qual valia (§8.2).
+   */
+  baseDaEstimativa: number | null
   status: string | null
   previsao: boolean
 }
@@ -323,6 +364,43 @@ export type DocAeroporto = {
    * diz de qual metade da classificação se deve desconfiar.
    */
   regiaoCriterio: 'uf' | 'coordenada' | 'indefinida' | null
+}
+
+/**
+ * Um porto ou ponto de carregamento, identificado pelo código UN/LOCODE.
+ *
+ * O cadastro existe porque o mapa do módulo marítimo precisa de coordenada e o
+ * relatório do agente não traz nenhuma — ele traz o código. A resolução vem da
+ * lista oficial UN/LOCODE, carregada por seed, e não de geocodificação do nome:
+ * o nome no relatório é texto livre, com nome de aeroporto, nome composto e nome
+ * entre parênteses, e geocodificar texto assim põe o ponto no lugar errado sem
+ * nenhum erro aparecer.
+ *
+ * `latitude` e `longitude` podem ser nulas: parte dos registros da lista oficial
+ * não traz coordenada. O porto entra no cadastro assim mesmo — ausência de
+ * coordenada é fato a declarar, e o embarque que depende dela fica fora do mapa
+ * com a proporção anunciada, não some.
+ */
+export type DocPorto = {
+  /** Cinco letras: país e local, como a lista publica. */
+  locode: string
+  nome: string
+  pais: string
+  subdivisao: string | null
+  latitude: number | null
+  longitude: number | null
+  /**
+   * O classificador de função da lista oficial, cru.
+   *
+   * É ele que diz se o código é porto marítimo, aeroporto ou ponto rodoviário —
+   * e é o que permite sinalizar embarque marítimo cujo código de carregamento
+   * não é porto, erro de preenchimento que sem isso viraria uma linha no mapa
+   * saindo de onde navio não atraca.
+   */
+  funcao: string | null
+  ehPorto: boolean
+  /** Edição da lista de onde o registro saiu, para o cadastro ser auditável. */
+  fonte: string
 }
 
 export type DocMunicipio = {

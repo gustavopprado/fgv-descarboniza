@@ -11,6 +11,21 @@
  * abaixo de 1000px, o que deixaria quem abre no celular sem navegação nenhuma.
  * Aqui ele vira uma barra horizontal rolável no topo. O protótipo é referência
  * visual, não especificação de comportamento em tela pequena.
+ *
+ * **A segunda divergência, e ela é sobre largura.** O protótipo dá ao conteúdo
+ * `max-width:1180px` sem `margin:0 auto` — ancorado à esquerda, com o resto da
+ * tela em branco. O código copiava isso fielmente, então num monitor de 1920 o
+ * conteúdo parava a 508px da borda direita, e num de 2560 a 1148px.
+ *
+ * **A casca é contêiner, não medida.** Ela cresce com a tela; quem declara
+ * limite é cada peça, pelo motivo dela: prosa tem medida de leitura em `ch`,
+ * desenho tem teto em pixel porque `viewBox` amplia em vez de reflui, e tabela
+ * não tem limite nenhum porque largura ali vira coluna legível. Teto na casca
+ * seria um número arbitrário que devolveria o mesmo branco um monitor adiante.
+ *
+ * O ajuste está calibrado para 1366–2000px. Acima disso o branco não some: ele
+ * migra para dentro dos painéis, em volta das figuras que têm teto, e o conserto
+ * é a grade reorganizar — não a casca voltar a ter limite.
  */
 import Link from 'next/link'
 
@@ -136,7 +151,9 @@ export function Casca({
         </div>
       </nav>
 
-      <main className="min-w-0 max-w-[1180px] flex-1 px-[18px] pt-[22px] pb-[60px] md:px-10 md:pt-[30px] md:pb-[70px]">
+      {/* Sem `max-w`: ver o cabeçalho deste arquivo. O padding sobe um degrau
+          em tela larga para o conteúdo não encostar na borda do monitor. */}
+      <main className="min-w-0 flex-1 px-[18px] pt-[22px] pb-[60px] md:px-10 md:pt-[30px] md:pb-[70px] xl:px-14">
         {children}
 
         {/* Em tela estreita a identificação e a saída ficam no fim da página:

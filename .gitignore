@@ -23,6 +23,11 @@ Rel__CO2*
 RELATORIO_VIAGENS*
 mobilidade_*
 
+# Ensaios temporários: script solto que roda contra o banco carregado e
+# imprime o que encontrou. Por natureza toca dado real e é descartável — a
+# regra entra antes de a pasta existir de verdade (§2.3).
+/ensaio/
+
 # Saídas de processamento e conferência
 /out/
 /output/

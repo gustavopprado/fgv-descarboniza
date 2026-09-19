@@ -12,6 +12,7 @@ import type {
   DocEmbarque,
   DocFatorEmissao,
   DocMobilidade,
+  DocPorto,
   DocViagemRegistrada,
   DocViagemTrecho,
   NucleoDeEmissao,
@@ -110,6 +111,19 @@ function validarEnvelope(
   doc: NucleoDeEmissao,
   emissao: number,
   dataDeReferencia: string | null,
+  /**
+   * Dispensa o fator, sem dispensar a auditabilidade.
+   *
+   * Existe para um caso só, e ele é do marítimo: ali a emissão **medida** não
+   * vem de fator × atividade — ela vem informada pelo agente, e é o dado
+   * primário (§8.1). Exigir fator nesse documento obrigaria a inventar um, e
+   * fator inventado é pior que fator ausente.
+   *
+   * Quem passa isto assume a outra metade: a coleção que dispensa o fator
+   * precisa carimbar de onde o número veio por outro caminho, e é a validação
+   * daquela coleção que confere. Ver `validarEmbarque`.
+   */
+  opcoes: { fatorDispensado?: boolean } = {},
 ): void {
   exigirSemUndefined(ctx, doc)
 
@@ -140,8 +154,9 @@ function validarEnvelope(
 
   exigirNumeroNaoNegativo(ctx, 'emissao', emissao)
 
-  // Fator nulo só se sustenta onde a emissão é zero por definição (§6.2).
-  if (doc.fator === null && emissao !== 0) {
+  // Fator nulo só se sustenta onde a emissão é zero por definição (§6.2) — ou
+  // onde a emissão não vem de fator nenhum, que é o caso do embarque medido.
+  if (doc.fator === null && emissao !== 0 && opcoes.fatorDispensado !== true) {
     falhar(ctx, 'fator', 'está nulo, mas a emissão não é zero')
   }
   if (doc.fator !== null) {
@@ -337,11 +352,14 @@ export function validarEmbarque(id: string, doc: DocEmbarque): void {
   if (doc.periodicidade !== 'evento') {
     falhar(ctx, 'periodicidade', 'embarque é evento, não taxa mensal')
   }
-  validarEnvelope(ctx, doc, doc.co2Kg, null)
+
+  const medido = doc.nivelDado === 'medido'
+  validarEnvelope(ctx, doc, doc.co2Kg, doc.etd, { fatorDispensado: medido })
 
   if (!doc.agente) falhar(ctx, 'agente', 'está vazio')
+  if (!doc.bloco) falhar(ctx, 'bloco', 'está vazio; é o escopo de recarga (§8.4)')
   if (!doc.shipmentId) falhar(ctx, 'shipmentId', 'está vazio')
-  for (const campo of ['etd', 'eta', 'atd', 'ata'] as const) {
+  for (const campo of ['etd', 'eta', 'atd', 'ata', 'ataFinal'] as const) {
     exigirDataOuNulo(ctx, campo, doc[campo])
   }
   for (const campo of ['pesoKg', 'volumeM3', 'containers'] as const) {
@@ -349,6 +367,68 @@ export function validarEmbarque(id: string, doc: DocEmbarque): void {
   }
   if (doc.modal !== 'maritimo' && doc.modal !== 'aereo') {
     falhar(ctx, 'modal', 'no módulo marítimo só existe modal marítimo ou aéreo')
+  }
+
+  /**
+   * **A cascata da §8.2, em código.** As duas metades são simétricas de
+   * propósito, e cada uma fecha um buraco diferente:
+   *
+   *  - **medido** é o número do agente, e não tem fator. O que o torna auditável
+   *    são o agente, o bloco de origem e o identificador do embarque, que já são
+   *    campos deste documento. Fator preenchido aqui seria afirmar uma conta que
+   *    não aconteceu.
+   *  - **estimado** é média × atividade, e **precisa** carregar a média usada,
+   *    com a versão e o tamanho da amostra. Sem isso, a estimativa não é
+   *    reproduzível a partir do documento — e recalculá-la depois, sobre uma
+   *    base maior, daria outro número sem ninguém notar (§9.1).
+   */
+  if (medido) {
+    if (doc.fator !== null) {
+      falhar(ctx, 'fator', 'em nivelDado "medido" o número é do agente, não de fator')
+    }
+    if (doc.baseDaEstimativa !== null) {
+      falhar(ctx, 'baseDaEstimativa', 'em nivelDado "medido" não há média a declarar')
+    }
+  } else {
+    if (doc.fator === null) {
+      falhar(ctx, 'fator', `nivelDado "${doc.nivelDado}" precisa carimbar a média usada`)
+    }
+    exigirInteiroPositivo(ctx, 'baseDaEstimativa', doc.baseDaEstimativa)
+  }
+
+  if (doc.containers !== null && doc.containersFonte === null) {
+    falhar(ctx, 'containersFonte', 'há contagem de contêineres sem dizer de onde veio')
+  }
+}
+
+export function validarPorto(id: string, doc: DocPorto): void {
+  const ctx = { colecao: 'porto', id }
+  exigirSemUndefined(ctx, doc)
+
+  if (!/^[A-Z]{2}[A-Z0-9]{3}$/.test(doc.locode)) {
+    falhar(ctx, 'locode', `não tem a forma de um código UN/LOCODE: ${JSON.stringify(doc.locode)}`)
+  }
+  if (!doc.nome) falhar(ctx, 'nome', 'está vazio')
+  if (!doc.pais) falhar(ctx, 'pais', 'está vazio')
+  if (!doc.fonte) falhar(ctx, 'fonte', 'está vazia; o cadastro precisa ser auditável')
+
+  /**
+   * Coordenada é opcional, mas **meia coordenada não existe**: um lado nulo e o
+   * outro preenchido desenharia o ponto sobre o meridiano ou sobre a linha do
+   * equador, que é um lugar plausível e errado.
+   */
+  const temLat = doc.latitude !== null
+  const temLon = doc.longitude !== null
+  if (temLat !== temLon) {
+    falhar(ctx, 'latitude', 'coordenada pela metade: ou as duas ou nenhuma')
+  }
+  if (temLat) {
+    if (typeof doc.latitude !== 'number' || Math.abs(doc.latitude) > 90) {
+      falhar(ctx, 'latitude', `fora da faixa: ${JSON.stringify(doc.latitude)}`)
+    }
+    if (typeof doc.longitude !== 'number' || Math.abs(doc.longitude) > 180) {
+      falhar(ctx, 'longitude', `fora da faixa: ${JSON.stringify(doc.longitude)}`)
+    }
   }
 }
 

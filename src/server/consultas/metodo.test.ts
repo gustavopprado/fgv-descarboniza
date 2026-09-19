@@ -17,9 +17,22 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Firestore } from 'firebase-admin/firestore'
 
-import type { DocMobilidade, DocViagemTrecho, Papel } from '../documentos/tipos'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
+
+import type {
+  DocEmbarque,
+  DocMobilidade,
+  DocViagemTrecho,
+  Papel,
+} from '../documentos/tipos'
 import type { ContextoDeAcesso } from './acesso'
-import { consultarMetodo, NAO_DEFINIDO } from './metodo'
+import {
+  consultarMetodo,
+  MOTIVO_DO_ALERTA,
+  MOTIVO_NAO_DECLARADO,
+  NAO_DEFINIDO,
+} from './metodo'
 
 const ANO_BASE = 2031
 const DESCRICAO_SENSIVEL = 'resposta 7: distancia de 987,6 km ate a fabrica'
@@ -30,6 +43,7 @@ function ctx(papel: Papel): ContextoDeAcesso {
     email: 'pessoa.ficticia@exemplo.invalid',
     papel,
     empresa: null,
+    funcionarioId: null,
   }
 }
 
@@ -96,6 +110,50 @@ function trecho(parcial: Partial<DocViagemTrecho>): DocViagemTrecho {
     propriedadeVeiculo: null,
     combustivel: null,
     ocupantes: null,
+    ...parcial,
+  }
+}
+
+/** Embarque fictício, inventado do zero (§2.2) — nenhum nome é real. */
+function embarque(parcial: Partial<DocEmbarque>): DocEmbarque {
+  return {
+    modulo: 'maritimo',
+    modal: 'maritimo',
+    escopo: 3,
+    periodicidade: 'evento',
+    ano: ANO_BASE,
+    mes: `${ANO_BASE}-03`,
+    empresa: null,
+    fator: null,
+    alertas: [],
+    alertasCodigos: [],
+    atualizadoEm: '2031-03-01',
+    agente: 'agente-ficticio',
+    bloco: 'agente-ficticio_2031',
+    shipmentId: 'EMB-0001',
+    houseRef: null,
+    trans: 'SEA',
+    mode: null,
+    portoOrigem: 'AAAAA',
+    portoDestino: 'BBBBB',
+    portoOrigemNome: 'Porto Fictício',
+    portoDestinoNome: 'Porto Inventado',
+    navioPartida: null,
+    navioTransbordo: null,
+    etd: `${ANO_BASE}-03-01`,
+    eta: null,
+    atd: `${ANO_BASE}-03-02`,
+    ata: null,
+    ataFinal: null,
+    pesoKg: null,
+    volumeM3: null,
+    containers: 1,
+    containersFonte: 'coluna',
+    co2Kg: 100,
+    nivelDado: 'medido',
+    baseDaEstimativa: null,
+    status: null,
+    previsao: false,
     ...parcial,
   }
 }
@@ -273,6 +331,9 @@ test('alerta sai como tipo, severidade e contagem — nunca a descrição', asyn
       tipo: 'alerta_ficticio',
       severidade: 'erro',
       ocorrencias: 2,
+      // Tipo inventado neste teste: ele não tem regra escrita, e a tela diz
+      // isso em vez de repetir a descrição gravada.
+      motivo: MOTIVO_NAO_DECLARADO,
     },
   ])
   assert.equal(
@@ -286,5 +347,234 @@ test('colaborador não abre a tela de método', async () => {
   await assert.rejects(
     () => consultarMetodo(ctx('colaborador'), {}, bancoCom({})),
     /não tem acesso/,
+  )
+})
+
+/* ------------------------------------------------------- marítimo (§8, §10) */
+
+const PARAMETROS_DO_MARITIMO = {
+  MARITIMO_LIMIAR_ATIPICO: '7',
+  MARITIMO_LIMIAR_IMPOSSIVEL: '250',
+  MARITIMO_AMOSTRA_MINIMA_CORREDOR: '5',
+}
+
+function parametro(metodo: { parametros: { rotulo: string }[] }, rotulo: string) {
+  const achado = metodo.parametros.find((p) => p.rotulo === rotulo)
+  assert.ok(achado, `a tela de método não declara o parâmetro "${rotulo}"`)
+  return achado as (typeof metodo.parametros)[number] & {
+    valor: string
+    definido: boolean
+  }
+}
+
+/**
+ * **A base de data tem uma fonte só, e é a constante.**
+ *
+ * A tela lia uma variável de ambiente que já tinha sido removida, e por isso
+ * declararia "não definida" justamente a escolha que mais muda o número do
+ * módulo. Este teste morde pelos dois lados: ele **define** a variável com outro
+ * valor e exige que a tela continue declarando a constante. Se alguém
+ * reintroduzir a leitura do ambiente, o valor plantado aqui aparece na tela e o
+ * teste reprova.
+ */
+test('a base de data do marítimo sai da constante, e o ambiente não a muda', async () => {
+  const metodo = await comAmbiente(
+    { ...PARAMETROS_DO_MARITIMO, MARITIMO_BASE_DE_DATA: 'registro_aduaneiro_ficticio' },
+    () => consultarMetodo(ctx('importacao'), {}, bancoCom({ embarque: [embarque({})] })),
+  )
+
+  const base = parametro(metodo, 'Base de data do embarque')
+  assert.equal(base.definido, true)
+  assert.match(base.valor, /partida prevista/)
+  assert.equal(
+    JSON.stringify(metodo).includes('registro_aduaneiro_ficticio'),
+    false,
+    'a tela leu a base de data do ambiente; ela tem uma fonte só, que é a constante',
+  )
+})
+
+test('os dois limiares saem declarados, com o valor em vigor e a amostra', async () => {
+  const metodo = await comAmbiente(PARAMETROS_DO_MARITIMO, () =>
+    consultarMetodo(ctx('importacao'), {}, bancoCom({ embarque: [embarque({})] })),
+  )
+
+  const atipica = parametro(metodo, 'Linha atípica — entra com alerta')
+  assert.equal(atipica.definido, true)
+  assert.match(atipica.valor, /7×/)
+  assert.match(atipica.valor, /5 linhas/)
+
+  const impossivel = parametro(metodo, 'Linha impossível — não é importada')
+  assert.equal(impossivel.definido, true)
+  assert.match(impossivel.valor, /250×/)
+
+  // As duas regras são opostas e não podem ser lidas como uma só: uma mede
+  // contra o corredor e deixa entrar, a outra mede contra o módulo e recusa.
+  assert.match(atipica.valor, /mediana do corredor/)
+  assert.match(impossivel.valor, /mediana geral/)
+})
+
+test('limiar sem valor no ambiente é declarado como pendente, não some', async () => {
+  const metodo = await comAmbiente(
+    {
+      MARITIMO_LIMIAR_ATIPICO: '',
+      MARITIMO_LIMIAR_IMPOSSIVEL: '',
+      MARITIMO_AMOSTRA_MINIMA_CORREDOR: '',
+    },
+    () => consultarMetodo(ctx('importacao'), {}, bancoCom({ embarque: [] })),
+  )
+
+  assert.equal(parametro(metodo, 'Linha atípica — entra com alerta').valor, NAO_DEFINIDO)
+  assert.equal(
+    parametro(metodo, 'Linha impossível — não é importada').valor,
+    NAO_DEFINIDO,
+  )
+})
+
+/**
+ * **A cascata sai degrau a degrau, e a previsão fica fora dela.**
+ *
+ * "Estimativa" sozinho não diz se a média era do corredor ou geral, e a
+ * diferença decide se o número é específico daquela rota. E medir a cascata
+ * junto com a previsão diria que tal proporção do número vem do agente para um
+ * número que não é o do módulo — a previsão está fora do total.
+ */
+test('a cascata do marítimo sai por degrau, medida sobre o total sem previsão', async () => {
+  const metodo = await comAmbiente(PARAMETROS_DO_MARITIMO, () =>
+    consultarMetodo(
+      ctx('importacao'),
+      {},
+      bancoCom({
+        embarque: [
+          embarque({ shipmentId: 'EMB-1', co2Kg: 750, nivelDado: 'medido' }),
+          embarque({ shipmentId: 'EMB-2', co2Kg: 250, nivelDado: 'estimado_corredor' }),
+          // Previsão: não entra na cascata nem no denominador dela.
+          embarque({ shipmentId: 'EMB-3', co2Kg: 9000, previsao: true }),
+        ],
+      }),
+    ),
+  )
+
+  const maritimo = metodo.qualidade.find((q) => q.modulo === 'maritimo')
+  assert.ok(maritimo)
+  const item = (rotulo: RegExp) => {
+    const achado = maritimo.itens.find((i) => rotulo.test(i.rotulo))
+    assert.ok(achado, `a cascata não declara o degrau ${rotulo}`)
+    return achado.valor
+  }
+
+  assert.equal(item(/^Embarques no total/), '2')
+  assert.equal(item(/^Medido/), '75,0% · 1')
+  assert.equal(item(/média do corredor/), '25,0% · 1')
+  // O degrau que não aconteceu aparece zerado, não some: degrau ausente se lê
+  // como degrau que não existe.
+  assert.equal(item(/média geral/), '0,0% · 0')
+  assert.equal(item(/por peso/), '0,0% · 0')
+  assert.equal(item(/^Previstos/), '1')
+})
+
+test('a fonte do marítimo declara o agente que falta, sem inventar o embarque', async () => {
+  const metodo = await comAmbiente(PARAMETROS_DO_MARITIMO, () =>
+    consultarMetodo(ctx('importacao'), {}, bancoCom({ embarque: [embarque({})] })),
+  )
+
+  const fonte = metodo.fontes.find((f) => f.modulo === 'maritimo')
+  assert.ok(fonte)
+  assert.match(fonte.situacao, /não inventa o embarque/)
+  assert.match(fonte.situacao, /cobertura/)
+})
+
+/**
+ * **Alerta novo nasce explicado, ou reprova.**
+ *
+ * A tela mostrava o identificador do alerta e uma contagem, o que responde
+ * "quantos" e não "o quê" — e alerta que não se entende é alerta que se aprende
+ * a ignorar. Esta guarda varre os arquivos que emitem alerta e exige linha para
+ * cada código. Conferida ligando a violação: tirar uma entrada do mapa reprova,
+ * **nomeando o código e o arquivo**.
+ */
+test('todo código de alerta das cargas tem motivo declarado na tela de método', () => {
+  const raiz = join(import.meta.dirname, '..', '..', '..')
+  const arquivos: string[] = []
+  const varrer = (dir: string): void => {
+    for (const entrada of readdirSync(dir, { withFileTypes: true })) {
+      if (entrada.name === 'node_modules' || entrada.name.startsWith('.')) continue
+      const caminho = join(dir, entrada.name)
+      if (entrada.isDirectory()) varrer(caminho)
+      else if (entrada.name.endsWith('.ts') && !entrada.name.endsWith('.test.ts')) {
+        arquivos.push(caminho)
+      }
+    }
+  }
+  varrer(join(raiz, 'src'))
+  varrer(join(raiz, 'scripts'))
+
+  const semMotivo: string[] = []
+  let encontrados = 0
+  for (const arquivo of arquivos) {
+    const fonte = readFileSync(arquivo, 'utf8')
+    // **Duas redes, e a segunda existe porque a primeira deixou passar.**
+    // Varrendo só a constante exportada, quatro códigos que moravam como chave
+    // de um `Record` de severidade chegaram à tela sem motivo — a guarda passou
+    // e o defeito só apareceu ao rodar a tela contra o banco carregado. A
+    // segunda rede pega o código escrito direto na emissão do alerta, e exige o
+    // `descricao` ao lado para não confundir com os outros campos chamados
+    // `tipo` que o sistema tem — tipo de viagem, por exemplo.
+    for (const achado of fonte.matchAll(
+      /export const ALERTA_[A-Z_]+ = '([a-z_0-9]+)'|tipo: '([a-z_0-9]+)',\s*descricao/g,
+    )) {
+      encontrados += 1
+      const codigo = achado[1] ?? achado[2]
+      if (!(codigo in MOTIVO_DO_ALERTA)) {
+        semMotivo.push(`${codigo} (${arquivo.slice(raiz.length + 1)})`)
+      }
+    }
+  }
+
+  assert.ok(encontrados > 20, 'a varredura não encontrou os códigos de alerta')
+  assert.deepEqual(
+    semMotivo,
+    [],
+    `código de alerta sem motivo em MOTIVO_DO_ALERTA: ${semMotivo.join(', ')}`,
+  )
+})
+
+/**
+ * **O motivo é a regra, não a linha** (§3.1).
+ *
+ * A descrição gravada na carga cita valor do registro — a razão contra a
+ * mediana, o código do porto, a distância. O que a tela escreve é a condição que
+ * dispara o alerta, igual para todas as ocorrências dele.
+ */
+test('o motivo do alerta descreve a regra, e não repete a descrição gravada', async () => {
+  const razaoDaLinha = 'CO₂ por contêiner 8,4× a mediana do corredor'
+  const metodo = await comAmbiente(PARAMETROS_DO_MARITIMO, () =>
+    consultarMetodo(
+      ctx('importacao'),
+      {},
+      bancoCom({
+        embarque: [
+          embarque({
+            alertas: [
+              {
+                tipo: 'co2_por_container_atipico',
+                descricao: razaoDaLinha,
+                severidade: 'atencao',
+              },
+            ],
+            alertasCodigos: ['co2_por_container_atipico'],
+          }),
+        ],
+      }),
+    ),
+  )
+
+  const alerta = metodo.alertas.find((a) => a.tipo === 'co2_por_container_atipico')
+  assert.ok(alerta)
+  assert.match(alerta.motivo, /entra no total/)
+  assert.notEqual(alerta.motivo, MOTIVO_NAO_DECLARADO)
+  assert.equal(
+    JSON.stringify(metodo).includes(razaoDaLinha),
+    false,
+    'a descrição gravada, que cita valor da linha, chegou ao cliente',
   )
 })

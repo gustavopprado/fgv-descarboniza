@@ -109,9 +109,13 @@ export function idContainerPortoMes(mes: string, porto: string): string {
   return montar(mes, porto)
 }
 
-/** Aeroporto e município já têm identificador natural e estável. */
+/** Aeroporto, porto e município já têm identificador natural e estável. */
 export function idAeroporto(iata: string): string {
   return sanitizarSegmento(iata.toUpperCase())
+}
+
+export function idPorto(locode: string): string {
+  return sanitizarSegmento(locode.toUpperCase())
 }
 
 export function idMunicipio(codigoIbge: string): string {

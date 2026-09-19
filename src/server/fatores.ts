@@ -12,6 +12,8 @@
  */
 import type { Firestore } from 'firebase-admin/firestore'
 
+import type { FaixaDistancia, LimiteDeFaixa } from '@/lib/calculo/aereo'
+import { CATEGORIA_AEREO_FAIXA_LIMITE } from '@/lib/calculo/categorias'
 import { COLECAO } from './firestore'
 import type { DocFatorEmissao, FatorAplicado } from './documentos/tipos'
 
@@ -76,4 +78,36 @@ export async function carregarFatores(db: Firestore): Promise<ResolvedorDeFatore
       }
     },
   }
+}
+
+/**
+ * Os limites das faixas de distância, lidos da própria tabela de fatores.
+ *
+ * Os quilômetros que separam curta, média e longa **fazem parte da definição do
+ * fator** e por isso moram na coleção, não no código: trocar a tabela sem trocar
+ * os limites daria um número calculado com metade de cada versão.
+ *
+ * Vive aqui, e não dentro de um script, porque os dois caminhos que calculam
+ * distância do zero precisam dele: a carga da planilha do cartão, no inventário,
+ * e o formulário do programa de viagens. **É a matemática compartilhada de que
+ * fala a §7.5** — o que não se compartilha é o dado.
+ *
+ * A faixa mais longa não tem teto, e a ausência do limite superior é o normal:
+ * é por isso que ele é procurado e não exigido.
+ */
+export function limitesDeFaixa(
+  fatores: ResolvedorDeFatores,
+  data: string,
+): LimiteDeFaixa[] {
+  const ids: readonly FaixaDistancia[] = ['curta', 'media', 'longa']
+  return ids.map((id) => {
+    const minimo = fatores.vigente(CATEGORIA_AEREO_FAIXA_LIMITE, `${id}.min_km`, data)
+    let maxKm: number | null = null
+    try {
+      maxKm = fatores.vigente(CATEGORIA_AEREO_FAIXA_LIMITE, `${id}.max_km`, data).valor
+    } catch {
+      maxKm = null
+    }
+    return { id, minKm: minimo.valor, maxKm }
+  })
 }

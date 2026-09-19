@@ -35,6 +35,22 @@ const FAIXA_PROXIMA = 0.4
 
 const RAIOS_DA_GRADE = 8
 
+/**
+ * Teto de largura do desenho, em pixels de tela.
+ *
+ * **`viewBox` é escala, não tamanho** — e num desenho quadrado isso quer dizer
+ * que cada pixel de largura é também um de altura. Com a casca crescendo com a
+ * tela (ver `casca.tsx`), a coluna da esquerda chega a 1293px num monitor de
+ * 2560, e o radar viraria um quadrado de 1293px: mais alto que a tela.
+ *
+ * O valor é o tamanho em que ele é desenhado hoje, e essa é a razão de ser
+ * exatamente este número: os anéis, o corpo do ponto, a faixa próxima e a
+ * legenda foram calibrados nessa escala. Pixel a mais aqui não acrescenta
+ * informação, só empurra o resto da página para baixo. O desenho fica centrado
+ * no painel, com branco simétrico em volta — decisão aceita.
+ */
+const LARGURA_MAXIMA = 615
+
 export function Radar({ distanciasKm }: { distanciasKm: number[] }) {
   const { pontos, aneis, distanciaMaximaKm } = montarRadar(distanciasKm, {
     raio: RAIO,
@@ -51,7 +67,7 @@ export function Radar({ distanciasKm }: { distanciasKm: number[] }) {
   ].join(' ')
 
   return (
-    <figure className="m-0">
+    <figure className="m-0" style={{ maxWidth: LARGURA_MAXIMA }}>
       <div className="overflow-hidden rounded-xl bg-[var(--color-escuro-2)] p-1.5">
         <svg
           viewBox={`0 0 ${LADO} ${LADO}`}
@@ -131,7 +147,7 @@ export function Radar({ distanciasKm }: { distanciasKm: number[] }) {
         </svg>
       </div>
 
-      <figcaption className="mt-3 text-[12px] text-[var(--color-apoio)]">
+      <figcaption className="mt-3 max-w-[70ch] text-[12px] text-[var(--color-apoio)]">
         Cada ponto é uma pessoa, e os anéis marcam a distância até a fábrica — a
         escala é comprimida para a nuvem não empilhar no centro, então o número
         se lê no anel, não no raio.{' '}

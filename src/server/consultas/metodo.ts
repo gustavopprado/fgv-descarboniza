@@ -18,13 +18,14 @@
  */
 import type { Firestore } from 'firebase-admin/firestore'
 
-import { opcional, parametrosDeclarados } from '@/lib/env'
+import { MARITIMO_BASE_DE_DATA, opcional, parametrosDeclarados } from '@/lib/env'
 import type {
   DocAeroporto,
   DocEmbarque,
   DocFatorEmissao,
   DocMobilidade,
   DocViagemTrecho,
+  NivelDado,
   Severidade,
 } from '../documentos/tipos'
 import { hojeIso } from '../documentos/tipos'
@@ -53,6 +54,131 @@ const NOME_DA_FONTE: Record<string, string> = {
 
 /** O que a tela escreve onde a decisão ainda não foi tomada. */
 export const NAO_DEFINIDO = 'não definida'
+
+/**
+ * Os quatro degraus da cascata da §8.2, na ordem do mais específico ao mais
+ * genérico — e é essa ordem que a tela mostra.
+ *
+ * O rótulo diz **de onde o número veio**, não quão bom ele é: "estimado por
+ * média do corredor" é uma frase que alguém pode conferir contra o documento,
+ * enquanto "qualidade média" seria um juízo que a tela não tem como sustentar.
+ *
+ * **A fórmula não cabe no rótulo, e não é dele.** A primeira versão escrevia
+ * "contêineres × média do corredor", e medido a 1024px — onde este painel vive
+ * numa coluna de 294px, dividida com os outros dois módulos — dois degraus
+ * quebravam em duas linhas. A unidade da estimativa é decisão declarada no
+ * parâmetro "Alocação do CO₂", que é onde ela se explica inteira; aqui basta
+ * qual mediana produziu o número, que é o que distingue um degrau do outro.
+ */
+const NIVEL_DA_CASCATA: { nivel: NivelDado; rotulo: string }[] = [
+  { nivel: 'medido', rotulo: 'Medido — informado pelo agente' },
+  { nivel: 'estimado_corredor', rotulo: 'Estimado — média do corredor' },
+  { nivel: 'estimado_media', rotulo: 'Estimado — média geral' },
+  { nivel: 'estimado_peso', rotulo: 'Estimado — por peso' },
+]
+
+/**
+ * O que levantou cada alerta, em uma frase — CLAUDE.md §10.
+ *
+ * **O motivo é a regra, nunca a linha.** A descrição gravada na carga cita valor
+ * do registro — distância, matrícula, razão contra a mediana, código de porto — e
+ * por isso não chega ao cliente (§3.1). O que chega é o que está escrito aqui: a
+ * condição que dispara o alerta, igual para todas as ocorrências dele, escrita
+ * junto do código e não junto do dado.
+ *
+ * Sem isto a tela mostrava só o identificador do alerta e uma contagem, o que
+ * responde "quantos" e não "o quê" — e alerta que não se entende é alerta que se
+ * aprende a ignorar, que é a lição que este projeto já registrou duas vezes.
+ *
+ * `metodo.test.ts` exige que **todo código de alerta emitido pelas cargas tenha
+ * linha aqui**: um alerta novo nasce explicado ou reprova.
+ */
+export const MOTIVO_DO_ALERTA: Record<string, string> = {
+  /* ---------------------------------------------------------- mobilidade */
+  combustivel_ausente:
+    'Modal que queima combustível do próprio respondente, sem combustível informado. Sem ele não há fator, e a resposta fica fora da média.',
+  combustivel_em_modal_sem_combustivel:
+    'Combustível preenchido em modal que não depende dele — ônibus tem fator por passageiro-km, e bicicleta e a pé não emitem. É erro de entrada, e não tira a linha da média.',
+  combustivel_desconhecido:
+    'A resposta de combustível não corresponde a nenhum dos valores previstos.',
+  transporte_desconhecido:
+    'A resposta de transporte não corresponde a nenhum modal previsto, então não há fator a aplicar.',
+  geocodificacao_falhou:
+    'O CEP não virou coordenada, então não houve distância a calcular. A resposta vira exceção em vez de entrar com distância inventada.',
+  geocodificacao_imprecisa:
+    'Esta distância é compartilhada por muitas outras respostas — sintoma de provedor que devolve o centro do município no lugar da coordenada do CEP. O módulo continua fechando por dentro, e é por isso que nenhuma conferência de coerência pega.',
+  distancia_improvavel:
+    'A distância passa do limite declarado nos parâmetros e não se sustenta como deslocamento diário. A resposta fica fora da média e continua no banco.',
+  distancia_indisponivel:
+    'O provedor de rota não respondeu depois das tentativas. É falha de infraestrutura, não de dado: uma recarga traz a resposta de volta ao cálculo.',
+  fator_ausente:
+    'Combinação de modal e combustível sem fator definido — a ausência é proposital e indica erro de preenchimento, não modal a estimar. A linha nunca recebe valor aproximado.',
+  resposta_substituida:
+    'A mesma matrícula respondeu mais de uma vez; vale a resposta mais recente, e a substituição fica registrada na linha que ficou.',
+  matricula_lida_como_numero:
+    'A matrícula veio como número na planilha, e nesse formato um zero à esquerda pode já ter se perdido na origem.',
+
+  /* -------------------------------------------- viagens (planilha do cartão) */
+  codigo_resolvido_por_apelido:
+    'O código do aeroporto não veio escrito: foi resolvido pelo nome da cidade, por um dicionário que cobre o que esta planilha escreve, inclusive os erros de digitação dela.',
+  data_herdada_do_bloco:
+    'A planilha traz data só na primeira linha de cada viagem, e este trecho herdou a dela. Para o total do ano não muda nada; na série mensal, um trecho de volta pode cair no mês seguinte e ser contado no anterior.',
+  sequencia_de_trechos_quebrada:
+    'O destino de um trecho não é a origem do seguinte. Pode ser viagem partida em blocos, e nesse caso ela conta como mais de uma viagem.',
+  segundo_nome_tratado_como_companhia:
+    'Um segundo nome apareceu no bloco e foi lido como companhia aérea, que é o caso normal desta planilha. A regra é posicional: num bloco que de fato tivesse dois viajantes, ela silenciaria o segundo, e é este alerta que torna a suposição visível.',
+
+  /* ------------------------------------------------------------- marítimo */
+  co2_por_container_atipico:
+    'O CO₂ por contêiner desta linha destoa da mediana do próprio corredor acima do limiar declarado nos parâmetros. Contêiner pouco carregado, carga solta e embarque partido produzem isso, e são plausíveis: a linha entra no total e fica marcada. Tirá-la seria remover emissão real por ser incomum.',
+  co2_estimado_por_media:
+    'O agente não informou CO₂ para este embarque, e o valor veio da cascata da §8.2. O documento guarda a média usada e o tamanho da amostra.',
+  embarque_previsto:
+    'CO₂ lançado para embarque que ainda não partiu — o relatório já traz número antes da viagem acontecer. Fica fora do total do módulo e contado à parte.',
+  embarque_sem_data_efetiva:
+    'O embarque tem itinerário com data prevista e nenhuma data de fato. Pode ter acontecido sem ter sido lançado, e por isso continua no total: descartar emissão real por falta de digitação erra mais que incluir uma previsão.',
+  sem_contagem_de_container:
+    'Nem a coluna numérica nem o texto de tipo trazem quantidade de contêineres, então este embarque não entra no denominador do indicador por contêiner.',
+  contagem_de_container_pelo_tipo:
+    'A aba não traz a coluna numérica de quantidade, e a contagem saiu do texto de tipo de contêiner, que é menos confiável.',
+  embarque_sem_locode:
+    'Falta código de porto em uma das pontas, então o embarque não tem como ser desenhado no mapa. Ele continua no total.',
+  porto_sem_cadastro:
+    'O código de porto da linha não está no cadastro, então não há coordenada para desenhar. Carregar a lista oficial resolve.',
+  codigo_de_carregamento_nao_e_porto:
+    'O código não é porto marítimo na lista oficial e o embarque é marítimo — costuma ser ponto interior de carregamento lançado onde se espera um porto.',
+  nome_do_lugar_diverge_do_codigo:
+    'O relatório chama este código por outro lugar. Em transbordo e em frete aéreo isso é esperado, porque o código é o ponto de carregamento e o nome é a origem real; o código é o que vale no mapa.',
+  carga_aerea_de_fornecedor:
+    'Frete aéreo de fornecedor dentro do relatório marítimo: Escopo 3 categoria 4, frete upstream — não é viagem de passageiro. Entra no total do módulo e fica fora de tudo que é por contêiner.',
+  embarque_sem_data_de_referencia:
+    'O embarque não tem a data que define o período, então ele conta no total e não aparece na série mensal.',
+
+  /* -------------------------------- viagens (vindos do relatório da agência) */
+  fora_do_inventario:
+    'Itinerário duplicado no relatório da agência. O trecho fica gravado com a emissão calculada e não entra no total — apagá-lo esconderia que a duplicata existe na origem.',
+  possivel_duplicidade:
+    'O relatório da agência marcou esta reserva como possivelmente repetida. Ela continua no total: a marca é da origem, e descartar por suspeita tiraria emissão real.',
+  trecho_nao_aereo:
+    'Trecho que o relatório da agência não classifica como voo. O módulo cobre aéreo e carro, e um trecho sem modal reconhecido fica sinalizado para conferência.',
+  troca_de_aeroporto:
+    'O aeroporto de chegada de um trecho não é o de partida do seguinte — a viagem trocou de aeroporto na mesma cidade, ou o itinerário tem um vão. A distância de cada trecho continua sendo a dele.',
+}
+
+/** O que a tela diz de um alerta que chegou sem explicação declarada. */
+export const MOTIVO_NAO_DECLARADO =
+  'Alerta sem motivo declarado nesta tela. É defeito desta tela, não do dado.'
+
+/**
+ * O nome por extenso de cada base de data possível.
+ *
+ * A decisão mora na constante `MARITIMO_BASE_DE_DATA`; o que mora aqui é como
+ * escrevê-la para quem lê a tela. São coisas diferentes, e é por isso que este
+ * mapa não é uma segunda fonte da decisão: base nova sem rótulo não compila.
+ */
+const BASE_DE_DATA_POR_EXTENSO: Record<typeof MARITIMO_BASE_DE_DATA, string> = {
+  etd_primeiro_carregamento: 'partida prevista do primeiro carregamento (ETD)',
+}
 
 export type EscopoDoParametro = 'geral' | Modulo
 
@@ -90,6 +216,8 @@ export type AlertaDeclarado = {
   tipo: string
   severidade: Severidade
   ocorrencias: number
+  /** A regra que levanta este alerta — nunca o valor da linha (§3.1). */
+  motivo: string
 }
 
 export type FatorDeclarado = DocFatorEmissao & { vigenteHoje: boolean }
@@ -268,7 +396,7 @@ function parametros(
       valor: 'econômica, assumida',
       definido: true,
       observacao:
-        'O relatório da agência não informa a cabine. Econômica é assumida em todos os trechos da base histórica, e o multiplicador correspondente fica gravado em cada trecho.',
+        'Nenhuma das duas fontes administrativas informa a cabine. Econômica é assumida em todos os trechos do inventário, e o multiplicador correspondente fica gravado em cada um deles.',
       escopo: 'viagens',
     })
 
@@ -281,12 +409,38 @@ function parametros(
       escopo: 'viagens',
     })
 
+    // **Onde a distância nasce muda conforme a fonte, e as duas convivem neste
+    // módulo.** A versão anterior desta declaração dizia que o acréscimo é
+    // aplicado "no formulário" — herança da premissa que a §0.1 apagou. O
+    // formulário não é fonte daqui; quem calcula a distância do zero é a
+    // planilha do cartão, que a frase não mencionava. A tela declarava um
+    // caminho que o módulo não tem e omitia o que ele tem.
     lista.push({
       rotulo: 'Acréscimo sobre a distância ortodrômica',
       valor: '8%',
       definido: true,
       observacao:
-        'Na base histórica o acréscimo já vem embutido na distância e não é reaplicado. No formulário, onde a distância é calculada do zero, ele é aplicado.',
+        'No relatório da agência a distância já vem pronta, com o acréscimo embutido, e não é reaplicada. Na planilha do cartão não há distância: ela é calculada na carga, pela ortodrômica entre os aeroportos, e aí o acréscimo é aplicado.',
+      escopo: 'viagens',
+    })
+
+    // As duas declarações abaixo são da §7, que exige que o que a planilha do
+    // cartão muda no número fique nesta tela. Uma delas muda a série mensal.
+    lista.push({
+      rotulo: 'Data dos trechos da planilha do cartão',
+      valor: 'a da primeira linha, herdada pelo bloco',
+      definido: true,
+      observacao:
+        'A planilha traz data só na primeira linha de cada viagem, e os demais trechos herdam. Para o total do ano não muda nada; na série mensal, um trecho de volta pode cair no mês seguinte e ser contado no anterior. O trecho afetado carrega alerta próprio, listado abaixo.',
+      escopo: 'viagens',
+    })
+
+    lista.push({
+      rotulo: 'Viajante da planilha do cartão',
+      valor: 'só o primeiro nome, vinculado ao cadastro',
+      definido: true,
+      observacao:
+        'Nome de uma palavra não identifica ninguém, e vincular pelo palpite atribuiria a viagem à pessoa errada — é o vínculo que liga emissão a funcionário. A ponte entre o primeiro nome e o cadastro é feita fora da aplicação; nome sem correspondência para a carga em vez de virar pessoa nova, para não inflar o quadro com quem não existe.',
       escopo: 'viagens',
     })
 
@@ -315,16 +469,78 @@ function parametros(
       valor: 'por contêiner, por corredor',
       definido: true,
       observacao:
-        'O valor informado pelo agente é o dado primário e não é recalculado por tonelada-quilômetro: na mesma rota o CO₂ por quilo varia muito, enquanto o CO₂ por contêiner é estável.',
+        'O valor informado pelo agente é o dado primário e não é recalculado — nem por tonelada-quilômetro, nem por peso, nem por contêiner. Onde é preciso estimar o que ele não informou, a unidade é o contêiner por corredor: é a unidade que o agente de fato movimenta, e estimar por peso importaria para dentro do inventário a conta circular da aba de resumo.',
       escopo: 'maritimo',
     })
 
-    const baseDeData = texto(opcional('MARITIMO_BASE_DE_DATA') ?? null)
+    // **A base de data é constante no código, e a tela lê a constante.**
+    // Reintroduzir a variável de ambiente daria duas fontes para a mesma
+    // decisão, e é assim que uma delas envelhece sem a outra — foi o defeito
+    // que esta linha tinha: perguntava ao ambiente uma variável já removida e
+    // declararia "não definida" justamente a escolha que mais muda o número do
+    // módulo. O rótulo legível mora aqui porque é apresentação; a decisão mora
+    // na constante.
     lista.push({
       rotulo: 'Base de data do embarque',
-      ...baseDeData,
+      valor: BASE_DE_DATA_POR_EXTENSO[env.maritimoBaseDeData],
+      definido: true,
       observacao:
-        'A aba de detalhe e a de resumo do relatório usam bases de data diferentes; o inventário escolhe uma e aplica em todo o sistema. O módulo ainda não foi carregado.',
+        'A aba de detalhe e a de resumo do relatório usam bases de data diferentes, e a do resumo não é escolha possível: ela é registro aduaneiro, existe só na aba agregada e não tem coluna por linha, enquanto o inventário guarda um documento por embarque. Entre partida e chegada, a partida é a que existe em quase toda linha e a que não muda de mês: partida prevista e partida efetiva concordam no mês em todos os embarques que têm as duas. O total por ano civil não bate com o total por aba do relatório, porque um bloco atravessa a virada do ano e o embarque pertence ao ano em que o navio partiu.',
+      escopo: 'maritimo',
+    })
+
+    // Os dois limiares da §8.1.1 são regras opostas, e ficam em linhas
+    // separadas de propósito: confundi-los erra nos dois sentidos — ou um
+    // número impossível entra e domina o total, ou emissão verdadeira é apagada
+    // por ser incomum.
+    const atipico = texto(env.maritimoLimiarAtipico)
+    const amostra = texto(env.maritimoAmostraMinimaCorredor)
+    lista.push({
+      rotulo: 'Linha atípica — entra com alerta',
+      valor: atipico.definido
+        ? `${atipico.valor}× a mediana do corredor` +
+          (amostra.definido ? `, com amostra mínima de ${amostra.valor} linhas` : '')
+        : NAO_DEFINIDO,
+      definido: atipico.definido,
+      observacao:
+        'A linha plausível que destoa da mediana do próprio corredor entra no total e recebe alerta, listado abaixo. O limiar é folgado porque a dispersão do CO₂ por contêiner dentro dos corredores de maior volume é alta, e alerta que dispara em boa parte da base é alerta que se aprende a ignorar. Abaixo da amostra mínima o corredor não tem mediana confiável e a comparação não é feita.',
+      escopo: 'maritimo',
+    })
+
+    const impossivel = texto(env.maritimoLimiarImpossivel)
+    lista.push({
+      rotulo: 'Linha impossível — não é importada',
+      valor: impossivel.definido ? `${impossivel.valor}× a mediana geral do módulo` : NAO_DEFINIDO,
+      definido: impossivel.definido,
+      observacao:
+        'Este é o único parâmetro do módulo que decide o que fica de fora. A linha cuja ordem de grandeza não pertence ao módulo — sintoma típico de fórmula errada na origem — não entra até ser conferida, porque sozinha ela domina o total e torna o resto invisível. A comparação é contra a mediana geral, não contra o corredor: linha assim costuma estar sozinha no corredor dela, e um corredor de uma linha só tem essa linha como mediana. A recusa é anunciada com motivo e contada como diferença na conferência de cobertura.',
+      escopo: 'maritimo',
+    })
+
+    lista.push({
+      rotulo: 'Embarque previsto',
+      valor: 'fora do total, contado à parte',
+      definido: true,
+      observacao:
+        'O relatório já traz CO₂ lançado para embarque que ainda não partiu. Previsão sai de todos os totais do módulo — emissão, contêineres, série mensal, corredores e mapa — e aparece declarada à parte. Só sai do total quem não tem itinerário nenhum: itinerário com data prevista e sem data de fato continua contando, porque pode ter acontecido e não ter sido lançado.',
+      escopo: 'maritimo',
+    })
+
+    lista.push({
+      rotulo: 'Frete aéreo de fornecedor',
+      valor: 'no total do módulo, fora do indicador por contêiner',
+      definido: true,
+      observacao:
+        'O arquivo do agente traz carga aérea de fornecedor: Escopo 3 categoria 4, frete upstream, e não viagem de passageiro, que é categoria 6 e mora no módulo de viagens. Ela é emissão da empresa e fica no total; sai do indicador por contêiner, da tabela de portos, dos corredores e do mapa, porque o destino dela é aeroporto ou ponto interior — desenhá-la num mapa marítimo afirmaria que existe porto ali e que a linha é rota de navio.',
+      escopo: 'maritimo',
+    })
+
+    lista.push({
+      rotulo: 'Período relatado',
+      valor: 'série contínua, sem ano-base',
+      definido: true,
+      observacao:
+        'Diferente do módulo de viagens, este não relata um ano: ele cobre a série contínua que o relatório do agente traz, atravessando anos civis que ficam parciais nas pontas. O escopo de recarga é agente e bloco de origem, nunca agente e ano — um bloco atravessa a virada do ano, então dois blocos do mesmo agente contêm documentos do mesmo ano, e com o ano no escopo recarregar um apagaria o outro.',
       escopo: 'maritimo',
     })
   }
@@ -377,6 +593,9 @@ export async function consultarMetodo(
             tipo: a.tipo,
             severidade: a.severidade,
             ocorrencias: 1,
+            // A regra, escrita no código; nunca a descrição gravada, que cita
+            // valor da linha e atravessaria a anonimização por porta lateral.
+            motivo: MOTIVO_DO_ALERTA[a.tipo] ?? MOTIVO_NAO_DECLARADO,
           })
       }
     }
@@ -491,40 +710,71 @@ export async function consultarMetodo(
   }
 
   if (podeVerModulo(ctx, 'maritimo')) {
-    const embarques = (await db.collection(COLECAO.embarque).get()).docs.map(
+    const todos = (await db.collection(COLECAO.embarque).get()).docs.map(
       (d) => d.data() as DocEmbarque,
     )
+    // **A cascata é medida sobre o que está no total**, e previsão está fora
+    // dele. Medir os dois juntos diria que parte do número vem de dado do
+    // agente para um número que não é o número do módulo.
+    const previstos = todos.filter((e) => e.previsao)
+    const embarques = todos.filter((e) => !e.previsao)
     const co2Total = embarques.reduce((s, e) => s + e.co2Kg, 0)
-    const co2Medido = embarques
-      .filter((e) => e.nivelDado === 'medido')
-      .reduce((s, e) => s + e.co2Kg, 0)
+
+    // **Um agente que não entrega detalhe não está aqui, nem como estimativa.**
+    // A cascata da §8.2 estima o que falta *dentro* de um embarque; ela não
+    // inventa o embarque. Quantos agentes o inventário tem é fato do banco;
+    // quantos ficaram de fora é fato do arquivo, e quem responde isso é a
+    // conferência de cobertura — a tela diz onde procurar em vez de fingir que
+    // sabe.
+    const agentes = new Set(embarques.map((e) => e.agente)).size
+    const blocos = new Set(embarques.map((e) => e.bloco)).size
 
     fontes.push({
       modulo: 'maritimo',
-      descricao: 'Relatório do agente de carga, por embarque.',
+      descricao:
+        'Relatório do agente de carga, um documento por embarque, lido das abas de detalhe. A aba de resumo não é usada: ela usa outra base de data e deriva peso de contagem de contêiner e contagem de peso, que é conta circular.',
       situacao:
         embarques.length === 0
           ? 'Módulo ainda não carregado. O painel consolidado segue parcial até ele existir.'
-          : 'Nem todo agente entrega detalhe linha a linha; o que falta é estimado por média de corredor.',
+          : `Detalhe linha a linha de ${agentes === 1 ? 'um agente' : `${agentes} agentes`}, em ${blocos === 1 ? 'um bloco' : `${blocos} blocos`} de origem. Agente que não entrega detalhe por embarque não está no inventário, nem como estimativa: a cascata estima o que falta dentro de um embarque, não inventa o embarque. A saída para trazê-los é pedir detalhe à origem, que é operação e não código; enquanto não vier, a conferência de cobertura conta os blocos ausentes.`,
     })
+
+    const porNivel = new Map<NivelDado, { embarques: number; co2Kg: number }>()
+    for (const e of embarques) {
+      const atual = porNivel.get(e.nivelDado) ?? { embarques: 0, co2Kg: 0 }
+      atual.embarques += 1
+      atual.co2Kg += e.co2Kg
+      porNivel.set(e.nivelDado, atual)
+    }
 
     qualidade.push({
       modulo: 'maritimo',
       registros: embarques.length,
       itens: [
-        { rotulo: 'Embarques carregados', valor: String(embarques.length) },
+        { rotulo: 'Embarques no total', valor: String(embarques.length) },
+        // **A cascata inteira, degrau a degrau** (§8.2). O rodapé do módulo diz
+        // quanto do número veio do agente; aqui está de onde veio o resto —
+        // "estimativa" sozinho não diz se a média era do corredor ou geral, e a
+        // diferença entre as duas é a que decide se o número é específico
+        // daquela rota ou uma média do módulo inteiro.
+        ...NIVEL_DA_CASCATA.map(({ nivel, rotulo }) => {
+          const v = porNivel.get(nivel) ?? { embarques: 0, co2Kg: 0 }
+          return {
+            rotulo,
+            valor: `${porcentagem(v.co2Kg, co2Total)} · ${v.embarques}`,
+          }
+        }),
         {
-          rotulo: 'Do número, vindo de dado do agente',
-          valor: porcentagem(co2Medido, co2Total),
-        },
-        {
-          rotulo: 'Embarques previstos, ainda não realizados',
-          valor: String(embarques.filter((e) => e.previsao).length),
+          rotulo: 'Previstos, fora do total',
+          valor: String(previstos.length),
         },
       ],
     })
 
-    contarAlertas('maritimo', embarques)
+    // Previsão sai do total e **não sai da lista de alertas**: ela existe no
+    // banco, e uma tela que a contasse em lugar nenhum esconderia justamente o
+    // que a decisão de excluí-la produziu.
+    contarAlertas('maritimo', todos)
   }
 
   const hoje = hojeIso()

@@ -378,8 +378,17 @@ Três coisas dela mudam o número e ficam declaradas na tela de método:
   mensal, um trecho de volta pode cair no mês seguinte e ser contado no anterior;
 - **o viajante vem só pelo primeiro nome.** Nome de uma palavra não identifica ninguém, e
   vincular pelo palpite atribuiria a viagem à pessoa errada — o vínculo com o cadastro é o
-  que liga emissão a funcionário, e errá-lo corrompe o dado na origem. Quem não casa com o
-  cadastro entra como registro próprio desta fonte, com alerta no trecho.
+  que liga emissão a funcionário, e errá-lo corrompe o dado na origem. A ponte entre o
+  primeiro nome e o cadastro é um mapa que mora fora do repositório, porque nome real não
+  se versiona (§2.1).
+
+  **Quem não casa com o cadastro para a carga, e ela diz quem falta.** Esta carga não cria
+  pessoa. A versão anterior deste parágrafo mandava o contrário — entrar como registro
+  próprio, com alerta no trecho —, e foi assim que uma companhia aérea virou funcionário:
+  o texto abaixo do nome, dentro do bloco, é a companhia. Criar pessoa a partir de planilha
+  é barato de fazer e caro de desfazer, e infla justamente a contagem de pessoas distintas
+  que sustenta a supressão da mobilidade (§3.1.1) e o denominador de adesão do programa
+  (§7.5).
 
 **Não existe data de corte.** O `VIAGENS_CORTE_FONTE` e tudo que dependia dele saem: a
 premissa que os justificava foi apagada pela §0.1. Variável de ambiente que ninguém lê é
@@ -458,6 +467,20 @@ Quem viajou preenche. **Não há fluxo de aprovação** — se a viagem acontece
 antes. O viajante vê apenas as próprias submissões e pode editar enquanto o período não for
 fechado.
 
+**O que fecha um período: uma data no ambiente, `PROGRAMA_FECHADO_ATE`.** Viagem cuja ida
+seja até ela, inclusive, fica somente leitura; a submissão continua visível para quem a
+fez, continua contando e não se apaga. **Fechar é operação, não tela** — acontece fora da
+aplicação, como conceder perfil e rodar carga (§5). Um botão que fechasse precisaria de
+quem pode apertá-lo, de registro de quem apertou e de como desfazer, e nada disso se paga
+num programa que não é fonte de relatório. Vazia, nada está fechado: é o estado inicial, e
+a tela o declara. A trava está **na escrita**, não na interface (§11.3) — a tela deixa de
+oferecer o botão, mas quem impede é a consulta.
+
+**Reenviar a mesma viagem grava uma.** O identificador da submissão é derivado de quem
+registrou e do que registrou — trajeto e datas —, então um clique repetido sobrevive sem
+dobrar a emissão de ninguém. Duas viagens com o mesmo trajeto e as mesmas datas não são
+duas viagens.
+
 Ao enviar, o sistema devolve na hora a emissão calculada. Esse retorno imediato é o
 principal incentivo de adesão; não omitir.
 
@@ -472,6 +495,15 @@ preenchido — e nenhum desses campos entra no cálculo.
 **Aéreo:** um ou mais trechos com aeroporto de origem e destino, em autocomplete sobre a
 coleção de aeroportos. Botão para gerar o trecho de volta.
 
+**A classe da cabine é perguntada, e é a outra exceção ao formulário mínimo** — pelo mesmo
+critério dos três campos do carro: ela entra na conta. No inventário a econômica é
+*assumida*, porque o relatório da agência não informa a cabine (§7.2); aqui quem preenche é
+quem voou e sabe. Executiva multiplica a emissão do trecho por quase três, e assumir o que
+se pode perguntar seria descartar informação de graça. O seletor vem em econômica, então
+quem não tem o que dizer não precisa dizer nada.
+
+**A faixa de distância não é perguntada**: ela é calculada, como no inventário.
+
 **Carro:** lista ordenada de municípios — origem, paradas intermediárias, destino. Botões
 "adicionar parada" e "retornar à origem". A distância é a soma dos trechos consecutivos.
 
@@ -482,6 +514,18 @@ do formulário mínimo:
 - `combustivel`: `gasolina` | `etanol` | `diesel` | `flex`
 - `ocupantes`: inteiro ≥ 1. A emissão é do veículo. Dividir pelo número de ocupantes ao
   atribuir por pessoa, e deixar a regra explícita na interface.
+
+**O documento guarda a emissão do veículo; a divisão acontece ao atribuir.** Gravar já
+dividido esconderia a conta dentro do número — o que distância e fator reproduzem é o
+veículo (§9.1). E a divisão precisa acontecer em **toda** atribuição a pessoa, não só na
+tela do viajante: sem isso, dois caronas que registrem a mesma viagem somam o mesmo carro
+duas vezes no total do programa, e o total continua parecendo plausível.
+
+**O fator do carro é o da mobilidade, reaproveitado.** Um carro a gasolina emite por
+quilômetro o que emite, indo trabalhar ou indo a cliente, e a §7.5 já diz que a matemática
+se compartilha. Não existe um segundo arquivo de fatores para o mesmo número físico: dois
+arquivos são um que envelhece sem o outro. Sem o fator carregado, o cálculo falha
+explicitamente (§9.8) — não há valor aproximado.
 
 ### 7.4 Distância rodoviária
 
@@ -496,8 +540,41 @@ Distância **rodoviária**, nunca ortodrômica. Em trajetos regionais a diferen�
   declarada na tela de método (§10) e não é tratada como detalhe de infraestrutura.
 - **Cachear toda rota no banco**, com chave = sequência ordenada de códigos IBGE. As rotas
   da empresa se repetem muito.
-- Seleção de município via **lista do IBGE embarcada na aplicação** (5.570 registros), não
-  campo de texto livre. Elimina ambiguidade de grafia e é o que torna o cache eficaz.
+- Seleção de município via **lista do IBGE embarcada na aplicação**, não campo de texto
+  livre. Elimina ambiguidade de grafia e é o que torna o cache eficaz.
+
+  A lista vem de um **gerador versionado**, no mesmo padrão do contorno do mapa: o script
+  baixa da API de localidades do IBGE, declara origem e licença no cabeçalho do arquivo, e
+  o resultado é reprodutível — quem duvidar roda de novo e compara. **A coleção
+  `municipio` da §9.2 não é criada enquanto o arquivo for a fonte**: duas cópias do mesmo
+  dado é uma que diverge da outra em silêncio, e a que a tela lê não seria a que alguém
+  corrigiu.
+
+  **A lista traz o centroide de cada município, e ele serve para desenhar — nunca para
+  rotear.** A distinção é a lição de 15/09 lida no sentido certo: lá se pedia precisão de
+  CEP e o provedor devolvia o centro do município, o que arruinava a distância. Desenhar um
+  ponto num mapa do país é outro uso, e o centro do município é exatamente a precisão que
+  ele pede. **O roteamento continua mandando nome e UF**, porque é o provedor que sabe por
+  onde a estrada entra na cidade; mandar a ele um ponto nosso seria escolher um lugar dentro
+  do município e roteá-lo como se fosse o município.
+
+  O centroide vem das malhas territoriais do IBGE, na qualidade mínima — mesma origem e
+  mesma licença das divisas de região que o mapa já usa —, e é calculado pela fórmula do
+  polígono, não pela média dos vértices: a média puxa o ponto para onde o contorno tem mais
+  detalhe, e um litoral recortado deslocaria a cidade para o mar.
+
+  **Município sem centroide fica na lista assim mesmo.** O IBGE cria o município no cadastro
+  de localidades antes de refazer a malha, então há sempre alguns recém-criados sem
+  polígono. Eles continuam escolhíveis e continuam roteando; o que lhes falta é o ponto, e
+  quem desenha declara o que não pôde desenhar. Tirá-los da lista seria sumir do formulário
+  um lugar que existe.
+
+- **A chave do roteamento chamado pela aplicação é outra**, separada da das cargas
+  (§11.8). O provedor passa a ser consultado por quem usa o sistema, e não só por quem roda
+  carga: a chamada acontece **no envio do formulário, nunca enquanto alguém digita**, e o
+  cache deixa de ser conveniência para ser o que segura a conta. A chave do cache é o **par
+  ordenado** de códigos — uma sequência de dois —, e não o trajeto inteiro: por trajeto,
+  uma parada a mais inutilizaria tudo que já estava guardado.
 
 ---
 
@@ -509,16 +586,55 @@ números de referência em `CONTEXTO.md`.
 
 ### 8.1 Como o CO₂ é alocado
 
-A emissão informada pelo agente é alocada **por contêiner, por corredor**, não por peso. Na
-mesma rota o CO₂ por quilo varia até dez vezes, enquanto o CO₂ por contêiner é estável.
+**O valor informado pelo agente é o dado primário, e não se recalcula.** Nem por
+tonelada-quilômetro, nem por peso, nem por contêiner. Onde for preciso **estimar** o que o
+agente não informou, a unidade é o **contêiner, por corredor** (§8.2).
 
-**Não recalcular por tonelada-quilômetro.** O valor do agente é o dado primário. O CO₂ por
-contêiner é o teste de sanidade da ingestão: linha muito fora da mediana do corredor é
-sinalizada para revisão.
+**Por que contêiner e não peso.** O contêiner é a unidade que o agente de fato movimenta e a
+única que existe em todo embarque marítimo; o peso dentro dele varia com o que foi embarcado
+e não é escolha do transporte. Medido contra a base, nenhuma das duas unidades é
+estável dentro de um corredor — a dispersão por contêiner e a dispersão por quilo são da
+mesma ordem —, então **a escolha não se justifica por estabilidade, e sim por significado**:
+estimar por peso importaria para dentro do inventário a mesma conta circular da aba de
+resumo.
 
 **Não reproduzir a metodologia da aba de resumo.** Ela deriva peso a partir de contagem de
 contêiner com uma constante e depois deriva contagem a partir do peso — a conta é circular,
 e a constante usada está acima da média real.
+
+#### 8.1.1 Linha atípica e linha impossível são casos diferentes
+
+Versões anteriores deste documento descreviam os dois como se fossem um: a §8.1 mandava
+**sinalizar para revisão** e a §8.3 mandava **não importar**. São regras distintas, com
+limiares distintos e consequências opostas, e confundi-las erra nos dois sentidos — ou um
+número impossível entra e domina o total, ou emissão verdadeira é apagada por ser atípica.
+
+**Linha atípica — entra, com alerta.** É a linha plausível que destoa da mediana do próprio
+corredor: contêiner pouco carregado, carga solta, embarque partido. **Ela entra no total e
+recebe alerta**, que aparece na tela de método. Tirá-la seria remover emissão real do
+inventário por ser incomum, quando é justamente o incomum que um inventário existe para
+mostrar.
+
+O limiar é **folgado, e isso é medido, não arbitrado**: a dispersão por contêiner dentro dos
+corredores de maior volume é alta o bastante para que um limiar apertado marcasse uma fração
+grande da base. **Alerta que dispara em boa parte das linhas é alerta que se aprende a
+ignorar** — a mesma lição já registrada na §14 sobre teste com alarme falso. O limiar é
+parâmetro declarado, não constante no código.
+
+**Linha impossível — não é importada.** É a linha cuja ordem de grandeza não pertence ao
+módulo: não destoa do corredor, destoa do inventário inteiro por ordens de grandeza. O
+sintoma típico é fórmula errada na origem — peso multiplicado por distância, por exemplo.
+**Ela não entra até ser conferida na origem**, porque um número desses sozinho domina o
+total e torna todo o resto invisível.
+
+A comparação aqui é contra a **mediana geral do módulo**, não contra o corredor: linha
+impossível costuma estar sozinha no corredor dela, e um corredor de uma linha só tem essa
+linha como mediana — o teste passaria justamente onde precisava morder. O limiar é separado
+do anterior, muito mais alto, e também declarado.
+
+**A carga recusada é anunciada, nunca silenciosa.** O script diz qual linha recusou e por
+quê, e a conferência de cobertura (§8.4) conta a recusa como diferença entre origem e banco,
+com motivo — senão o descarte vira exatamente o buraco que a cobertura existe para achar.
 
 ### 8.2 Estimativa dos agentes sem detalhe
 
@@ -549,8 +665,27 @@ Gravar `nivelDado` em todo documento. No rodapé do módulo, uma linha de texto:
 - **Abas de template do sistema de origem são lixo.** Ignorar.
 - **A aba de detalhe e a de resumo usam bases de data diferentes.** Escolher uma, aplicar em
   todo o sistema e declarar qual é na tela de método.
-- Linha cuja ordem de grandeza é incompatível com o restante **não é importada** até ser
-  conferida na origem.
+- **Linha atípica entra com alerta; linha impossível não é importada.** São regras
+  diferentes, com limiares diferentes — ver §8.1.1, que é onde elas moram.
+
+### 8.4 Cobertura, desde a primeira carga
+
+**O marítimo entra na lista de fontes conhecidas do `verificar` na mesma leva do script de
+ingestão, nunca depois.** A conferência de cobertura responde *"chegou tudo?"*, que é a
+pergunta que coerência e plausibilidade não fazem — e é a única que pega uma fonte inteira
+ficando de fora. Ela custou duas vezes neste projeto (§14), e na segunda só apareceu porque
+alguém notou por acaso.
+
+A contagem é **por bloco de origem — agente e período —, nunca contra o arquivo inteiro.**
+Comparar total de coleção com total de uma fonte é a premissa de fonte única disfarçada de
+conferência, e já foi encontrada exatamente nessa forma. Bloco no banco sem conferência que o
+cubra vira aviso; arquivo de origem ausente na máquina não falha, mas diz quantos embarques
+ficaram sem conferir.
+
+**O escopo de recarga é agente E bloco de origem, nunca agente e ano.** Um bloco do relatório
+atravessa a virada do ano — o período dele não coincide com o ano civil —, então dois blocos
+do mesmo agente contêm documentos do mesmo ano. Com o ano no escopo, recarregar um bloco
+apagaria os documentos do outro que caíssem naquele ano (§9.9).
 
 ---
 
@@ -588,13 +723,26 @@ mobilidade/{anoBase}_{matricula}
 viagemTrecho/{fonte}_{refOrigem}_{ordem}
 viagemRegistrada/{uid}_{reservaId}_{ordem}
 embarque/{agente}_{shipmentId}
-containerPortoMes/{ano}_{mes}_{porto}
+containerPortoMes/{ano}_{mes}_{porto}   -- prevista, NÃO criada: ver abaixo
 fatorEmissao/{categoria}__{chave}__{versao}__{vigenciaInicio}
 aeroporto/{iata}
-municipio/{codigoIbge}
+porto/{locode}
+municipio/{codigoIbge}    -- prevista, NÃO criada: ver §7.4
 rotaCache/{chave}
 usuarioPerfil/{uid}
 ```
+
+**`containerPortoMes` não é criada, e o motivo é o da §9.1.5.** Contêineres por
+porto por mês é **contador agregado**: sai de `embarque` com uma redução em
+JavaScript, no volume deste módulo, e pré-calculá-lo é justamente o que
+desincroniza em silêncio e trava a criação de cortes novos. Duas cópias da mesma
+contagem é uma que diverge da outra, e a que a tela lê não seria a que alguém
+corrigiu — mesmo raciocínio que deixou `municipio` fora na §7.4.
+
+**A tabela de contêineres por porto da aba de resumo também não entra.** Ela usa
+outra base de data (§8.3) e o total dela embute a contagem derivada dos agentes
+sem detalhe, que é a conta circular que a §8.1 proíbe reproduzir. A tela monta a
+dela a partir dos documentos.
 
 ### 9.3 Por que três coleções de emissão, e não uma
 
@@ -703,6 +851,11 @@ sem `empresa`, que é dimensão de inventário; sem `passageiros`, porque quem
 preenche é quem viajou e a divisão entre ocupantes de um carro é `ocupantes`; e
 sem `modulo` nem `periodicidade`, porque não faz parte de módulo nenhum do
 inventário.
+
+`origem` e `destino` guardam o **identificador**, não o nome: código IATA no
+aéreo e código IBGE no carro. É o que o inventário já faz com o aeroporto, e é o
+que permite reabrir a viagem no formulário para editar — nome gravado não volta a
+ser escolha de lista. O nome é resolvido na exibição.
 
 `criadoPorUid` é **obrigatório** — é ele que permite ao `colaborador` ler apenas
 as próprias submissões, na consulta e não na interface (§5.1). É também o que
@@ -831,8 +984,26 @@ com fonte e vigência, e a lista de exceções com motivo.
 e **nunca** `viagemRegistrada`.
 
 6. **Registrar viagem** — formulário, com resultado imediato da emissão.
-7. **Emissões registradas** — registradas no período, emissão acumulada, cobertura, últimas
-   viagens, participação de avião e carro.
+7. **Emissões registradas** — registradas no período, emissão acumulada, adesão, mapa dos
+   trajetos, últimas viagens, participação de avião e carro.
+
+   **No mapa daqui todo ponto é um lugar de verdade** — a cidade do aeroporto no voo, o
+   município no carro —, ao contrário do mapa de Viagens, que agrega por região. Lá a
+   agregação existe por legibilidade, com centenas de trechos; aqui não há volume que a
+   peça nem supressão a satisfazer, e agregar esconderia de onde se foi sem ganhar nada.
+   **O aeroporto de uma cidade e o município dessa cidade são o mesmo ponto**: dois pontos
+   para um lugar diriam que se foi a dois lugares.
+
+   O desenho é a mesma peça nas duas telas, e isso é a §7.5 outra vez — compartilha-se a
+   matemática e o desenho, nunca o dado. A peça não conhece consulta nenhuma: recebe lugares
+   e ligações prontos.
+
+   **O `colaborador` tem a versão dele desta tela, "Minhas viagens"**, e não a agregada:
+   ele não vê dado de terceiro nem agregado (§5.1). É a mesma sétima tela, recortada pelo
+   uid na consulta — não é uma "Emissões registradas" com filtro de interface.
+
+   A palavra na tela é **adesão**, não "cobertura" solta: o protótipo usava a mesma palavra
+   para outra conta, e indicador com rótulo ambíguo é começo de discussão longa em reunião.
 
 **Nenhuma tela mistura as duas origens**, nem lado a lado, nem como comparação, nem como
 total somado. Se um dia alguém quiser os dois números na mesma página, isso é decisão nova
@@ -964,27 +1135,51 @@ Coisas que provavelmente vão acontecer, mas não agora.
   metodológica de quem assina o relatório e entram por arquivo próprio.
 - **A data de corte deixou de existir** (§0.1, §7). Agência e formulário não são a mesma
   série, então não há o que cortar.
-- **Módulo marítimo não começou.** É o que falta para o painel consolidado deixar de ser
-  parcial.
+- **Dois dos três agentes de carga não entregam detalhe linha a linha**, e por isso não
+  estão no inventário — nem como estimativa. A cascata da §8.2 estima o que falta **dentro
+  de um embarque**; ela não inventa o embarque. Um deles entrega quatro números agregados,
+  o outro entrega uma aba vazia, e os totais que a aba de resumo lhes atribui são a conta
+  circular que a §8.1 proíbe reproduzir — o CO₂ de um sai do indicador dos outros e o peso
+  é resíduo de subtração. **A saída é pedir detalhe por embarque à origem, que é operação,
+  não código.** Enquanto não vier, o marítimo é o inventário de um agente, a cobertura
+  conta os dois blocos ausentes e a tela declara quantos embarques ficam de fora.
+- **Os três módulos cobrem períodos diferentes, e a Visão geral vai ter que dizer isso.**
+  Mobilidade tem ano-base 2026; viagens relata 2025; o marítimo cobre de novembro de 2024
+  a maio de 2026, com 2024 e 2026 parciais e **sem ano-base** — o escopo dele é agente e
+  bloco, nunca ano (§8.4). Um "total do ano" que some os três precisa declarar o que essa
+  palavra significa quando um módulo é taxa anual de um ano, outro é um relatório anual
+  fechado e o terceiro é uma série contínua recortada pelo ano civil. **Não é ajuste de
+  tela: é a definição do indicador principal do painel**, e fica para a etapa da Visão
+  geral.
 - **Chaves do Google separadas por função e por destino** (§11.8). Já estão separadas por
   API — uma para geocodificação, outra para roteamento —, porque restringir uma chave única
   a uma API derrubaria a chamada da outra ponta. Falta a separação por **destino**: a chave
   usada nas cargas roda da máquina de quem opera e admite restrição por IP; a que o
   formulário vai usar sairá da Vercel, cujo IP de saída não é estável, e nessa ponta o
-  controle é restrição por API mais teto de faturamento com alerta. Nada disso é código:
-  é configuração no console do Google, e entra quando o formulário existir.
+  controle é restrição por API mais teto de faturamento com alerta.
+
+  **O lado do código está feito:** `GOOGLE_ROUTES_API_KEY_APP` existe e é a única chave que
+  o formulário lê; as cargas continuam na antiga. Falta a **configuração no console**, que
+  é operação: criar a segunda chave, restringir só à Routes API, pôr teto de faturamento
+  com alerta e acrescentar a variável na Vercel. Sem ela o formulário cai na chave das
+  cargas — conveniente em desenvolvimento, e não é o que deve ir para produção.
 - **O provedor de rota não fica carimbado no documento.** O documento de emissão carimba o
   fator (§9.1), não o provedor de geocodificação nem o de roteamento — então a tela de
   método declara a configuração **atual** do ambiente, e não necessariamente a que produziu
   a carga que está no banco. Enquanto a carga for manual e rara, a diferença é teórica;
   quando deixar de ser, o caminho é carimbar o provedor junto do fator.
-- **Das sete telas da §10, três existem**: Método, Mobilidade e Viagens, junto da entrada
-  e da casca de navegação. Faltam Visão geral, Marítimo e as duas do programa de viagens. A
-  Visão geral fica por último de propósito: enquanto o marítimo não existir, ela mostraria
-  dois terços do inventário como se fosse o total.
-- **O denominador da cobertura do programa não está definido.** Hoje seria o total da
-  coleção de funcionários, que inclui gente que só aparece como aprovador de passagem.
-  Indicador com denominador errado é pior que indicador ausente, porque parece funcionar.
+- **Das sete telas da §10, seis existem**: Método, Mobilidade, Viagens e Marítimo no
+  inventário, e Registrar viagem e Emissões registradas no programa — esta última com a
+  versão do próprio viajante, "Minhas viagens", porque `colaborador` não vê agregado
+  (§5.1). Falta a **Visão geral**, que ficou por último de propósito: enquanto o marítimo
+  não existisse, ela mostraria dois terços do inventário como se fosse o total. O que falta
+  a ela agora não é módulo — é a definição de período do item acima.
+- **O denominador da adesão do programa é parâmetro, e pode não estar definido.** Ele não
+  sai de coleção nenhuma: o candidato óbvio, o tamanho da coleção de funcionários, inclui
+  gente que só aparece como aprovador de passagem, e com ele a adesão nasceria menor do que
+  é. Sem `PROGRAMA_QUADRO` no ambiente, a tela mostra a contagem e **declara que não há
+  denominador** — indicador com denominador errado é pior que indicador ausente, porque
+  parece funcionar. O que falta é o número, que vem de quem tem o quadro, não do código.
 - **Rotação da chave da service account** — pendente desde 14/09, depois de a credencial ter
   ido parar no `.env.example` duas vezes. Operação, não código: rotacionar, atualizar as
   variáveis na Vercel, redeploy, e só então apagar a chave antiga.
@@ -1001,6 +1196,926 @@ documento.
 **Sem dado real nas entradas** — descreva o que mudou, não os números que apareceram.
 
 ### Histórico
+
+#### 2026-09-19 — Marítimo, passos 2 e 3: a tela, e o que só aparece desenhando
+
+O último módulo do inventário ganhou tela e chegou à tela de Método. Nenhum
+número mudou de valor nestes dois passos — o que mudou foi o que a tela **diz**
+sobre eles, e foi aí que os defeitos apareceram.
+
+**Passo 2 — a tela do módulo**
+
+Os três cartões, o mapa de corredores, a série mensal, os contêineres por porto,
+a tabela de corredores e o rodapé de qualidade da §8.2. As exclusões que o
+Gustavo decidiu estão na camada, não na tela, e cada uma tem teste que **liga a
+violação** — as duas nascem sem nada a excluir, então sem isso seriam guardas
+sem mordida:
+
+- **previsão fora de todos os totais** — emissão, contêineres, série, corredores
+  e mapa —, contada à parte. Com a regra desligada, o total sobe exatamente o
+  que a previsão vale;
+- **aéreo no total e fora de tudo que é por contêiner**: indicador, tabela de
+  portos, corredores e mapa. Com a regra desligada, o indicador sobe e a tabela
+  de portos ganha dois "portos" que são aeroporto e ponto interior;
+- **nada de supressão** (§3.1.3): corredor de um embarque aparece pelo próprio
+  nome, e não há balde. A declaração do aéreo é **uma string só**, usada na nota
+  do indicador, na legenda do mapa e sob as duas tabelas — texto duplicado seria
+  garantir que uma das cópias envelhecesse.
+
+**A peça neutra de mapa serve para rota porto a porto, com dois ajustes, e os
+dois são sobre este módulo ter algo que o outro não tem**
+
+- **A ligação tem sentido, porque importação tem sentido.** A carga sai de um
+  porto e chega no outro, e isso está no documento; em Viagens ida e volta são a
+  mesma ligação, e um ponto percorrendo a linha inventaria direção. Virou prop,
+  desligada por padrão.
+- **Sem divisas de região.** Em Viagens a região *é* a unidade, e clicar num
+  ponto acende a divisa. Aqui o ponto é um porto e não há recorte por região:
+  desenhar as divisas convidaria a procurar um agrupamento que a tela não tem.
+
+**Os navios do protótipo: a direção é dado, o resto não**
+
+Ao contrário do ângulo do radar (§3.1.1), aqui o movimento não é vazio. O que o
+protótipo inventa é tudo em volta dele: a duração de cada arco sai do **índice da
+linha**, que é a ordem por emissão, então corredor mais pesado parece mais lento;
+e a animação **repete para sempre**, o que afirma que há navio navegando agora
+num período fechado. Ficou uma passagem só, mesma duração para todas,
+sincronizada com o traçado da linha, e o ponto se dissolve ao chegar. Em CSS com
+`offset-path`, e **não em SMIL**: `animateMotion` ignoraria o bloco de movimento
+reduzido, que é quem zera duração e atraso.
+
+**Três defeitos que só o desenho mostrou, e o terceiro é da família deste log**
+
+- **O inserto do Brasil não aparecia.** Ele era montado das **ligações**
+  domésticas, e numa importação nenhuma ligação tem as duas pontas no Brasil —
+  então ele nunca apareceria justamente no mapa em que os portos de desembarque
+  ficam a poucos pixels uns dos outros. Passou a ser montado dos **lugares**
+  domésticos. Em Viagens não muda nada, e isso foi conferido, não suposto.
+- **Os dois extremos são aglomerados, e só um deles tem inserto.** Medido: uma
+  dezena e meia de rótulos com dezenas de sobreposições. Entrou regra geral —
+  **rótulo que colide não é escrito, e a legenda declara quantos ficaram sem
+  nome**. A medida é a **caixa do texto**, não o raio, que é a correção do alarme
+  falso de 18/09: um limiar em pixels da moldura grande acusava colisão dentro do
+  inserto, que tem um terço da largura.
+- **A série mensal declarava as fontes de Viagens dentro do marítimo.** A nota
+  estava escrita **dentro da peça compartilhada** — as duas fontes
+  administrativas daquele módulo —, e a tela nova herdou a frase. Cada módulo
+  agrupa por uma data diferente e soma fontes diferentes: a nota passou a vir de
+  quem chama, e as três telas declaram a sua.
+
+> **Compartilha-se o desenho, não a declaração.** A peça sabe desenhar uma série;
+> o que a série significa é sempre do módulo. É a mesma família dos defeitos que
+> este log vem pegando — tela afirmando um arranjo que ela não tem.
+
+**Passo 3 — a tela de Método**
+
+O módulo passou de duas linhas para sete no painel de parâmetros, e cada uma é
+uma decisão que muda o número: base de data, os dois limiares, previsão fora do
+total, aéreo dentro do total e fora do indicador, e o período sem ano-base.
+
+- **A base de data tem fonte única, e o defeito era exatamente o contrário.** A
+  tela perguntava ao ambiente uma variável já removida, e declararia "não
+  definida" justamente a escolha que mais muda o número do módulo. Ela passou a
+  ler a constante. O teste **planta um valor diferente na variável de ambiente** e
+  exige que a tela continue declarando a constante: quem reintroduzir a leitura
+  do ambiente vê o valor plantado aparecer e reprova.
+- **Os dois limiares saem com o valor em vigor**, em linhas separadas de
+  propósito — um mede contra a mediana do corredor e deixa entrar, o outro mede
+  contra a mediana do módulo e recusa. A amostra mínima do corredor viaja junto
+  do primeiro, porque é ela que decide quando a comparação vale.
+- **A cascata da §8.2 aparece degrau a degrau**, com a proporção da emissão e a
+  contagem de embarques. "Estimativa" sozinho não diz se a média era do corredor
+  ou geral, e a diferença é entre um número específico daquela rota e uma média
+  do módulo inteiro. O degrau que não aconteceu aparece zerado, não some.
+- **A cascata é medida sobre o total, e previsão está fora dele.** Medir os dois
+  juntos diria que tal proporção do número vem do agente para um número que não é
+  o do módulo. Conferido ligando a violação: com a previsão de volta no
+  denominador, o teste reprova.
+- **A fonte declara o agente que falta sem inventar o embarque.** Quantos agentes
+  o inventário tem é fato do banco; quantos ficaram de fora é fato do arquivo, e
+  quem responde isso é a conferência de cobertura. A tela diz onde procurar em
+  vez de fingir que sabe.
+
+**O alerta passou a dizer o quê, não só quantos — e isso destapou quatro
+alertas mudos**
+
+A tabela de alertas mostrava o identificador e uma contagem. Um código como
+`co2_por_container_atipico` só se entende de dentro do código, e **alerta que não
+se entende é alerta que se aprende a ignorar**, que é a lição que este log já
+registrou duas vezes. Cada tipo ganhou o **motivo**: a regra que o levanta,
+escrita junto do código. A descrição gravada na carga continua fora da tela —
+ela cita valor do registro e atravessaria a anonimização por porta lateral
+(§3.1).
+
+> **A guarda estática passou, e o defeito estava lá.** Escrevi um teste que varre
+> o fonte exigindo motivo para todo código de alerta, e ele passou. Rodando a
+> tela **contra o banco carregado**, quatro alertas apareceram sem explicação:
+> eles moravam como **chave de um `Record` de severidade**, e a varredura só
+> procurava a constante exportada. A guarda existia, mordia, e mordia no lugar
+> errado.
+
+O conserto foi em três camadas, e a terceira é a que importa:
+
+1. os quatro códigos viraram constante exportada, no formato das outras cargas;
+2. a varredura do fonte ganhou uma segunda rede, para o código escrito direto na
+   emissão do alerta — conferida com um código inline inventado, que **reprova
+   nomeando o arquivo**;
+3. **entrou conferência no `verificar`, que varre o banco**: todo código de
+   alerta gravado tem motivo declarado. É a família da cobertura (§8.4) —
+   coerência pergunta "a conta fecha?", esta pergunta "chegou explicação para
+   tudo que está lá?". Conferida tirando dois motivos: reprova, **nomeando os
+   dois códigos**.
+
+**Um rótulo que não cabia, medido e encurtado**
+
+A primeira versão da cascata escrevia a fórmula no rótulo. Medido a 1024px, onde
+o painel vive numa coluna de 294px dividida com os outros dois módulos, **dois
+degraus quebravam em duas linhas**. A unidade da estimativa é decisão declarada
+no parâmetro de alocação, que é onde ela se explica inteira; no degrau basta qual
+mediana produziu o número. Encurtados, nenhum rótulo quebra.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (262 testes, 7 novos) e `next build` passam.
+  `verificar` fecha inteiro, incluindo as duas conferências de cobertura do
+  marítimo e a nova dos motivos. Nenhum servidor foi subido por mim; usei o que
+  já estava no ar.
+- **As quatro guardas novas foram conferidas ligando a violação**: a tela lendo a
+  base de data do ambiente reprova; um motivo removido reprova, nomeando o código
+  e o arquivo; um código de alerta inline sem motivo reprova; a previsão de volta
+  no denominador da cascata reprova. Guarda que não morde não é guarda.
+- Contra o banco carregado, por ensaio temporário apagado em seguida: os sete
+  parâmetros do marítimo saem definidos, nenhum pendente; a cascata fecha em cem
+  por cento medido; **nenhum dos dezesseis tipos de alerta fica sem motivo**;
+  nenhuma descrição gravada e nenhum identificador de pessoa saem na resposta; e
+  o perfil `importacao` recebe só o marítimo, com a mobilidade e as viagens nem
+  chegando a ser lidas.
+- O layout foi medido com rota temporária, no `.gitignore` **antes** de existir e
+  apagada no fim, desenhando o recorte **verbatim** da tela real com dados
+  inventados do zero. Sem rolagem lateral em 360, 390, 640, 1024, 1280 e 1366; as
+  tabelas viram lista abaixo de 640, com as células nomeadas; nenhum bloco vaza
+  por fora do envoltório de rolagem.
+
+**O que continua fora do alcance de teste automático:** a tela abrir. `next
+build` compila e não renderiza — todas as páginas são dinâmicas (lição de 15/09),
+e a rota temporária exercita a árvore de componentes, não a sessão.
+
+#### 2026-09-18 — Marítimo, passo 1: o código que já estava lá, e as sete decisões que ele não conhecia
+
+Início do último módulo do inventário. Antes de escrever qualquer linha, o
+levantamento encontrou o módulo **meio construído e não registrado**.
+
+**De onde veio o que já estava no diretório.** Seis arquivos — a leitura do
+relatório, a cascata de qualidade, a carga, o cadastro de portos, a leitura da
+lista oficial de códigos de porto e o bloco de cobertura da conferência — foram
+escritos entre 16 e 18/09, ficaram fora de todo commit, **não têm entrada neste
+log** e a §13 continuava afirmando que o módulo não tinha começado. Nunca
+rodaram: as duas coleções do módulo estavam vazias.
+
+> **Código sem entrada no log é rascunho, não base.** Ele foi escrito antes de
+> qualquer uma das decisões desta etapa existir, então passou por revisão contra
+> o documento em vez de ser aproveitado como pronto — e nada dele entra em commit
+> antes de o módulo ter rodado. O que sobreviveu à revisão sobreviveu por
+> argumento, não por já estar escrito.
+
+O que a revisão confirmou vale registrar, porque é o que permitiu decidir com
+número em cima da base: **a leitura reproduz os valores de conferência
+exatamente** — embarques, contêineres, emissão e peso dos dois blocos de detalhe,
+sem diferença. O que não sobreviveu está nos dois defeitos abaixo e nas decisões.
+
+**As sete decisões do Gustavo, medidas antes de propostas**
+
+- **Base de data: a partida.** A §8.3 manda escolher entre a base do detalhe e a
+  do resumo, e a medição mostrou que **não são duas opções**: a do resumo é
+  registro aduaneiro, que existe só na aba agregada — não há coluna por linha, e
+  a §9.1 pede um documento por embarque. A escolha real é entre partida e
+  chegada, e aí o número decidiu: **partida prevista e partida efetiva concordam
+  no mês em todos os embarques que têm as duas**, enquanto a chegada mudaria de
+  mês a maior parte da base e de ano uma fração dela. Fica a partida prevista,
+  que é a que existe em quase toda linha.
+- **Os dois limiares, com a fração da base que cada um marcaria.** O de linha
+  atípica ficou no **pé de um patamar**: o valor escolhido e o seguinte marcam
+  exatamente as mesmas linhas, e escolher o menor dos dois mantém os alertas de
+  hoje e morde se uma linha nova cair no meio. Abaixo dele a contagem sobe
+  depressa — o valor mais apertado que eu medi marcaria quase um terço da base, e
+  alerta assim se aprende a ignorar. O de linha impossível ficou com **uma ordem
+  de grandeza de folga sobre a maior linha legítima da base**, e não no valor
+  altíssimo que eu tinha proposto no exemplo: alto demais só pega o absurdo, e
+  fórmula errada em embarque pequeno passaria por baixo.
+- **Previsão fora do total**, e aéreo **fora do indicador por contêiner e dentro
+  do total do módulo**.
+- **`containerPortoMes` não é criada**, com o motivo escrito na §9.2 no molde do
+  que foi feito com `municipio`: é contador agregado, que a §9.1.5 proíbe.
+- **A tabela de contêineres por porto da aba de resumo fica de fora** — outra base
+  de data, e o total dela embute a contagem derivada dos agentes sem detalhe.
+- **O módulo não tem ano-base.** Diferente de viagens (§7.0): ele cobre uma série
+  contínua que atravessa três anos civis, dois deles parciais, e o escopo de
+  recarga é agente e bloco, nunca ano (§8.4).
+
+**A previsão parou de depender de uma ausência ambígua, e essa foi a correção
+mais importante da etapa**
+
+A derivação que estava escrita marcava como previsão quem não tivesse partida
+efetiva. Ela reproduz exatamente a classificação da própria origem — e **erra em
+seis de oito**, porque a coluna de partida é de navio: no frete aéreo ela nunca é
+preenchida, por construção. Metade dos marcados eram aéreos que já tinham
+chegado, com data de chegada registrada.
+
+> **Ausência de coluna significa coisas diferentes em cada modal, e por isso não
+> serve de prova.** O pedido do Gustavo foi direto: declarar o modal em vez de
+> depender do vazio. O conserto que saiu disso é melhor que o pedido, porque não
+> usa ausência nenhuma para decidir o que sai do total.
+
+Ficaram **três graus, e só o primeiro sai do total**: sem itinerário nenhum — sem
+data, sem porto, só a reserva e o CO₂ lançado — é previsão, e é conclusivo sem
+olhar o modal, porque não há coluna a interpretar. Itinerário com data prevista e
+nenhuma data de fato vira **alerta próprio e continua no total**: pode ter partido
+e não ter sido lançado, e descartar emissão real por falta de digitação é erro
+maior que incluir uma previsão. É nesse grau que o modal é declarado, porque a
+força da prova difere — no marítimo há três colunas de fato possíveis, no aéreo há
+uma só.
+
+**Dois defeitos de leitura, e os dois eram de forma**
+
+- **Uma aba de template estava sendo lida como detalhe.** O sistema de origem
+  guarda a configuração de ordenação numa aba cuja primeira célula é o nome do
+  campo identificador — rótulo, não cabeçalho. A regra que localiza o cabeçalho
+  pelo conteúdo mordia nela e produzia um bloco fantasma, com linhas cujos
+  identificadores eram nomes de campo. Nenhuma virava documento, mas todas viravam
+  **recusa declarada num bloco falso dentro da conferência de cobertura** — ruído
+  exatamente onde a conferência precisa ser lida com atenção. A correção continua
+  sendo por forma e não por lista de nomes de aba: além do identificador, a aba
+  precisa trazer um mínimo de outras colunas conhecidas. Uma aba de detalhe traz
+  duas dezenas; a de template trazia três. Template novo nasce ignorado e agente
+  novo nasce lido, que era a propriedade que a regra original buscava.
+- **A tela de método lia uma variável de ambiente que já tinha sido removida.** A
+  base de data virou constante no código, e a tela continuava perguntando ao
+  ambiente — declararia "não definida" justamente a escolha que mais muda o número
+  do módulo. **A decisão do Gustavo foi fonte única:** a tela passa a ler a
+  constante. Reintroduzir a variável daria duas fontes para a mesma decisão, e é
+  assim que uma delas envelhece sem a outra.
+
+#### 2026-09-18 — No celular nada rola de lado: o que não cabe muda de forma
+
+Reportado depois da correção anterior: no telefone ainda era preciso **arrastar a
+tela para ver o mapa**, e arrastando o cabeçalho ficava cortado. O pedido veio
+como regra, e é ela que governa esta entrada:
+
+> **Tudo tem de estar visível a partir do momento em que a tela é acessada.**
+
+**Isso derruba a premissa da etapa anterior.** Lá eu troquei *encolher* por
+*rolar de lado*, tratando as duas como as únicas saídas. São três, e só a
+terceira serve num telefone:
+
+| | o que acontece | serve no celular? |
+|---|---|---|
+| Encolher | o texto encolhe junto — rótulo de mês a 6,7px | não |
+| Rolar de lado | o conteúdo existe fora do quadro | **não** |
+| **Mudar de forma** | o mesmo dado, em outro arranjo | sim |
+
+E rolar de lado era pior do que eu tinha medido: nas tabelas de cinco colunas,
+**período e emissão nasciam fora da tela**. Numa tabela de emissão, esconder a
+emissão por padrão é o pior corte possível, e exigir arrasto para chegar nela é
+pior ainda.
+
+**O que mudou de forma**
+
+- **A tabela vira lista.** Abaixo de 640px cada linha é um bloco e cada célula um
+  par rótulo–valor; o cabeçalho some e o rótulo da coluna passa a vir colado ao
+  valor, de `data-rotulo`. **Nada é escondido** — o que era coluna virou linha. A
+  primeira célula, que nomeia a linha, fica sozinha em destaque.
+- **O mapa perde o que não se lê.** Na largura do telefone o nome de cada ponto
+  sairia com pouco mais de quatro pixels e o inserto com três — sujeira, não
+  texto. Os dois somem, o traçado fica, **e a legenda declara o que sumiu**, com
+  a frase aparecendo só nessa largura.
+- **O gráfico de barras perde o valor no topo.** Doze meses dividem 26px cada; os
+  números sairiam encavalados. Barra e rótulo do mês ficam.
+- **O piso de largura do `Rolavel` passou a valer só a partir de `sm`.** Abaixo
+  disso ele é zero e não há o que rolar.
+
+**Medido, antes e depois, num aparelho de 390px**
+
+| | antes | depois |
+|---|---|---|
+| Página rola de lado | sim | **não** (390 = 390) |
+| Algum bloco rola de lado | sim | **não** |
+| Mapa visível | 57% | **inteiro** |
+| Tabelas visíveis | 62% | **inteiro** |
+| Altura da página | 3666px | 4723px |
+
+**O preço, aceito e declarado: a página ficou ~29% mais alta.** Tabela empilhada
+gasta altura, e é a troca que a regra pede — rolar para baixo é o gesto natural
+do telefone; rolar para o lado dentro de uma página que rola para baixo não é.
+
+Conferido também que **nada disso alcança o desktop**: a 640px a tabela já volta
+a ser tabela, e a 1366 o cabeçalho está de volta, os rótulos do mapa também, e os
+blocos voltam a ter piso e a rolar por dentro quando a coluna é estreita.
+
+**Como foi medido, e o que isso destravou**
+
+A rota temporária foi a virada: uma página que desenha a árvore de Viagens com os
+**componentes reais e dados inventados do zero**, sem tocar em Firestore e sem
+exigir sessão, servida pelo servidor de desenvolvimento que já estava no ar. Com
+ela deu para medir caixa renderizada em várias larguras sem a sessão de ninguém —
+que era a limitação registrada nas duas entradas anteriores. A rota entrou no
+`.gitignore` **antes** de existir e foi apagada no fim, com o `.gitignore`
+voltando ao que era.
+
+> **A lição desta sequência inteira, em uma linha:** as três rodadas de erro
+> saíram de deduzir layout em vez de medir. Layout não é aritmética — depende de
+> min-content, de ordem de media query e do que o navegador faz com uma tabela.
+> **Enquanto não havia como medir, cada correção era um palpite informado**, e
+> palpite informado acerta a causa com a frequência que este log registra.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (228 testes, 2 novos) e `next build` passam. Nenhum
+  servidor foi subido por mim; usei o que já estava no ar.
+- Sem vazamento e sem rolagem lateral em **360 e 390**; comportamento de desktop
+  intacto em **640 e 1366**.
+- As duas guardas novas foram conferidas desligando cada uma: tirar o rótulo de
+  uma célula numérica reprova, nomeando a célula; tirar o mínimo de uma grade
+  reprova, nomeando o arquivo.
+
+
+#### 2026-09-18 — A rolagem que nunca rolou: o mínimo do item alargando a grade
+
+Reportado ao testar no celular e num notebook: a tela de Viagens ruim e **a
+página inteira precisando ser arrastada de lado** — exatamente o defeito que a
+rolagem por bloco da etapa anterior existia para impedir.
+
+**O envoltório de rolagem não falhou em rolar: ele nunca precisou rolar.** O
+mínimo automático de um item de grade é o min-content dele, e um item que contém
+algo com largura mínima declarada arrasta esse mínimo para a coluna. A coluna
+cresce, a grade passa do contêiner, e o que deveria rolar por dentro passa a
+caber — porque tudo em volta cedeu.
+
+Medido num aparelho de 390px, antes e depois de `min-width: 0` no item:
+
+| | antes | depois |
+|---|---|---|
+| Largura rolável da página | **640px** (viewport 390) | 390px |
+| Largura do painel | **622px** | 354px |
+| Envoltório de rolagem | não rolava | 352 visíveis para 620 de conteúdo |
+
+**`grid-cols-1` não resolve, e testar isso foi o que fechou o diagnóstico.** O
+problema é o mínimo do item, não o número de colunas — três variantes foram
+medidas lado a lado na mesma página, e só a do `min-width` mudou alguma coisa.
+Todas as grades passaram a zerar o mínimo dos próprios itens.
+
+**Por que a etapa anterior não pegou isto.** Ela mediu o que é aritmética —
+escala de `viewBox`, tamanho efetivo de texto, altura de alvo de toque — e
+deduziu o resto. **Largura resolvida por grade não é aritmética: depende de
+min-content, que depende do conteúdo.** A dedução dizia que um contêiner de
+rolagem contém o que está dentro dele, e isso é verdade **só quando a largura de
+quem contém é definida**. Dentro de uma coluna que se ajusta ao conteúdo, o
+contêiner de rolagem vira o que empurra.
+
+> **A lição, e ela é da mesma família das outras deste log.** Coerência interna
+> — o envoltório está lá, a classe é emitida, o mínimo é o certo — passava em
+> tudo. O que faltava era medir o resultado, e o resultado é layout: só existe
+> com navegador fazendo layout.
+
+**Como foi medido, já que layout não sai de typecheck nem de teste**
+
+A etapa anterior registrou que o navegador embutido não executa script em arquivo
+local, o que deixava caixa renderizada fora de alcance. A saída foi servir a
+reprodução **pelo próprio servidor de desenvolvimento que o Gustavo já tinha no
+ar**: um arquivo estático com a folha de estilo construída embutida e a mesma
+árvore de classes, servido por HTTP em vez de `file://` — e aí o script roda e a
+caixa se mede. A reprodução e o arquivo servido foram removidos em seguida.
+
+Uma tentativa antes dessa não valeu e vale registrar: o mesmo arquivo aberto como
+`file://` carregou **sem estilo nenhum**, porque a política do painel bloqueia
+folha externa. Embutir o CSS resolveu a aparência, mas continuou sem script — foi
+o HTTP que destravou a medição.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (227 testes, 1 novo) e `next build` passam. Nenhum
+  servidor foi subido por mim; usei o que já estava no ar.
+- Sem vazamento em **360, 390, 753, 1280 e 1366px** — `scrollWidth` igual ao
+  viewport em todas, e os blocos rolando por dentro onde precisam.
+- A guarda nova foi conferida desligando-a: tirar o mínimo de uma grade reprova,
+  nomeando o arquivo e a string de classes.
+
+
+#### 2026-09-18 — Entrar pelo IP da máquina: origem bloqueada e falhas mudas
+
+Surgiu ao tentar abrir o sistema pelo IP da máquina — que é o que permite conferir
+o layout num celular de verdade, e a única forma de exercitar o que emulação de
+dispositivo não reproduz. O botão de entrar não fazia nada.
+
+**A causa não era autenticação, e levou três rodadas para aparecer.** O Next
+recusa servir os recursos de desenvolvimento (`/_next/*`) para origem que não
+esteja em `allowedDevOrigins`. Com isso **o JavaScript não carregava, a página
+não hidratava e a tela virava HTML inerte**: o clique não chegava a executar
+nada. Firebase, domínio autorizado e popup nunca foram exercitados — o que
+parecia falha de login era ausência de aplicação.
+
+> **O sintoma não se parece nada com a causa**, e é o que torna este caso digno
+> de registro: botão que não responde, sem erro em lugar nenhum, com o servidor
+> servindo a página normalmente e o mesmo botão funcionando em `localhost`.
+
+**A variável é de ambiente, não constante.** É IP de máquina, e IP de máquina
+versionado é a mesma classe de erro da coordenada da fábrica (§2.1): entra como
+constante, segue no repositório público e deixa de valer no dia em que o roteador
+entrega outro endereço. `DEV_ORIGENS_PERMITIDAS` entrou no `.env.example` vazia,
+**com o sintoma descrito ao lado** — porque ninguém deveria precisar descobrir
+duas vezes que "botão inerte" quer dizer "origem bloqueada". Vale só em
+desenvolvimento; em produção o Next ignora.
+
+**Dois defeitos meus, achados no caminho, que transformavam qualquer falha de
+entrada em silêncio**
+
+- **`authWeb()` estava fora do `try`.** Ele lança quando falta configuração, e
+  ali a rejeição escapava da função inteira: o React não espera o `onClick`,
+  então o `finally` nunca rodava. O botão travava em "Entrando…", sem mensagem na
+  tela e sem nada no console. **Falha silenciosa num botão é o pior lugar para
+  ela estar** — e enquanto ela existiu, nenhuma melhoria de mensagem era sequer
+  alcançada.
+- **Popup que fecha sozinho se passava por desistência.** `popup-closed-by-user`
+  era silenciado de propósito, porque fechar a janela é desistir, não falhar — só
+  que um popup recusado pela origem fecha sozinho e chega pelo mesmo código.
+  Calados, os dois casos ficam idênticos: clicar e não acontecer nada. **O que os
+  separa é o relógio**, e ninguém lê a lista de contas do Google e desiste em
+  menos de dois segundos.
+
+**E as falhas do SDK deixaram de cair na mensagem genérica.** A generalidade do
+lado do servidor é deliberada e continua: não distinguir token inválido de
+expirado nega pista a quem está adivinhando. As do SDK são outra coisa — vêm do
+navegador de quem clicou, já estão no console dele e não dependem de quem é a
+pessoa. Domínio não autorizado, popup bloqueado e ambiente sem suporte passaram a
+ser ditos pelo nome; o resto leva o código entre parênteses, porque **quem abre o
+sistema num celular não tem console para abrir**.
+
+**Duas lições de diagnóstico, e as duas são minhas**
+
+> **Sintoma descartado como ruído era o mesmo defeito por outra porta.** Na
+> primeira vez que o console foi colado, o WebSocket de hot reload aparecia
+> falhando e eu disse que não tinha relação com o login. Era o mesmo bloqueio de
+> origem, visto do outro lado. Três rodadas foram gastas no Firebase por causa
+> dessa frase.
+
+> **Passo de operação que eu passo adiante não é passo executado.** Dei um
+> comando de shell para acrescentar a variável e segui assumindo que tinha
+> rodado. O que resolveu foi **conferir o estado em vez de confiar no passo**: um
+> ensaio temporário carregou o ambiente como o Next carrega, importou o
+> `next.config.ts` e imprimiu o que de fato chegava lá — e a resposta foi que a
+> variável não existia. Era para eu ter medido na primeira vez.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (226 testes) e `next build` passam. Nenhum servidor
+  de desenvolvimento foi subido por mim; quem sobe e derruba é o Gustavo.
+- O caminho de configuração foi conferido por ensaio temporário, apagado em
+  seguida: carregar o ambiente, importar o config e imprimir o que chega —
+  primeiro acusando a ausência, depois confirmando o valor.
+- Entrada pelo IP confirmada funcionando pelo Gustavo.
+
+
+#### 2026-09-18 — Largura, altura e celular: a casca deixa de ser a medida
+
+Ajuste fino de layout, em três passos com revisão entre cada um. Nenhuma mudança
+na camada de consulta, em número ou em conteúdo — com uma exceção de duas
+palavras, declarada no fim.
+
+**O defeito que abriu a etapa, e a comparação que ele exigia.** O conteúdo tinha
+largura máxima fixa e ficava ancorado à esquerda: num monitor de 1920 sobrava
+508px de branco à direita, num de 2560 sobrava 1148. A primeira coisa pedida foi
+comparar com o protótipo — e a comparação deu **divergência zero**. O protótipo
+faz exatamente isso, `max-width` sem `margin: 0 auto`, e o código o copiava
+fielmente. Não era a omissão de 16/09; era limitação herdada, e corrigi-la é
+divergir do protótipo de propósito, que a §0 autoriza.
+
+> **A casca é contêiner, não medida.** Ela cresce com a tela; quem declara
+> limite é cada peça, pelo motivo dela. Teto na casca seria um número arbitrário
+> que devolveria o mesmo branco um monitor adiante.
+
+**O inventário do que fica sem medida foi exigido antes de aplicar**, com a
+conclusão escrita para cada peça, e foi ele que mudou o desenho da solução:
+
+- **Cartões:** não precisam de medida, e dar medida à nota pioraria. O cartão não
+  abre vazio — a nota reflui e ele encolhe em altura. É a única prosa do sistema
+  sem medida de leitura, e a exceção está escrita onde mora: **prosa dentro de
+  uma caixa que já é o limite.**
+- **Tabelas:** a maior ganhadora até ~1920 e a pior infratora acima disso. A
+  distribuição de excedente em `table-layout: auto` é definida pelo navegador,
+  não pelo CSS — o único número do levantamento que não dá para derivar.
+- **Gráfico de barras:** **eu tinha dito que não precisava de teto, e estava
+  errado.** `montarBarras` decide rarear rótulo e mostrar valor **só pelo número
+  de barras**, nunca pela largura renderizada — então largura a mais não
+  acrescenta nada, só multiplica, texto incluído.
+- **Grades:** não têm largura intrínseca e não produzem branco; entregam largura
+  aos filhos. O que elas decidem é a razão, e é a razão que quebra em tela larga.
+
+**O que entrou no passo 1.** A casca perdeu o teto e ganhou um degrau de respiro
+acima de `xl`. O sistema de medidas de leitura — 62ch para descrição, 70ch para
+legenda, 80ch para nota e fecho — **já existia pela metade** e foi completado:
+faltava na `Nota`, na legenda do radar, no `Vazio` e na faixa de aviso do Método.
+Nas caixas que sinalizam **estado** — vazio, pendência, erro — a caixa mantém a
+largura inteira e o texto dentro é que leva a medida: caixa encolhida faz a
+ausência parecer menor.
+
+Mapa e radar ganharam teto no tamanho em que já eram desenhados, **e é por isso
+que os números não são redondos**: o inserto, o recuo do rótulo e o limiar de
+colisão medidos em 16/09 e 18/09 foram calibrados nessa escala, e mudá-la
+reabriria aquela validação por causa de largura de monitor.
+
+> **A primeira tentativa centrou o desenho e ficou pior, e o motivo vale
+> guardar.** O painel passou a ter três alinhamentos: título na borda, desenho
+> duzentos pixels adentro, legenda de volta na borda. **Figura deslocada em
+> relação ao texto dela não é branco simétrico, é desalinho.** O teto passou do
+> desenho para o bloco inteiro — desenho e legenda —, à esquerda. Conferido pelo
+> `git diff` ignorando espaço: **nada dentro do `<svg>` mudou.**
+
+**Passo 2: a borda encosta no conteúdo, sempre.** Item de grade estica por
+padrão, e a esticada é branco dentro de uma caixa branca com borda — que **não se
+lê como "este painel é pequeno", lê-se como dado faltando**. Na Mobilidade a
+diferença chegava a ~344px, medidos no screenshot e previstos em 328 pelo modelo
+de altura: foi a validação do modelo que permitiu prever o resto.
+
+> **A regra vale inclusive para a linha de cartões, e isso reverteu a minha
+> recomendação.** Eu queria manter altura igual entre cartões. O argumento que
+> venceu é do Gustavo e é mais forte: **o conteúdo do cartão é estático**, então
+> altura igual comprada com um gap grande num cartão pequeno paga um preço certo
+> por um risco que não existe.
+
+**E então o branco migrou para dentro dos painéis, que era exatamente a
+preocupação levantada antes de aplicar.** A causa é aritmética e não se resolve
+com proporção: as peças daquela linha têm largura natural — teto de desenho — e
+a linha tem muito mais que a soma delas. **Excedente estrutural resolve-se com
+uma coluna a mais, não com outra razão.** As duas telas ganharam colocação
+explícita no `xl`, sem duplicar painel no DOM com `hidden`: painel duplicado é
+conteúdo duplicado para leitor de tela, animação rodando duas vezes e duas cópias
+para envelhecerem em desacordo.
+
+| Tela | até `lg` | no `xl` |
+|---|---|---|
+| Mobilidade | radar \| gráfico, depois cidade \| bairro | radar \| [gráfico + cidade] \| bairro |
+| Viagens | mapa inteiro, destinos \| pilha, rotas inteiro | mapa \| pilha, destinos \| rotas |
+
+Na coluna de 1,55fr o painel do mapa tem 1008px úteis contra um teto de 1056: o
+desenho **preenche a coluna sem sobra**. Acima de ~1800px de conteúdo o teto
+volta a morder — declarado no código, não descoberto depois.
+
+**Passo 3: `viewBox` erra para os dois lados.** No passo 1 o perigo era ampliar;
+no celular é o contrário, e é pior, porque **o que encolhe é o texto**. Medido:
+
+| Desenho, num aparelho de 360px | antes | depois |
+|---|---|---|
+| Série mensal — rótulo do mês | **6,7px** | 9,0px |
+| Série mensal — espaço por barra (doze meses) | **23,3px** | 31,5px |
+| Mapa — rótulo de região | **4,2px** | 8,6px |
+| Mapa — rótulo dentro do inserto | **3,3px** | 6,8px |
+| Tabela de cinco colunas — orçamento por coluna | **56px** | 104px |
+
+Texto de 3,3px não é texto pequeno: é sujeira no desenho. E a tabela de cinco
+colunas não cabia — ela estourava o painel e **fazia a página inteira rolar de
+lado**, que é o defeito que se sente e não se localiza.
+
+A correção é uma peça só: **abaixo de uma largura mínima, o bloco rola em vez de
+encolher.** Com o teto do passo 1, cada desenho passa a viver **entre 0,9× e
+1,25× da própria escala** — nunca menor, nunca maior. A sangria lateral existe
+para a rolagem não parecer corte: sem ela o conteúdo some no meio de uma margem
+branca, como se estivesse quebrado.
+
+**O radar ficou de fora do piso, de propósito:** são quatro rótulos e a legenda
+carrega o significado, então ele degrada bem onde os outros viram sujeira.
+
+**Registrar viagem foi tratada como prioridade, por ser a única tela que alguém
+de fora da equipe abre — e abre no telefone.** Dois ajustes valendo só abaixo de
+640px, sem tocar na densidade do desktop:
+
+| | antes | depois |
+|---|---|---|
+| Opção do autocomplete (aeroporto e município) | **32,2px** | 44,2px |
+| Botão fraco — adicionar trecho, parada, remover | **33,4px** | 45,4px |
+| Campo de texto e de data | **38,9px** | 50,8px |
+| Botão de enviar | 40,9px | 48,9px |
+| Pílula do seletor de ano | **32,2px** | 44,2px |
+
+E o campo passou a 16px no celular, que **não é preferência de tamanho**: abaixo
+disso o Safari do iPhone amplia a página ao focar o campo, e o layout salta sob o
+dedo de quem está preenchendo. A opção do autocomplete era o pior alvo e é a
+interação central da tela — oito opções empilhadas para escolher um lugar, onde
+errar a opção é escolher o lugar errado.
+
+**Decisões que não estavam no documento**
+
+- **Onde a prosa NÃO leva medida**, e por quê: dentro de uma caixa que já é o
+  limite. Vale só para a nota do cartão.
+- **Caixa de estado mantém a largura; o texto dentro é que tem medida.**
+- **Piso e teto são fator, não pixel, no gráfico de barras** — quem chama escolhe
+  o `viewBox`, e os dois usos têm larguras diferentes.
+- **O fator do teto é maior que 1 de propósito**: a série mensal estava pequena
+  demais, e largura era o que faltava a ela.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (226 testes, 6 novos) e `next build` passam. Nenhum
+  servidor de desenvolvimento foi subido.
+- **As seis guardas novas foram conferidas desligando cada uma** — teto de volta
+  na casca, medida fora da legenda e da peça compartilhada, `items-start` fora de
+  uma grade, piso fora do gráfico, rolagem fora de uma tabela. As seis reprovam,
+  e as que varrem arquivo **nomeiam o arquivo e a string exata**. Guarda que não
+  morde não é guarda.
+- Uma delas reprovou por estar desatualizada, e a reprovação foi correta: ela
+  conferia `maxWidth` literal, e o teto do gráfico passou a ir pelo envoltório de
+  rolagem. Passou a conferir o conceito, não a escrita.
+- **O CSS construído foi conferido classe a classe.** O Tailwind só emite o que
+  encontra no fonte, então classe montada dentro de uma constante pode virar
+  classe morta sem erro nenhum — as doze saem. Conferida também a **ordem das
+  media queries**: `lg` antes de `xl`, que é o que faz a colocação do `xl`
+  desfazer o `col-span` do `lg`. Invertida, o mapa continuaria atravessando as
+  duas colunas e o layout estaria errado em silêncio.
+- A geometria dos desenhos foi medida por ensaio temporário, apagado em seguida:
+  é ela que produziu as duas tabelas de números acima.
+- **O que não foi medido, e por quê:** o navegador embutido não executa script em
+  arquivo local (CSP `script-src 'none'`), então caixa renderizada — quebra de
+  texto, distribuição de coluna em `table-layout: auto` — não dá para medir por
+  aqui. A conferência dessas veio de screenshot do Gustavo com a proporção da
+  grade servindo de régua, e da leitura dele na tela.
+
+**Uma mudança de conteúdo, de duas palavras.** A descrição do mapa de Viagens
+dizia "unidade mais grossa que a da **tabela ao lado**". A tabela não estava ao
+lado nem antes — o mapa era largura inteira e a tabela vinha na linha de baixo —,
+então a frase já apontava para o lugar errado. Virou "que a das **tabelas
+abaixo**". É a mesma família dos defeitos que este log vem pegando: tela
+declarando um arranjo que ela não tem.
+
+
+#### 2026-09-18 — Mapa na tela de Emissões registradas
+
+Pedido do Gustavo, a partir da pergunta "dá para fazer um mapa igual o de Viagens?".
+Dá, e a resposta curta teria sido pior que a longa: **"igual" era o alvo errado
+para esta tela**, e foram duas decisões dele antes de qualquer linha.
+
+**Por que não igual.** O mapa de Viagens agrega por região porque voo cruza
+região e são centenas de trechos — uma linha por par de aeroportos vira
+emaranhado. Um carro Curitiba → São José dos Pinhais fica *dentro* do Sul e
+viraria um anel sobre um ponto só. Medido nos registros existentes: a maior parte
+da emissão era aérea e desenhável, o restante era rodoviário e não teria lugar. E
+numa fábrica em Curitiba o carro é o caso cotidiano, então com o tempo o mapa
+desenharia a minoria e declararia a maioria.
+
+**A segunda decisão apareceu depois da primeira, e vale registrar por quê.** O
+Gustavo escolheu "aéreo por região + carro por município" de uma lista que eu
+escrevi — e ao montar o dado ficou claro que a agregação do aéreo não tem função
+aqui: **não há supressão a satisfazer** (§3.2, o programa é identificado por
+desenho) **nem volume que peça agregação**. Pior, o ponto "Sul" cairia ao lado do
+ponto "Curitiba/PR", duas escalas com a mesma aparência. Perguntei de novo em vez
+de construir o que a primeira pergunta tinha enquadrado mal, e a unidade ficou
+sendo **o lugar de verdade nos dois modais**.
+
+**Coordenada de município: a decisão de 18/09 vale, e não foi revertida.** Lá a
+lista nasceu sem coordenada porque o **roteamento** resolve melhor pelo nome com
+a UF. Desenhar é outro uso, com outra precisão: o centro do município é
+exatamente o que um ponto num mapa do país quer. O roteamento continua mandando
+nome e UF. As duas coisas convivem, e o gerador diz isso no cabeçalho.
+
+**O gerador de municípios, e as duas vezes que a guarda mordeu**
+
+O centroide vem das malhas territoriais do IBGE, uma requisição por UF — 27, e
+não uma por município, que é a diferença entre um gerador que roda e um que
+ninguém roda duas vezes. É calculado pela **fórmula do polígono, não pela média
+dos vértices**: a média puxa o ponto para onde o contorno tem mais detalhe, e um
+litoral recortado deslocaria a cidade para o mar.
+
+> **As duas guardas que escrevi reprovaram, e cada uma por um motivo diferente —
+> uma estava errada, a outra estava certa.**
+>
+> A primeira exigia que o ponto caísse numa caixa do território brasileiro, e
+> reprovou Fernando de Noronha: **a caixa é que estava colada no continente**, e
+> as ilhas oceânicas são território com município. A caixa foi alargada.
+>
+> A segunda exigia centroide para todo município, e reprovou um município de
+> criação recente — o IBGE o publica no cadastro de localidades antes de refazer
+> a malha. Aqui a guarda estava certa sobre o fato e errada sobre a consequência:
+> **ausência de ponto é fato a declarar, não carga a derrubar.** Virou campo
+> nulo, com aviso na geração, com o lugar continuando escolhível e roteável, e
+> com a tela declarando o que não pôde desenhar. Uma fração grande de ausências
+> continua derrubando, porque aí não é município novo — é malha trocada.
+
+**A peça de desenho saiu da pasta de Viagens**
+
+Compartilhar desenho é legítimo e compartilhar dado não é (§7.5). O componente
+estava amarrado ao tipo da consulta do inventário, e a tela do programa
+importando aquilo faria o teste da §0.1 morder — com razão. O tipo do desenho
+passou a morar em `src/lib/mapa.ts`, neutro: um lugar tem chave, rótulo,
+coordenada e `domestico`, e este último vem **declarado, não deduzido do
+rótulo** — reconhecer país pelo texto seria uma lista de nomes escrita dentro do
+desenho.
+
+Aproveitei para consertar um deslize meu da etapa anterior: a tela de Emissões
+registradas reusava o gráfico mensal de dentro da pasta de Viagens. Ele subiu
+junto.
+
+**Um defeito que só apareceu com dado real, e que é conceitual**
+
+Renderizando o mapa e medindo a posição dos rótulos, **"Curitiba" e "Curitiba/PR"
+caíam a menos de vinte pixels um do outro** — o aeroporto de Curitiba e o
+município de Curitiba desenhados como dois pontos. Não é problema de espaço: **é
+o mesmo lugar**, e o mapa estava dizendo que se foi a dois.
+
+A identidade do lugar passou a ser **cidade e UF**, não o código. Onde a UF não
+existe — aeroporto estrangeiro — a chave cai no próprio código: o pior caso vira
+o comportamento anterior, dois pontos separados, que é feio e não é errado.
+Juntar lugares distintos seria o contrário, e é por isso que a junção exige as
+duas partes.
+
+Consequência aceita: um voo e um trajeto de carro entre as mesmas duas cidades
+viram **uma linha**. O mapa responde "para onde se foi", e a divisão por modal
+mora no painel ao lado.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (220 testes, 6 novos) e `next build` passam. Nenhum
+  servidor de desenvolvimento foi subido.
+- **O mapa do inventário não mudou, e isso foi provado, não suposto.** Os dois
+  componentes — o de antes da refatoração, tirado do próprio histórico, e o de
+  agora — foram renderizados contra o banco carregado e a geometria comparada
+  elemento a elemento: **95 elementos, nenhum diferente.**
+- A guarda nova do desenho compartilhado foi conferida ligando a violação:
+  bastou o componente importar o tipo de uma das consultas para ela reprovar.
+- Conferido contra o banco com ensaio temporário, apagado em seguida: as duas
+  ligações registradas saem com o lugar certo em cada ponta, desenhado mais não
+  desenhado fecha com o total da tela, nenhum ponto cai fora da moldura, nenhuma
+  coordenada sai inválida, nenhum rótulo colide e nenhum identificador de pessoa
+  sai no mapa.
+- Os testes novos cobrem o que quebra: os dois modais no mesmo mapa, ida e volta
+  como uma linha só, trajeto que volta ao ponto de partida virando anel, lugar
+  sem coordenada declarado e continuando no total, a fusão do aeroporto com o
+  município da mesma cidade, e o aeroporto sem UF que **não** se funde com
+  ninguém.
+- Uma medição minha deu alarme falso no caminho: o limiar de colisão calibrado
+  para a moldura grande acusou sobreposição dentro do inserto, que tem um terço
+  da largura. Medido de novo pela caixa real do texto, não havia sobreposição
+  nenhuma — e o mapa do inventário já era assim antes.
+
+
+#### 2026-09-18 — O módulo de viagens fechado, e o programa saindo do papel
+
+Duas frentes, na ordem pedida: varredura do que sobrou do inventário de viagens, e
+depois as duas telas do programa.
+
+**A varredura achou sete coisas, e nenhuma era erro de conta.** Os números fechavam
+em todas. O que havia era promessa que a tela ou a especificação faziam e o código
+não cumpria — e o inverso.
+
+> **A premissa apagada deixa rastro em texto, não só em código.** A §0.1 saiu do
+> §7 em 16/09, mas a tela de Método continuava declarando que o acréscimo sobre a
+> ortodrômica é aplicado "no formulário". O formulário não é fonte deste módulo
+> desde aquele dia; quem calcula distância do zero é a **planilha do cartão**, que
+> a frase não mencionava. A tela declarava um caminho que o módulo não tem e
+> omitia o que ele tem — parente próximo do defeito da subtração, e igualmente
+> invisível em typecheck, teste e build.
+
+As outras seis:
+
+- **Duas das três declarações que a §7 exige da planilha do cartão não existiam.**
+  A data valer para o bloco inteiro — que muda a série mensal, porque um trecho de
+  volta pode cair no mês seguinte e ser contado no anterior — aparecia só como
+  contagem de alerta, sem dizer o que o alerta significa. E o viajante vir só pelo
+  primeiro nome não aparecia de forma nenhuma. As duas entraram como parâmetro
+  declarado.
+- **A §7 e o código discordavam sobre viajante sem correspondência.** O texto
+  mandava criar registro próprio com alerta; o código para a carga e diz quem
+  falta, decisão tomada em 15/09 depois de uma companhia aérea virar funcionário.
+  **Decisão do Gustavo: o código vence**, e a §7 foi corrigida com o motivo —
+  criar pessoa a partir de planilha infla justamente a contagem que sustenta a
+  supressão da mobilidade e o denominador de adesão do programa.
+- **O mapa desenha só aéreo, e a tela tinha deixado de dizer isso.** O comentário
+  da camada afirmava "a tela declara o recorte"; a tela não declarava, e
+  `co2KgDesenhado` e `co2KgAereo` eram calculados, testados e nunca exibidos. Hoje
+  é invisível, porque nenhuma das duas fontes administrativas traz carro — e é
+  isso que torna o caso perigoso: **o primeiro trecho rodoviário faria o mapa somar
+  menos que o total sem uma palavra**, e mapa menor que o número é lido como falha
+  de carga. A camada passou a expor a emissão não aérea e a legenda a declara.
+- **A tela não dizia qual ano ela relata.** A §7.0 faz do ano-base a identidade do
+  relatório, e o seletor se esconde sozinho abaixo de dois anos: com um ano
+  carregado, o ano existia só na tela de Método. Onde o seletor não aparece, a
+  tela agora diz "Relatório de ‹ano›".
+- **Nenhum teste mordia a fronteira da §0.1.** A separação estava guardada em três
+  pontos — validação de escrita, conferência e cobertura —, e nenhum deles
+  respondia "a consulta do inventário lê a coleção do programa?".
+- Menor, sem consequência de número: `co2ToneladasAno` carregava "Ano" no nome num
+  valor que pode cobrir vários anos. Passou a `co2Toneladas` em viagens e marítimo;
+  na mobilidade o nome continua certo, porque lá o valor **é** anual.
+
+**As decisões do Gustavo, que o documento deixava em aberto**
+
+- **Denominador da adesão:** contagem sempre, proporção só com `PROGRAMA_QUADRO` no
+  ambiente. Sem o parâmetro a tela declara que não há denominador, em vez de usar o
+  tamanho da coleção de funcionários — que inclui quem só aparece como aprovador de
+  passagem e faria a adesão nascer menor do que é, com aparência de funcionar.
+- **Fechamento de período:** uma data no ambiente, fechada por script. Não existe
+  tela que feche, pelo mesmo motivo por que não existe tela que conceda acesso. A
+  submissão fechada continua visível, continua contando e não se apaga.
+- **Classe de cabine:** perguntada, com econômica pré-selecionada. É o mesmo
+  critério que já admite os três campos do carro — entra na conta. Assumir
+  econômica num intercontinental de diretoria subestimaria a viagem em quase três
+  vezes, e quem preenche é quem voou e sabe.
+- **Fator do carro:** o da mobilidade, reaproveitado. Um carro a gasolina emite por
+  quilômetro o que emite, indo trabalhar ou indo a cliente; um segundo arquivo com
+  o mesmo número físico seria um que envelhece sem o outro.
+- **Lista de municípios:** só o arquivo gerado e versionado. A coleção `municipio`
+  da §9.2 **não** foi criada, e o documento diz por quê — duas cópias do mesmo dado
+  é uma que diverge da outra em silêncio.
+- **Chave do Google:** segunda chave, só para a aplicação. O código está feito; a
+  configuração no console é operação e está na §13.
+
+**Ocupantes: a decisão foi gravar o veículo, e ela precisou de uma segunda metade.**
+Eu havia recomendado gravar a cota da pessoa; o Gustavo escolheu gravar a emissão do
+veículo inteira, com a divisão na exibição. Implementado assim, e com a consequência
+fechada: **toda atribuição a pessoa divide** — na tela do viajante e no agregado do
+programa, não só numa delas. Sem isso, dois caronas registrando a mesma viagem
+somariam o mesmo carro duas vezes num total que continuaria parecendo plausível. O
+documento guarda o que distância e fator reproduzem; a divisão é da atribuição.
+
+**O que entrou de código**
+
+- `scripts/gerar-municipios.ts` e `src/lib/municipios.ts` — a lista do IBGE, no
+  padrão do gerador de contorno: origem e licença no cabeçalho, resultado
+  versionado e reprodutível. **Sem coordenada, de propósito:** o roteamento resolve
+  o município pelo nome com a UF, que é a precisão de que se trata; coordenada
+  própria seria um ponto dentro da cidade roteado como se fosse a cidade.
+- `src/server/rotas.ts` — distância rodoviária com cache. **A chave é o par
+  ordenado de códigos**, e não o trajeto inteiro: por trajeto, uma parada a mais
+  inutilizaria tudo que já estava guardado, enquanto por par um trecho serve a toda
+  viagem que passe por ele. Ordenado, não normalizado — ida e volta podem diferir, e
+  fingir que não diferem seria inventar simetria.
+- `registrarViagem` na camada de consulta, com o cálculo aéreo e o rodoviário. A
+  regravação usa o mesmo mecanismo da carga (§9.9), com escopo **esta viagem desta
+  pessoa** — é também o que impede editar submissão alheia, porque o uid entra no
+  filtro e no identificador.
+- `limitesDeFaixa` saiu de dentro da carga do cartão para `src/server/fatores.ts`.
+  Os dois caminhos que calculam distância do zero precisam dela, e duas cópias da
+  mesma função é uma que envelhece sem a outra. **É a matemática compartilhada da
+  §7.5** — o que não se compartilha é o dado.
+- As três telas do programa, a ação de servidor que as escreve e a busca de
+  município. A escrita passa pela camada: nenhuma tela alcança o banco por fora
+  dela, e a guarda de porta única continua valendo para o caminho de escrita.
+
+**Decisões minhas, que não estavam no documento**
+
+- **O identificador da submissão é derivado do conteúdo** — quem registrou, trajeto
+  e datas. Dá de graça a proteção que mais falta num formulário: reenviar a mesma
+  viagem grava uma, em vez de dobrar a emissão de alguém por um clique repetido.
+- **A busca de município é uma rota, e não uma lista mandada ao navegador.** São
+  mais de cinco mil registros, e nenhum formulário precisa carregá-los todos para
+  oferecer doze. O aeroporto faz o contrário, e pelo mesmo raciocínio: são poucas
+  dezenas, e mandá-los de uma vez custa menos que uma ida ao servidor por tecla. A
+  rota **exige sessão mesmo sendo dado público** — abrir uma exceção por
+  conveniência é como se começa a ter exceções.
+- **A chamada ao provedor acontece no envio, nunca enquanto alguém digita.** É a
+  diferença entre um formulário e uma conta a pagar.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (214 testes, 13 novos) e `next build` passam. Nenhum
+  servidor de desenvolvimento foi subido.
+- **A fronteira da §0.1 tem teste dos dois lados**, estático e executável, e foi
+  conferida **ligando a mistura**: com a consulta do inventário lendo a coleção do
+  programa, com a do programa lendo a do inventário e com uma tela de inventário
+  importando o módulo do outro lado, **quatro conferências reprovam**. Guarda que
+  não morde não é guarda.
+
+  > Uma delas só passou a morder depois de afiada, e o motivo vale guardar. As
+  > asserções sobre o total não pegavam a leitura indevida, porque o total do
+  > inventário filtra por `contabilizar` — campo que a coleção do programa não tem.
+  > Um documento do programa lido por engano cairia nesse filtro e **somaria zero**:
+  > o erro existiria e não apareceria em número nenhum. A asserção passou a ser
+  > sobre os documentos lidos antes do filtro.
+
+- As regras dos ocupantes e do denominador também foram conferidas desligando cada
+  uma: sem a divisão, duas das conferências reprovam; com o denominador de volta na
+  coleção de funcionários, outras duas.
+- Exercitado contra o Firestore carregado, com ensaio temporário apagado em
+  seguida: viagem aérea de ida e volta, viagem de carro com parada e retorno à
+  origem, e reenvio da mesma viagem. **O multiplicador de classe sai exato** entre
+  executiva e econômica, a divisão pelos ocupantes sai exata, a distância
+  rodoviária é compatível com o trajeto, o reenvio não duplica, a soma das viagens
+  fecha com o total, o `gestor` não vê nome, e **o inventário não se mexeu em
+  trecho, em emissão nem em contagem fora do total**. Os documentos e as rotas de
+  cache do ensaio foram removidos, e a coleção voltou a zero.
+- `verificar` roda e todas as conferências de viagens fecham, incluindo a da §0.1.
+  **As duas que falham são do marítimo** — cobertura de blocos cujo ingest ainda não
+  rodou —, e são trabalho de outra etapa; nada do marítimo foi tocado aqui.
+
+**Operação, e não código**
+
+- `PROGRAMA_QUADRO` e `PROGRAMA_FECHADO_ATE` entraram no `.env.example` **vazias**,
+  e a guarda de placeholder plausível vigia as duas: um número plausível no primeiro
+  vira proporção de adesão errada, e uma data plausível no segundo tranca submissão
+  que ninguém decidiu trancar.
+- `GOOGLE_ROUTES_API_KEY_APP` precisa ser criada no console do Google, restrita à
+  Routes API, com teto de faturamento e alerta, e acrescentada na Vercel. Sem ela o
+  formulário cai na chave das cargas — que funciona, e não é o que deve ir para
+  produção.
+- `/ensaio/` entrou no `.gitignore` **antes** de a pasta receber qualquer coisa
+  (§2.3).
+
 
 <!-- adicionar entradas abaixo -->
 

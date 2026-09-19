@@ -105,12 +105,28 @@ const ESCOPO_VIAGEM_AEREA = 3
 
 const FONTE = 'agencia' as const
 
+/**
+ * Os códigos de alerta desta fonte.
+ *
+ * **Três deles vêm de dentro do JSON da base**, não desta carga: o relatório
+ * consolidado já traz a reserva sinalizada. Eles ficam declarados aqui assim
+ * mesmo, no mesmo formato das outras cargas, porque é este formato que a tela de
+ * método varre para exigir que todo alerta tenha motivo escrito — código que só
+ * existe como string solta dentro de um `Record` passa por essa varredura sem
+ * ser visto, e foi exatamente o que aconteceu: quatro alertas chegaram à tela
+ * sem explicação, e a guarda passou.
+ */
+export const ALERTA_TROCA_DE_AEROPORTO = 'troca_de_aeroporto'
+export const ALERTA_FORA_DO_INVENTARIO = 'fora_do_inventario'
+export const ALERTA_TRECHO_NAO_AEREO = 'trecho_nao_aereo'
+export const ALERTA_POSSIVEL_DUPLICIDADE = 'possivel_duplicidade'
+
 /** Gravidade por tipo de alerta; o que não estiver aqui é "atenção". */
 const SEVERIDADE: Record<string, Severidade> = {
-  troca_de_aeroporto: 'informativo',
-  fora_do_inventario: 'informativo',
-  trecho_nao_aereo: 'atencao',
-  possivel_duplicidade: 'atencao',
+  [ALERTA_TROCA_DE_AEROPORTO]: 'informativo',
+  [ALERTA_FORA_DO_INVENTARIO]: 'informativo',
+  [ALERTA_TRECHO_NAO_AEREO]: 'atencao',
+  [ALERTA_POSSIVEL_DUPLICIDADE]: 'atencao',
 }
 
 function severidadeDe(tipo: string): Severidade {
@@ -210,9 +226,9 @@ async function principal(): Promise<void> {
       }))
       if (!reserva.contabilizar) {
         alertasDaReserva.push({
-          tipo: 'fora_do_inventario',
+          tipo: ALERTA_FORA_DO_INVENTARIO,
           descricao: 'itinerário duplicado no relatório da agência; não entra no total',
-          severidade: severidadeDe('fora_do_inventario'),
+          severidade: severidadeDe(ALERTA_FORA_DO_INVENTARIO),
         })
       }
       const funcionarioId = idPorChaveOrigem.get(reserva.pax_id)

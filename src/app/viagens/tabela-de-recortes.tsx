@@ -14,7 +14,7 @@
  */
 import { inteiro, numero, periodo, proporcao } from '@/lib/formato'
 import type { RecorteDeViagem } from '@/server/consultas/agregacao'
-import { Nota, TABELA, Vazio } from '../componentes'
+import { MINIMO, Nota, Rolavel, TABELA, Vazio } from '../componentes'
 
 export function TabelaDeRecortes({
   recortes,
@@ -36,57 +36,61 @@ export function TabelaDeRecortes({
 
   return (
     <>
-      <table className={TABELA.tabela}>
-        <thead>
-          <tr>
-            <th className={TABELA.th}>{cabecalho}</th>
-            <th className={TABELA.thNum}>Pessoas</th>
-            <th className={TABELA.thNum}>Trechos</th>
-            <th className={TABELA.th}>Período</th>
-            <th className={TABELA.thNum}>kg CO₂</th>
-          </tr>
-        </thead>
-        <tbody>
-          {recortes.map((r) => (
-            <tr key={r.rotulo}>
-              <td className={TABELA.td}>
-                <span
-                  className={
-                    r.resto ? 'text-[var(--color-apoio)] italic' : 'text-[var(--color-tinta)]'
-                  }
-                >
-                  {r.rotulo}
-                </span>
-                {/* A barra fica sob o rótulo: a coluna numérica já carrega o
-                    valor, e a barra existe para dar a proporção de relance. */}
-                <span className="mt-1 block h-1.5 w-full overflow-hidden rounded bg-[#E7EFE5]">
-                  <span
-                    className="block h-full rounded bg-[var(--color-folha-700)]"
-                    style={{ width: `${maior > 0 ? (r.co2Kg / maior) * 100 : 0}%` }}
-                  />
-                </span>
-              </td>
-              <td className={TABELA.tdNum}>{inteiro(r.pessoas)}</td>
-              <td className={TABELA.tdNum}>{inteiro(r.trechos)}</td>
-              {/* Sem `nowrap`: espremida, a coluna quebra no travessão entre as
-                  duas datas, que é o único lugar onde a quebra não atrapalha.
-                  Fixar a largura faria a tabela estourar o painel. */}
-              <td className={`${TABELA.td} text-[var(--color-apoio)]`}>
-                {periodo(r.primeira, r.ultima)}
-              </td>
-              <td className={TABELA.tdNum}>
-                {numero(r.co2Kg)}
-                {total > 0 && (
-                  <span className="ml-1.5 text-[11px] text-[var(--color-apoio)]/70">
-                    {proporcao(r.co2Kg / total)}
-                  </span>
-                )}
-              </td>
+      <Rolavel minimo={MINIMO.tabela5}>
+        <table className={TABELA.tabela}>
+          <thead>
+            <tr>
+              <th className={TABELA.th}>{cabecalho}</th>
+              <th className={TABELA.thNum}>Pessoas</th>
+              <th className={TABELA.thNum}>Trechos</th>
+              <th className={TABELA.th}>Período</th>
+              <th className={TABELA.thNum}>kg CO₂</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-
+          </thead>
+          <tbody>
+            {recortes.map((r) => (
+              <tr key={r.rotulo}>
+                <td className={TABELA.td}>
+                  <span
+                    className={
+                      r.resto ? 'text-[var(--color-apoio)] italic' : 'text-[var(--color-tinta)]'
+                    }
+                  >
+                    {r.rotulo}
+                  </span>
+                  {/* A barra fica sob o rótulo: a coluna numérica já carrega o
+                      valor, e a barra existe para dar a proporção de relance. */}
+                  <span className="mt-1 block h-1.5 w-full overflow-hidden rounded bg-[#E7EFE5]">
+                    <span
+                      className="block h-full rounded bg-[var(--color-folha-700)]"
+                      style={{ width: `${maior > 0 ? (r.co2Kg / maior) * 100 : 0}%` }}
+                    />
+                  </span>
+                </td>
+                <td className={TABELA.tdNum} data-rotulo="Pessoas">{inteiro(r.pessoas)}</td>
+                <td className={TABELA.tdNum} data-rotulo="Trechos">{inteiro(r.trechos)}</td>
+                {/* Sem `nowrap`: espremida, a coluna quebra no travessão entre as
+                    duas datas, que é o único lugar onde a quebra não atrapalha.
+                    Fixar a largura faria a tabela estourar o painel. */}
+                <td
+                  className={`${TABELA.td} text-[var(--color-apoio)]`}
+                  data-rotulo="Período"
+                >
+                  {periodo(r.primeira, r.ultima)}
+                </td>
+                <td className={TABELA.tdNum} data-rotulo="kg CO₂">
+                  {numero(r.co2Kg)}
+                  {total > 0 && (
+                    <span className="ml-1.5 text-[11px] text-[var(--color-apoio)]/70">
+                      {proporcao(r.co2Kg / total)}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Rolavel>
       {(resto !== undefined || nota !== undefined) && (
         <Nota>
           {resto !== undefined && (

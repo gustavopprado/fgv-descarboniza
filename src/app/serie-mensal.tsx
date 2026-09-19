@@ -1,18 +1,26 @@
 /**
- * Série mensal do inventário de viagens — CLAUDE.md §10.3.
+ * Série mensal, compartilhada pelas telas do inventário — CLAUDE.md §10.
+ *
+ * **A única ressalva que o desenho tem é do desenho**, e é esta: mês sem
+ * emissão aparece com barra zerada, não sumido — mês ausente encostaria o mês
+ * seguinte no anterior e esconderia a queda que houve.
+ *
+ * **O resto da nota vem de quem chama**, e isso é correção de um defeito real:
+ * a peça trazia escrito, dentro dela, que a série cobria as duas fontes
+ * administrativas de viagens — o relatório da agência e a planilha do cartão.
+ * A tela do marítimo reusou a peça e passou a declarar, embaixo do próprio
+ * gráfico, uma composição de fontes que não é a dela. É a mesma família de
+ * defeito que este projeto vem pegando: tela afirmando um arranjo que ela não
+ * tem. Cada módulo agrupa por uma data diferente e soma fontes diferentes, e
+ * **isso é sempre do módulo, nunca do gráfico**.
  *
  * **Não há marca de troca de fonte, e a ausência é a §0.1.** Enquanto se
  * acreditou que o relatório da agência e o formulário do viajante eram a mesma
- * série, esta tela destacava o mês da data de corte para avisar que a emissão
- * ia parecer cair sem ter caído. A premissa estava errada: as duas fontes deste
- * módulo são administrativas, cobrem o mesmo tipo de registro e convivem sem
- * ressalva. O formulário alimenta o programa de viagens, que tem coleção e
- * telas próprias.
- *
- * O que sobra é a única ressalva que a série de fato tem, e que é de outra
- * regra: mês sem viagem aparece com barra zerada, não sumido.
+ * série, a tela de viagens destacava o mês da data de corte para avisar que a
+ * emissão ia parecer cair sem ter caído. A premissa estava errada, e o que
+ * dependia dela saiu.
  */
-import { GraficoDeBarras } from '../grafico-de-barras'
+import { GraficoDeBarras } from './grafico-de-barras'
 
 const NOME_DO_MES = [
   'jan', 'fev', 'mar', 'abr', 'mai', 'jun',
@@ -26,8 +34,11 @@ function rotuloDoMes(mes: string): string {
 
 export function SerieMensal({
   serie,
+  nota,
 }: {
   serie: { mes: string; co2Kg: number; documentos: number }[]
+  /** O que a série significa **neste** módulo: que datas, que fontes. */
+  nota?: React.ReactNode
 }) {
   if (serie.length === 0) return null
 
@@ -53,12 +64,8 @@ export function SerieMensal({
       />
 
       <p className="mt-3 max-w-[80ch] border-t border-[var(--color-linha)] pt-3 text-[12px] text-[var(--color-apoio)]">
-        Mês sem viagem aparece com barra zerada, não sumido: mês ausente
-        esconderia a queda que houve. A série cobre as duas fontes
-        administrativas do módulo — o relatório da agência e a planilha do cartão
-        empresarial —, somadas sem distinção, porque as duas cobrem o mesmo tipo
-        de registro. O que os colaboradores registram no programa de viagens não
-        entra aqui.
+        Mês sem emissão aparece com barra zerada, não sumido: mês ausente
+        esconderia a queda que houve. {nota}
       </p>
     </div>
   )

@@ -17,6 +17,46 @@ export type Coordenada = { latitude: number; longitude: number }
 
 export type Ponto = { x: number; y: number }
 
+/**
+ * Um lugar no mapa — CLAUDE.md §10.3.
+ *
+ * **O tipo mora aqui, e não na camada de consulta, porque o desenho é
+ * compartilhado e o dado não é** (§0.1, §7.5). O inventário e o programa de
+ * viagens usam o mesmo mapa e não se tocam: se o componente falasse o tipo de
+ * uma das duas consultas, a outra tela teria que importar o módulo do lado
+ * errado para desenhar — e é exatamente isso que a fronteira proíbe.
+ *
+ * `chave` é a identidade do lugar e `rotulo` é o que aparece. Elas são campos
+ * separados porque nem sempre coincidem: uma região tem nome curto, um município
+ * carrega a UF junto, e é a chave que decide se dois extremos são o mesmo ponto.
+ *
+ * `domestico` vem **declarado, não deduzido do rótulo**. Quem monta o dado sabe
+ * se o lugar é do Brasil — pela classificação gravada no cadastro do aeroporto,
+ * ou por ser município do IBGE. Reconhecer isso pelo texto do rótulo seria uma
+ * lista de nomes escrita dentro do desenho.
+ */
+export type PontoDoMapa = {
+  chave: string
+  rotulo: string
+  latitude: number
+  longitude: number
+  domestico: boolean
+}
+
+/**
+ * Uma ligação entre dois lugares, com o peso que ela carrega.
+ *
+ * Não tem sentido: ida e volta são a mesma ligação, então não há seta a
+ * desenhar. Ligação cujos dois extremos são o mesmo lugar vira anel, porque um
+ * ponto não tem direção.
+ */
+export type LigacaoDoMapa = {
+  chave: string
+  origem: PontoDoMapa
+  destino: PontoDoMapa
+  co2Kg: number
+}
+
 export type Moldura = {
   largura: number
   altura: number
@@ -124,4 +164,60 @@ export function coordenadaValida(
     // incompleto costuma trazer. Aeroporto no oceano é dado faltando, não rota.
     !(latitude === 0 && longitude === 0)
   )
+}
+
+/**
+ * Quais rótulos cabem — CLAUDE.md §10.4.
+ *
+ * **Um mapa cujos pontos se aglomeram não cabe todos os nomes**, e escrever o
+ * que não se lê é sujeira, não informação. Foi o defeito que o inserto resolveu
+ * para o conjunto brasileiro em 16/09; o mapa marítimo trouxe a forma geral do
+ * problema, com **dois** aglomerados — os portos de origem num delta e os de
+ * destino no sul do país —, e aglomerado que não é o Brasil não tem inserto.
+ *
+ * A regra é de caixa, não de raio: o rótulo é escrito à direita do ponto, então
+ * dois deles se atrapalham quando as linhas de base estão perto **e** as caixas
+ * de texto se sobrepõem. Medir a caixa, e não a distância entre âncoras, é a
+ * correção da medição que deu alarme falso dentro do inserto — ali tudo tem um
+ * terço da largura, e um limiar em pixels da moldura grande acusa sobreposição
+ * onde não há.
+ *
+ * **Quem chega primeiro fica.** A ordem é a das ligações, que vêm ordenadas por
+ * emissão: quando dois nomes disputam o mesmo lugar, o do corredor mais pesado é
+ * o que aparece. Os outros estão nas tabelas, e a legenda diz isso.
+ */
+export function rotulosQueCabem(
+  lugares: PontoDoMapa[],
+  projecao: Projecao,
+  escala: number,
+): Set<string> {
+  /** Meia-entrelinha: abaixo disso as duas linhas de base se tocam. */
+  const ALTURA = 10 * escala
+  /** Largura média de um caractere no corpo em que o rótulo é desenhado. */
+  const LARGURA_DO_CARACTERE = 5.1 * escala
+  /** O recuo do rótulo em relação ao ponto, como `Pontos` o escreve. */
+  const RECUO = 9 * escala
+
+  const aceitos: { x: number; y: number; largura: number }[] = []
+  const cabe = new Set<string>()
+
+  for (const lugar of lugares) {
+    const ponto = projecao.projetar(lugar)
+    const caixa = {
+      x: ponto.x + RECUO,
+      y: ponto.y - 6 * escala,
+      largura: lugar.rotulo.length * LARGURA_DO_CARACTERE,
+    }
+    const colide = aceitos.some(
+      (a) =>
+        Math.abs(a.y - caixa.y) < ALTURA &&
+        caixa.x < a.x + a.largura &&
+        a.x < caixa.x + caixa.largura,
+    )
+    if (colide) continue
+    aceitos.push(caixa)
+    cabe.add(lugar.chave)
+  }
+
+  return cabe
 }

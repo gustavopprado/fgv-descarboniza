@@ -21,6 +21,7 @@ function ctx(papel: Papel): ContextoDeAcesso {
     email: 'pessoa.ficticia@exemplo.invalid',
     papel,
     empresa: null,
+    funcionarioId: null,
   }
 }
 

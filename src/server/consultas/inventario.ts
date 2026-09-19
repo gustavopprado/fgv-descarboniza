@@ -24,6 +24,7 @@ import { corredor } from '@/lib/regiao'
 import type {
   DocAeroporto,
   DocEmbarque,
+  DocPorto,
   DocMobilidade,
   DocViagemTrecho,
 } from '../documentos/tipos'
@@ -219,9 +220,10 @@ export type MapaDeCorredores = {
   /**
    * Trechos descartados por aeroporto sem região ou sem coordenada.
    *
-   * É o único motivo que restou para algo não ser desenhado, e por isso continua
-   * declarado na tela: aqui **é** dado faltando, ao contrário da supressão que
-   * saiu daqui — aquela escondia dado que existia.
+   * É um dos dois motivos que restaram para algo não ser desenhado — o outro é
+   * `co2KgNaoAereo` —, e por isso continua declarado na tela: aqui **é** dado
+   * faltando, ao contrário da supressão que saiu daqui, que escondia dado que
+   * existia.
    */
   semGeografia: number
   /** Agregado por região, para o ponto do mapa poder ser aberto. */
@@ -230,6 +232,17 @@ export type MapaDeCorredores = {
   co2KgDesenhado: number
   /** Emissão aérea total do recorte. Igual à desenhada quando nada ficou fora. */
   co2KgAereo: number
+  /**
+   * Emissão do recorte que **não é aérea** e por isso não tem lugar neste mapa.
+   *
+   * O trecho de carro guarda município em `origem` e `destino`, e a lista do
+   * IBGE não está no inventário: não há coordenada de onde tirar uma linha.
+   * Existe como número porque a tela precisa **declarar** o recorte — hoje ele
+   * é zero, já que nenhuma das duas fontes administrativas traz carro, e o
+   * primeiro trecho rodoviário que entrar faria o mapa somar menos que o total
+   * sem uma palavra. Mapa menor que o número é lido como falha de carga.
+   */
+  co2KgNaoAereo: number
 }
 
 export type ResumoDeViagens = {
@@ -249,7 +262,7 @@ export type ResumoDeViagens = {
    */
   trechosForaDoTotal: number
   co2Kg: number
-  co2ToneladasAno: number
+  co2Toneladas: number
   co2KgPorViagem: number
   porMes: { mes: string; co2Kg: number; documentos: number }[]
   /** Maiores destinos e rotas, com o resto numa linha. Sem supressão (§3.1.2). */
@@ -310,7 +323,7 @@ export async function consultarViagens(
     trechos: trechos.length,
     trechosForaDoTotal: todos.length - trechos.length,
     co2Kg,
-    co2ToneladasAno: emToneladas(co2Kg),
+    co2Toneladas: emToneladas(co2Kg),
     co2KgPorViagem: viagens === 0 ? 0 : co2Kg / viagens,
     porMes: serieMensal(trechos, (t) => t.mes, valor),
     destinos: maioresRecortes(trechos, {
@@ -354,8 +367,9 @@ export async function consultarViagens(
  * Agrega os trechos aéreos em corredores entre regiões e os posiciona no mapa.
  *
  * Só o trecho aéreo entra: o de carro guarda município em `origem` e `destino`,
- * e a coleção de municípios ainda não existe. Desenhar o aéreo e calar sobre o
- * rodoviário seria mentir por omissão, então a tela declara o recorte.
+ * e a lista do IBGE não está no inventário. Desenhar o aéreo e calar sobre o
+ * rodoviário seria mentir por omissão, então o que ficou de fora sai daqui em
+ * `co2KgNaoAereo` e a tela o declara.
  *
  * O ponto de cada região é o **centroide dos aeroportos daquela região que
  * aparecem nos trechos** — não um ponto inventado para a região inteira. Assim a
@@ -375,6 +389,7 @@ async function montarMapaDeCorredores(
 ): Promise<MapaDeCorredores> {
   const aereos = trechos.filter((t) => t.tipo === 'aereo')
   const co2KgAereo = somar(aereos, valor)
+  const co2KgNaoAereo = somar(trechos, valor) - co2KgAereo
   if (aereos.length === 0) {
     return {
       corredores: [],
@@ -382,6 +397,7 @@ async function montarMapaDeCorredores(
       semGeografia: 0,
       co2KgDesenhado: 0,
       co2KgAereo: 0,
+      co2KgNaoAereo,
     }
   }
 
@@ -515,25 +531,108 @@ async function montarMapaDeCorredores(
     semGeografia,
     co2KgDesenhado: somar(corredores, (c) => c.co2Kg),
     co2KgAereo,
+    co2KgNaoAereo,
   }
 }
 
 /* --------------------------------------------------------------- marítimo */
 
-export type ResumoDeMaritimo = {
-  ano: number | null
+/**
+ * Um porto no mapa do módulo — CLAUDE.md §10.4.
+ *
+ * O rótulo é o nome da lista oficial, resolvido na consulta a partir do código
+ * gravado no embarque. `domestico` vem do **país do código**, que é dado do
+ * cadastro, e não de leitura do nome (§10.3): reconhecer país pelo texto seria
+ * uma lista de nomes escrita dentro do desenho.
+ */
+export type CorredorMaritimo = {
+  corredor: string
+  origemRotulo: string
+  destinoRotulo: string
   embarques: number
   containers: number
   co2Kg: number
-  co2ToneladasAno: number
+  primeira: string | null
+  ultima: string | null
+}
+
+/**
+ * O corredor que pode virar linha no mapa: o mesmo, com coordenada nas duas
+ * pontas. **A tabela lista todos; o mapa desenha estes** — e a diferença entre
+ * as duas contagens é declarada na tela, senão um mapa que soma menos que a
+ * tabela é lido como falha de carga.
+ */
+export type CorredorDesenhavel = CorredorMaritimo & {
+  origem: string
+  destino: string
+  origemLatitude: number
+  origemLongitude: number
+  origemDomestico: boolean
+  destinoLatitude: number
+  destinoLongitude: number
+  destinoDomestico: boolean
+}
+
+export type MapaMaritimo = {
+  corredores: CorredorDesenhavel[]
+  /** Embarques marítimos sem código de porto ou sem coordenada no cadastro. */
+  semGeografia: number
+  co2KgSemGeografia: number
+  co2KgDesenhado: number
+}
+
+export type ResumoDeMaritimo = {
+  ano: number | null
+  /** Embarques que entram no total: realizados, de qualquer modal. */
+  embarques: number
+  /** Contêineres do marítimo. O frete aéreo não tem contêiner, e fica fora. */
+  containers: number
+  co2Kg: number
+  co2Toneladas: number
+  /**
+   * O indicador da §1, **só do marítimo nas duas pontas da conta**.
+   *
+   * Frete aéreo entra no total do módulo e sai daqui: ele não tem contêiner, e
+   * onde a coluna numérica traz um número para carga aérea ela está contando
+   * volumes. Deixá-lo dentro somaria emissão sem contêiner sobre um denominador
+   * com um contêiner que não existe — os dois erros no mesmo indicador.
+   */
   co2KgPorContainer: number
+  /** A emissão marítima, que é o numerador do indicador acima. */
+  co2KgMaritimo: number
+  /** Frete aéreo de fornecedor: Escopo 3 cat. 4, no total e fora do indicador. */
+  co2KgAereo: number
+  embarquesAereos: number
   porMes: { mes: string; co2Kg: number; documentos: number }[]
-  corredores: Grupo[]
+  /**
+   * Todos os corredores marítimos do recorte, inclusive os que não viram linha.
+   *
+   * **A soma desta lista é a emissão marítima do recorte**, e é isso que a
+   * separa do mapa: embarque sem código de porto ou com código sem coordenada
+   * continua sendo um corredor, só não é desenhável.
+   */
+  corredores: CorredorMaritimo[]
   porEmpresa: Grupo[]
   porModal: Grupo[]
+  porPorto: { porto: string; rotulo: string; containers: number; co2Kg: number }[]
+  mapa: MapaMaritimo
   /** Quanto do número vem de dado do agente e quanto é estimativa (§8.2). */
   qualidade: { nivel: string; embarques: number; co2Kg: number; proporcao: number }[]
+  /**
+   * Embarque previsto, **fora de todos os números acima** (§8.3).
+   *
+   * O CO₂ já vem lançado pelo agente, mas a viagem não aconteceu: somá-lo ao
+   * total do período seria relatar como emitido o que ainda não foi. A flag
+   * existe para ele não se perder — continua contado e declarado aqui.
+   */
   previsoes: { embarques: number; co2Kg: number }
+  /** Anos com dado no módulo, para o seletor de período. */
+  anos: number[]
+}
+
+/** O embarque entra nos totais do período? Previsão não entra (§8.3). */
+function realizado(e: DocEmbarque): boolean {
+  return !e.previsao
 }
 
 export async function consultarMaritimo(
@@ -548,11 +647,30 @@ export async function consultarMaritimo(
   consulta = aplicarEmpresa(consulta, limiteDeEmpresa(ctx))
 
   const instantaneo = await consulta.get()
-  const embarques = instantaneo.docs.map((d) => d.data() as DocEmbarque)
+  const todos = instantaneo.docs.map((d) => d.data() as DocEmbarque)
   const valor = (e: DocEmbarque) => e.co2Kg
 
+  // **Previsão sai antes de qualquer conta.** Ela não é um filtro de tela: o
+  // total do módulo é o que aconteceu no período, e o previsto é declarado à
+  // parte, com contagem.
+  const embarques = todos.filter(realizado)
+  const previstos = todos.filter((e) => e.previsao)
+
+  /**
+   * **O frete aéreo fica no total e sai do que é por contêiner** — o indicador,
+   * a tabela de portos, os corredores e o mapa.
+   *
+   * Ele é Escopo 3 cat. 4, frete upstream, e é emissão da empresa: tirá-lo do
+   * total seria esconder emissão verdadeira. Mas o destino dele é um aeroporto
+   * ou um ponto interior, e desenhá-lo num mapa marítimo faria duas afirmações
+   * falsas — que existe porto ali, e que aquela linha é rota de navio.
+   */
+  const maritimos = embarques.filter((e) => e.modal !== 'aereo')
+  const aereos = embarques.filter((e) => e.modal === 'aereo')
+
   const co2Kg = somar(embarques, valor)
-  const containers = somar(embarques, (e) => e.containers ?? 0)
+  const co2KgMaritimo = somar(maritimos, valor)
+  const containers = somar(maritimos, (e) => e.containers ?? 0)
 
   const porNivel = new Map<string, { embarques: number; co2Kg: number }>()
   for (const e of embarques) {
@@ -562,22 +680,38 @@ export async function consultarMaritimo(
     porNivel.set(e.nivelDado, atual)
   }
 
-  const previstos = embarques.filter((e) => e.previsao)
+  const portos = new Map<string, DocPorto>()
+  for (const doc of (await db.collection(COLECAO.porto).get()).docs) {
+    const porto = doc.data() as DocPorto
+    portos.set(porto.locode, porto)
+  }
+  const rotuloDoPorto = (locode: string | null): string =>
+    locode === null ? 'Sem porto' : (portos.get(locode)?.nome ?? locode)
+
+  const corredores = montarCorredores(maritimos, portos)
+
+  /** Contêineres por porto de desembarque, só marítimo (§10.4). */
+  const acumuladoPorPorto = new Map<string, { containers: number; co2Kg: number }>()
+  for (const e of maritimos) {
+    const chave = e.portoDestino ?? ''
+    const atual = acumuladoPorPorto.get(chave) ?? { containers: 0, co2Kg: 0 }
+    atual.containers += e.containers ?? 0
+    atual.co2Kg += e.co2Kg
+    acumuladoPorPorto.set(chave, atual)
+  }
 
   return {
     ano: filtros.ano ?? null,
     embarques: embarques.length,
     containers,
     co2Kg,
-    co2ToneladasAno: emToneladas(co2Kg),
-    co2KgPorContainer: containers === 0 ? 0 : co2Kg / containers,
+    co2Toneladas: emToneladas(co2Kg),
+    co2KgMaritimo,
+    co2KgPorContainer: containers === 0 ? 0 : co2KgMaritimo / containers,
+    co2KgAereo: somar(aereos, valor),
+    embarquesAereos: aereos.length,
     porMes: serieMensal(embarques, (e) => e.mes, valor),
-    corredores: agrupar(embarques, {
-      chave: (e) =>
-        e.portoOrigem && e.portoDestino ? `${e.portoOrigem} → ${e.portoDestino}` : null,
-      valor,
-      rotuloNulo: 'Sem corredor',
-    }),
+    corredores,
     porEmpresa: agrupar(embarques, {
       chave: (e) => e.empresa,
       valor,
@@ -588,6 +722,14 @@ export async function consultarMaritimo(
       valor,
       rotuloNulo: 'Sem modal',
     }),
+    porPorto: [...acumuladoPorPorto.entries()]
+      .map(([porto, v]) => ({
+        porto,
+        rotulo: porto === '' ? 'Sem porto' : rotuloDoPorto(porto),
+        ...v,
+      }))
+      .sort((a, b) => b.containers - a.containers || b.co2Kg - a.co2Kg),
+    mapa: montarMapaMaritimo(corredores, maritimos, portos),
     qualidade: [...porNivel.entries()]
       .map(([nivel, v]) => ({
         nivel,
@@ -596,8 +738,132 @@ export async function consultarMaritimo(
       }))
       .sort((a, b) => b.co2Kg - a.co2Kg),
     previsoes: { embarques: previstos.length, co2Kg: somar(previstos, valor) },
+    anos: [...new Set(todos.map((e) => e.ano))].sort(),
   }
 }
+
+/** Uma chave de corredor que também existe quando falta porto numa ponta. */
+function chaveDoCorredor(e: DocEmbarque): string {
+  return `${e.portoOrigem ?? ''}-${e.portoDestino ?? ''}`
+}
+
+/**
+ * Os corredores do recorte, um por par de portos, na ordem do transporte.
+ *
+ * **Entra todo embarque marítimo, inclusive o que não pode ser desenhado.** A
+ * soma da lista é a emissão marítima do recorte: um corredor que some da tabela
+ * por falta de coordenada faria a tabela somar menos que o total sem nenhuma
+ * palavra, que é o defeito que a legenda do mapa de viagens passou a declarar.
+ */
+function montarCorredores(
+  maritimos: DocEmbarque[],
+  portos: Map<string, DocPorto>,
+): CorredorMaritimo[] {
+  const rotulo = (locode: string | null): string =>
+    locode === null ? 'Sem porto' : (portos.get(locode)?.nome ?? locode)
+
+  type Acumulado = CorredorMaritimo
+  const bruto = new Map<string, Acumulado>()
+
+  for (const e of maritimos) {
+    const chave = chaveDoCorredor(e)
+    const atual = bruto.get(chave) ?? {
+      corredor: chave,
+      origemRotulo: rotulo(e.portoOrigem),
+      destinoRotulo: rotulo(e.portoDestino),
+      embarques: 0,
+      containers: 0,
+      co2Kg: 0,
+      primeira: e.etd,
+      ultima: e.etd,
+    }
+    atual.embarques += 1
+    atual.containers += e.containers ?? 0
+    atual.co2Kg += e.co2Kg
+    if (e.etd !== null && (atual.primeira === null || e.etd < atual.primeira)) {
+      atual.primeira = e.etd
+    }
+    if (e.etd !== null && (atual.ultima === null || e.etd > atual.ultima)) {
+      atual.ultima = e.etd
+    }
+    bruto.set(chave, atual)
+  }
+
+  return [...bruto.values()].sort((a, b) => b.co2Kg - a.co2Kg)
+}
+
+/**
+ * O mapa do módulo: uma ligação por corredor, ponto a ponto.
+ *
+ * **Aqui o ponto é um lugar de verdade**, como no programa de viagens e ao
+ * contrário do mapa de Viagens, que agrega por região. Lá a agregação existe por
+ * legibilidade, com centenas de trechos que cruzam região; aqui o embarque já
+ * nasce com o par de portos, são poucas dezenas de corredores, e agregar
+ * esconderia de onde a carga veio sem ganhar nada.
+ *
+ * **Só marítimo.** Ver `consultarMaritimo`: o frete aéreo continua no total e
+ * fora do desenho.
+ */
+function montarMapaMaritimo(
+  corredores: CorredorMaritimo[],
+  maritimos: DocEmbarque[],
+  portos: Map<string, DocPorto>,
+): MapaMaritimo {
+  /** Os códigos de cada corredor, para resolver a coordenada das duas pontas. */
+  const pontas = new Map<string, { origem: string | null; destino: string | null }>()
+  for (const e of maritimos) {
+    pontas.set(chaveDoCorredor(e), { origem: e.portoOrigem, destino: e.portoDestino })
+  }
+
+  const desenhaveis: CorredorDesenhavel[] = []
+  let semGeografia = 0
+  let co2KgSemGeografia = 0
+
+  for (const c of corredores) {
+    const ponta = pontas.get(c.corredor)
+    const origem = ponta?.origem == null ? undefined : portos.get(ponta.origem)
+    const destino = ponta?.destino == null ? undefined : portos.get(ponta.destino)
+
+    if (
+      origem === undefined ||
+      destino === undefined ||
+      !coordenadaValida(origem.latitude, origem.longitude) ||
+      !coordenadaValida(destino.latitude, destino.longitude)
+    ) {
+      semGeografia += c.embarques
+      co2KgSemGeografia += c.co2Kg
+      continue
+    }
+
+    desenhaveis.push({
+      ...c,
+      origem: origem.locode,
+      destino: destino.locode,
+      origemLatitude: origem.latitude as number,
+      origemLongitude: origem.longitude as number,
+      // **O país do código, não o texto do nome.** É dado do cadastro.
+      origemDomestico: origem.pais === PAIS_DA_EMPRESA,
+      destinoLatitude: destino.latitude as number,
+      destinoLongitude: destino.longitude as number,
+      destinoDomestico: destino.pais === PAIS_DA_EMPRESA,
+    })
+  }
+
+  return {
+    corredores: desenhaveis,
+    semGeografia,
+    co2KgSemGeografia,
+    co2KgDesenhado: somar(desenhaveis, (c) => c.co2Kg),
+  }
+}
+
+/**
+ * O país cujos portos são "domésticos" no desenho.
+ *
+ * É o prefixo do código oficial, que já vem gravado no cadastro — não uma lista
+ * de nomes de porto, que a §2.2 mantém fora deste repositório.
+ */
+const PAIS_DA_EMPRESA = 'BR'
 
 /* ------------------------------------------------------------ visão geral */
 
@@ -627,8 +893,8 @@ export async function consultarVisaoGeral(
 
   const porModulo = [
     { modulo: 'mobilidade', toneladas: mobilidade.co2ToneladasAno },
-    { modulo: 'viagens', toneladas: viagens.co2ToneladasAno },
-    { modulo: 'maritimo', toneladas: maritimo.co2ToneladasAno },
+    { modulo: 'viagens', toneladas: viagens.co2Toneladas },
+    { modulo: 'maritimo', toneladas: maritimo.co2Toneladas },
   ]
   const totalToneladas = porModulo.reduce((s, m) => s + m.toneladas, 0)
 

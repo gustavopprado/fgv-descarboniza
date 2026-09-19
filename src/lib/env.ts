@@ -116,6 +116,144 @@ export function anoBaseViagens(): number {
   return ano
 }
 
+/* --------------------------------------------- programa de viagens (§7.5) */
+
+/**
+ * Quantas pessoas o programa poderia alcançar — o denominador da adesão.
+ *
+ * **Não sai de nenhuma coleção, e é por isso que é parâmetro.** O candidato
+ * óbvio seria o tamanho da coleção de funcionários, e ele está errado: ela é
+ * alimentada por mais de uma base e inclui gente que só aparece como aprovador
+ * de passagem, nunca como viajante. Um denominador grande demais faz a adesão
+ * parecer menor do que é, e o indicador **parece funcionar** — que é a forma
+ * mais cara de estar errado (§13).
+ *
+ * Sem valor, a tela mostra a contagem e diz que o denominador não está
+ * definido, em vez de exibir uma proporção inventada. É a mesma regra da tela de
+ * método: decisão pendente é declarada, não deixada em branco.
+ */
+export function programaQuadro(): number | null {
+  const bruto = opcional('PROGRAMA_QUADRO')
+  if (bruto === undefined) return null
+  const valor = Number(bruto)
+  if (!Number.isInteger(valor) || valor < 1) {
+    throw new Error(`PROGRAMA_QUADRO precisa ser inteiro ≥ 1: ${bruto}`)
+  }
+  return valor
+}
+
+/**
+ * Até quando o período do programa está fechado (§7.5).
+ *
+ * Viagem cuja data de ida seja **até esta data, inclusive**, fica somente
+ * leitura: o viajante continua vendo a própria submissão e não a edita mais.
+ *
+ * **Fechar é operação, não tela.** Como conceder perfil e como rodar carga, isso
+ * acontece fora da aplicação — não existe botão que feche um período, porque um
+ * botão assim precisaria de quem pode apertá-lo, de registro de quem apertou e
+ * de como desfazer, e nada disso vale o preço num programa que não é fonte de
+ * relatório (§0.1).
+ *
+ * Sem valor, nada está fechado e tudo é editável. É o estado inicial e é
+ * declarado na tela.
+ */
+export function programaFechadoAte(): string | null {
+  const bruto = opcional('PROGRAMA_FECHADO_ATE')
+  if (bruto === undefined) return null
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(bruto)) {
+    throw new Error(
+      `PROGRAMA_FECHADO_ATE precisa estar em AAAA-MM-DD: ${bruto}`,
+    )
+  }
+  return bruto
+}
+
+/**
+ * Chave do provedor de rota usada **pela aplicação**, não pelas cargas (§11.8).
+ *
+ * São duas chaves de propósito, e a diferença é o destino. A das cargas roda da
+ * máquina de quem opera, onde o IP é estável e a chave pode ser restrita por
+ * ele. Esta sai da Vercel, cujo IP de saída não é estável: a restrição possível
+ * é por API, mais teto de faturamento com alerta. Uma chave só obrigaria a
+ * abandonar a restrição por IP das cargas — e chave paga sem restrição não é só
+ * risco de privacidade, é conta a pagar.
+ *
+ * Cai de volta na chave das cargas quando esta não existe, para o formulário
+ * funcionar em desenvolvimento sem exigir duas chaves na máquina de quem
+ * desenvolve.
+ */
+export function chaveDeRotaDaAplicacao(): string {
+  const doApp = opcional('GOOGLE_ROUTES_API_KEY_APP')
+  if (doApp !== undefined) return doApp
+  const dasCargas = opcional('GOOGLE_ROUTES_API_KEY')
+  if (dasCargas !== undefined) return dasCargas
+  throw new Error(
+    'Sem chave de rota para a aplicação. Configure GOOGLE_ROUTES_API_KEY_APP ' +
+      '(restrita por API, com teto de faturamento) ou, em desenvolvimento, ' +
+      'GOOGLE_ROUTES_API_KEY. Veja .env.example.',
+  )
+}
+
+/* ------------------------------------------------------------- marítimo */
+
+/**
+ * **A base de data do módulo marítimo é o ETD do primeiro carregamento**, e não
+ * é parâmetro de ambiente (§8.3).
+ *
+ * A §8.3 manda escolher uma das duas bases que o relatório usa, aplicá-la em
+ * todo o sistema e declará-la na tela de método. A escolha está feita, e a outra
+ * **não tem caminho no código**: a base de registro aduaneiro existe só na aba
+ * de resumo, que é agregada, e a §9.1 pede um documento por embarque — não há de
+ * onde tirar a data por linha.
+ *
+ * Por isso ela é constante e não variável. `MARITIMO_BASE_DE_DATA` foi removida:
+ * uma variável que só aceita um valor não configura nada, e uma que aceitasse o
+ * outro valor prometeria um comportamento que o código não tem. É a mesma lição
+ * do `VIAGENS_CORTE_FONTE` — variável que ninguém lê é armadilha esperando
+ * alguém encontrar (§7).
+ *
+ * **O que muda o número, e a tela de método declara:** com o ETD, o total por
+ * ano civil não bate com o total por aba do relatório. Um bloco do relatório
+ * atravessa a virada do ano, e os embarques da virada pertencem ao ano em que o
+ * navio partiu — não ao ano que dá nome à aba.
+ */
+export const MARITIMO_BASE_DE_DATA = 'etd_primeiro_carregamento' as const
+
+/**
+ * Limiares e amostra mínima do módulo marítimo — §8.1.1, §8.2.
+ *
+ * Os três são **parâmetro declarado, não constante no código**, e vêm sem
+ * padrão embutido: a carga recusa rodar sem eles. O do impossível muda o
+ * número do inventário, porque decide o que não entra — e por isso nenhum
+ * deles pode ficar escondido num valor implícito que ninguém revisa.
+ */
+export function maritimoLimiarAtipico(): number {
+  return razaoObrigatoria('MARITIMO_LIMIAR_ATIPICO')
+}
+
+export function maritimoLimiarImpossivel(): number {
+  return razaoObrigatoria('MARITIMO_LIMIAR_IMPOSSIVEL')
+}
+
+export function maritimoAmostraMinimaCorredor(): number {
+  const valor = numeroObrigatorio('MARITIMO_AMOSTRA_MINIMA_CORREDOR')
+  if (!Number.isInteger(valor) || valor < 1) {
+    throw new Error(
+      `MARITIMO_AMOSTRA_MINIMA_CORREDOR precisa ser inteiro ≥ 1: ${valor}`,
+    )
+  }
+  return valor
+}
+
+/** Razão de comparação: precisa ser maior que 1, senão marcaria tudo. */
+function razaoObrigatoria(nome: string): number {
+  const valor = numeroObrigatorio(nome)
+  if (!(valor > 1)) {
+    throw new Error(`${nome} precisa ser maior que 1: ${valor}`)
+  }
+  return valor
+}
+
 /**
  * **Não existe data de corte, e a ausência é deliberada** (§0.1, §7).
  *
@@ -140,6 +278,11 @@ export function parametrosDeclarados(): {
   mobilidadeDistanciaMaximaKm: string | null
   mobilidadeAnoBase: string | null
   viagensAnoBase: string | null
+  /** A constante, não uma variável: ver `MARITIMO_BASE_DE_DATA`. */
+  maritimoBaseDeData: typeof MARITIMO_BASE_DE_DATA
+  maritimoLimiarAtipico: string | null
+  maritimoLimiarImpossivel: string | null
+  maritimoAmostraMinimaCorredor: string | null
 } {
   return {
     geocodeProvedor: opcional('GEOCODE_PROVEDOR') ?? null,
@@ -148,6 +291,12 @@ export function parametrosDeclarados(): {
     mobilidadeDistanciaMaximaKm: opcional('MOBILIDADE_DISTANCIA_MAXIMA_KM') ?? null,
     mobilidadeAnoBase: opcional('MOBILIDADE_ANO_BASE') ?? null,
     viagensAnoBase: opcional('VIAGENS_ANO_BASE') ?? null,
+    // Constante, não variável: ver `MARITIMO_BASE_DE_DATA` acima.
+    maritimoBaseDeData: MARITIMO_BASE_DE_DATA,
+    maritimoLimiarAtipico: opcional('MARITIMO_LIMIAR_ATIPICO') ?? null,
+    maritimoLimiarImpossivel: opcional('MARITIMO_LIMIAR_IMPOSSIVEL') ?? null,
+    maritimoAmostraMinimaCorredor:
+      opcional('MARITIMO_AMOSTRA_MINIMA_CORREDOR') ?? null,
   }
 }
 

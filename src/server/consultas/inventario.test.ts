@@ -40,6 +40,7 @@ function ctx(papel: Papel = 'admin'): ContextoDeAcesso {
     email: 'pessoa.ficticia@exemplo.invalid',
     papel,
     empresa: null,
+    funcionarioId: null,
   }
 }
 
@@ -350,4 +351,64 @@ test('o corredor carrega o período, e nada nele diz quem', async () => {
   const saida = JSON.stringify(dados.mapa)
   assert.equal(saida.includes('pessoa-ficticia-1'), false)
   assert.equal(saida.includes('funcionarioId'), false)
+})
+
+/**
+ * **O mapa desenha aéreo, e o que fica de fora precisa ser dito** (§10.3).
+ *
+ * O trecho de carro guarda município em `origem` e `destino`, e a lista do IBGE
+ * não está no inventário: não há coordenada de onde tirar a linha. Hoje nenhuma
+ * das duas fontes administrativas traz carro, então o número é zero e a frase
+ * não aparece — e é exatamente por isso que isto tem teste: o primeiro trecho
+ * rodoviário que entrar faria o mapa somar menos que o total **sem nenhum erro
+ * em lugar nenhum**, e mapa menor que o número é lido como falha de carga.
+ */
+test('trecho de carro não é desenhado, e o que ele pesa sai declarado', async () => {
+  const comCarro = [
+    ...UMA_PESSOA_SO,
+    trecho({
+      reservaId: 'r-carro',
+      funcionarioId: 'pessoa-ficticia-9',
+      tipo: 'carro',
+      modal: 'terrestre',
+      origem: 'Município fictício A',
+      destino: 'Município fictício B',
+      dataVoo: null,
+      dataIda: '2031-03-20',
+      co2Kg: 40,
+      classeCabine: null,
+      multiplicadorClasse: null,
+      faixaDistancia: null,
+      propriedadeVeiculo: 'proprio',
+      combustivel: 'gasolina',
+      ocupantes: 1,
+    }),
+  ]
+
+  const dados = await comAmbiente({ MOBILIDADE_SUPRESSAO_MINIMA: LIMITE }, () =>
+    consultarViagens(ctx(), {}, bancoCom({ viagemTrecho: comCarro, aeroporto: CADASTRO })),
+  )
+
+  assert.equal(
+    dados.mapa.co2KgNaoAereo,
+    40,
+    'a emissão rodoviária precisa sair da camada como número, senão a tela não ' +
+      'tem como declarar o recorte e o mapa cala sobre o que não desenhou',
+  )
+  assert.equal(
+    dados.mapa.co2KgDesenhado,
+    dados.mapa.co2KgAereo,
+    'tudo que é aéreo continua desenhado: o que ficou de fora é de outro modal',
+  )
+  assert.equal(
+    dados.mapa.co2KgAereo + dados.mapa.co2KgNaoAereo,
+    dados.co2Kg,
+    'desenhado mais não desenhado tem que fechar com o total do recorte — se não ' +
+      'fechar, há emissão sem lugar e sem menção',
+  )
+  assert.equal(
+    dados.mapa.corredores.some((c) => c.corredor.includes('Município')),
+    false,
+    'município não vira corredor: ele não tem coordenada no inventário',
+  )
 })

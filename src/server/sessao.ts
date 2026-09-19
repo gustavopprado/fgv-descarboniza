@@ -119,6 +119,7 @@ export async function sessaoAtual(): Promise<ContextoDeAcesso | null> {
     email: dados.email ?? email,
     papel: dados.papel,
     empresa: dados.empresa ?? null,
+    funcionarioId: dados.funcionarioId ?? null,
   }
 }
 

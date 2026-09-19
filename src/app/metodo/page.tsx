@@ -23,8 +23,10 @@ import {
   Cabecalho,
   Etiqueta,
   Grade,
+  MINIMO,
   Painel,
   Revelar,
+  Rolavel,
   TABELA,
   Vazio,
 } from '../componentes'
@@ -66,7 +68,10 @@ function Parametros({ metodo }: { metodo: Metodo }) {
             {metodo.parametros
               .filter((p) => p.escopo === escopo)
               .map((p) => (
-                <div key={p.rotulo} className="grid gap-1 py-3 md:grid-cols-[19rem_1fr]">
+                <div
+                  key={p.rotulo}
+                  className="grid items-start gap-1 py-3 [&>*]:min-w-0 md:grid-cols-[19rem_1fr]"
+                >
                   <dt className="text-[13px] font-medium text-[var(--color-tinta)]">
                     {p.rotulo}
                   </dt>
@@ -119,13 +124,18 @@ export default async function Page() {
 
       {pendentes.length > 0 && (
         <Revelar ordem={0} className="mb-4">
-          <p className="rounded-[var(--radius-painel)] border border-[#F0E0BC] bg-[#FBEED3]/50 px-[22px] py-4 text-[13px] text-[#8A6A1C]">
-            {pendentes.length === 1
-              ? 'Uma decisão de método ainda não foi tomada'
-              : `${pendentes.length} decisões de método ainda não foram tomadas`}
-            : {pendentes.map((p) => p.rotulo.toLowerCase()).join('; ')}. Elas aparecem
-            abaixo marcadas como {NAO_DEFINIDO}.
-          </p>
+          {/* A caixa ocupa a largura inteira — ela sinaliza estado, e encolhida
+              faria a pendência parecer menor. Quem leva medida de leitura é o
+              texto, como no `Vazio`. */}
+          <div className="rounded-[var(--radius-painel)] border border-[#F0E0BC] bg-[#FBEED3]/50 px-[22px] py-4">
+            <p className="max-w-[80ch] text-[13px] text-[#8A6A1C]">
+              {pendentes.length === 1
+                ? 'Uma decisão de método ainda não foi tomada'
+                : `${pendentes.length} decisões de método ainda não foram tomadas`}
+              : {pendentes.map((p) => p.rotulo.toLowerCase()).join('; ')}. Elas aparecem
+              abaixo marcadas como {NAO_DEFINIDO}.
+            </p>
+          </div>
         </Revelar>
       )}
 
@@ -137,7 +147,7 @@ export default async function Page() {
           {metodo.fontes.length === 0 ? (
             <Vazio>Nenhum módulo disponível para o seu perfil.</Vazio>
           ) : (
-            <dl className="grid gap-x-6 gap-y-4 md:grid-cols-3">
+            <dl className="grid items-start gap-x-6 gap-y-4 [&>*]:min-w-0 md:grid-cols-3">
               {metodo.fontes.map((f) => (
                 <div key={f.modulo}>
                   <dt className="text-[13px] font-semibold text-[var(--color-tinta)]">
@@ -168,12 +178,12 @@ export default async function Page() {
       <Revelar ordem={3} className="mt-4">
         <Painel
           titulo="Qualidade do dado"
-          descricao="Quanto de cada módulo está carregado, e quanto ficou fora da média."
+          descricao="Quanto de cada módulo está carregado, e quanto ficou fora da média. No marítimo, a cascata da §8.2 aparece degrau a degrau: a proporção é da emissão, e o número ao lado é de embarques."
         >
           {metodo.qualidade.length === 0 ? (
             <Vazio>Nenhum módulo disponível para o seu perfil.</Vazio>
           ) : (
-            <div className="grid gap-x-6 gap-y-5 md:grid-cols-3">
+            <div className="grid items-start gap-x-6 gap-y-5 [&>*]:min-w-0 md:grid-cols-3">
               {metodo.qualidade.map((q) => (
                 <div key={q.modulo}>
                   <h3 className="text-[13px] font-semibold text-[var(--color-tinta)]">
@@ -214,26 +224,28 @@ export default async function Page() {
             {metodo.excecoes.length === 0 ? (
               <Vazio>Nenhuma exceção registrada.</Vazio>
             ) : (
-              <table className={TABELA.tabela}>
-                <thead>
-                  <tr>
-                    <th className={TABELA.th}>Módulo</th>
-                    <th className={TABELA.th}>Motivo</th>
-                    <th className={TABELA.thNum}>Registros</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {metodo.excecoes.map((e) => (
-                    <tr key={`${e.modulo}-${e.motivo}`}>
-                      <td className={`${TABELA.td} text-[var(--color-apoio)]`}>
-                        {NOME_DO_ESCOPO[e.modulo]}
-                      </td>
-                      <td className={TABELA.td}>{e.motivo}</td>
-                      <td className={TABELA.tdNum}>{e.registros}</td>
+              <Rolavel minimo={MINIMO.tabela3}>
+                <table className={TABELA.tabela}>
+                  <thead>
+                    <tr>
+                      <th className={TABELA.th}>Módulo</th>
+                      <th className={TABELA.th}>Motivo</th>
+                      <th className={TABELA.thNum}>Registros</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {metodo.excecoes.map((e) => (
+                      <tr key={`${e.modulo}-${e.motivo}`}>
+                        <td className={`${TABELA.td} text-[var(--color-apoio)]`}>
+                          {NOME_DO_ESCOPO[e.modulo]}
+                        </td>
+                        <td className={TABELA.td} data-rotulo="Motivo">{e.motivo}</td>
+                        <td className={TABELA.tdNum} data-rotulo="Registros">{e.registros}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Rolavel>
             )}
           </Painel>
         </Revelar>
@@ -241,40 +253,51 @@ export default async function Page() {
         <Revelar ordem={5}>
           <Painel
             titulo="Alertas"
-            descricao="Sinalizações levantadas durante a carga, por tipo. A descrição de cada ocorrência fica no banco: ela cita valores da linha e não chega a esta tela."
+            descricao="Sinalizações levantadas durante a carga, por tipo, com a regra que levanta cada uma. A descrição de cada ocorrência fica no banco: ela cita valores da linha e não chega a esta tela."
           >
             {metodo.alertas.length === 0 ? (
               <Vazio>Nenhum alerta registrado.</Vazio>
             ) : (
-              <table className={TABELA.tabela}>
-                <thead>
-                  <tr>
-                    <th className={TABELA.th}>Tipo</th>
-                    <th className={TABELA.th}>Severidade</th>
-                    <th className={TABELA.thNum}>Registros</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {metodo.alertas.map((a) => (
-                    <tr key={`${a.modulo}-${a.tipo}-${a.severidade}`}>
-                      <td className={TABELA.td}>
-                        <span className="font-mono text-[11.5px]">{a.tipo}</span>
-                        <span className="mt-0.5 block text-[11.5px] text-[var(--color-apoio)]">
-                          {NOME_DO_ESCOPO[a.modulo]}
-                        </span>
-                      </td>
-                      <td className={TABELA.td}>
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CORES_DA_SEVERIDADE[a.severidade]}`}
-                        >
-                          {NOME_DA_SEVERIDADE[a.severidade]}
-                        </span>
-                      </td>
-                      <td className={TABELA.tdNum}>{a.ocorrencias}</td>
+              <Rolavel minimo={MINIMO.tabela3}>
+                <table className={TABELA.tabela}>
+                  <thead>
+                    <tr>
+                      <th className={TABELA.th}>Tipo</th>
+                      <th className={TABELA.th}>Severidade</th>
+                      <th className={TABELA.thNum}>Registros</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {metodo.alertas.map((a) => (
+                      <tr key={`${a.modulo}-${a.tipo}-${a.severidade}`}>
+                        <td className={TABELA.td}>
+                          <span className="font-mono text-[11.5px]">{a.tipo}</span>
+                          <span className="mt-0.5 block text-[11.5px] text-[var(--color-apoio)]">
+                            {NOME_DO_ESCOPO[a.modulo]}
+                          </span>
+                          {/* **O motivo é a regra, não a linha.** Sem ele a
+                              tabela respondia "quantos" e não "o quê", e um
+                              código como `co2_por_container_atipico` só se
+                              entende de dentro do código. A descrição gravada
+                              na carga continua fora daqui: ela cita valor do
+                              registro (§3.1). */}
+                          <span className="mt-1 block max-w-[62ch] text-[11.5px] leading-[1.45] text-[var(--color-apoio)]">
+                            {a.motivo}
+                          </span>
+                        </td>
+                        <td className={TABELA.td} data-rotulo="Severidade">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CORES_DA_SEVERIDADE[a.severidade]}`}
+                          >
+                            {NOME_DA_SEVERIDADE[a.severidade]}
+                          </span>
+                        </td>
+                        <td className={TABELA.tdNum} data-rotulo="Registros">{a.ocorrencias}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Rolavel>
             )}
           </Painel>
         </Revelar>
@@ -286,30 +309,32 @@ export default async function Page() {
             titulo="Região inferida da coordenada"
             descricao="O mapa de viagens agrupa por corredor entre regiões. A região do aeroporto brasileiro vem do estado, que é dado do cadastro; a destes aqui foi deduzida da coordenada, por faixa continental — é a parte frágil da classificação, e está aqui para ser conferida."
           >
-            <table className={TABELA.tabela}>
-              <thead>
-                <tr>
-                  <th className={TABELA.th}>Código</th>
-                  <th className={TABELA.th}>Aeroporto</th>
-                  <th className={TABELA.th}>Região atribuída</th>
-                </tr>
-              </thead>
-              <tbody>
-                {metodo.regioesInferidas.map((r) => (
-                  <tr key={r.iata}>
-                    <td className={`${TABELA.td} font-mono text-[11.5px]`}>{r.iata}</td>
-                    <td className={TABELA.td}>{r.nome}</td>
-                    <td className={TABELA.td}>
-                      {r.regiao === 'Região indefinida' ? (
-                        <Etiqueta tom="atencao">{r.regiao}</Etiqueta>
-                      ) : (
-                        r.regiao
-                      )}
-                    </td>
+            <Rolavel minimo={MINIMO.tabela3}>
+              <table className={TABELA.tabela}>
+                <thead>
+                  <tr>
+                    <th className={TABELA.th}>Código</th>
+                    <th className={TABELA.th}>Aeroporto</th>
+                    <th className={TABELA.th}>Região atribuída</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {metodo.regioesInferidas.map((r) => (
+                    <tr key={r.iata}>
+                      <td className={`${TABELA.td} font-mono text-[11.5px]`}>{r.iata}</td>
+                      <td className={TABELA.td} data-rotulo="Aeroporto">{r.nome}</td>
+                      <td className={TABELA.td}>
+                        {r.regiao === 'Região indefinida' ? (
+                          <Etiqueta tom="atencao">{r.regiao}</Etiqueta>
+                        ) : (
+                          r.regiao
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Rolavel>
           </Painel>
         </Revelar>
       )}
@@ -326,42 +351,44 @@ export default async function Page() {
             </Vazio>
           ) : (
             <div className="overflow-x-auto">
-              <table className={TABELA.tabela}>
-                <thead>
-                  <tr>
-                    <th className={TABELA.th}>Categoria</th>
-                    <th className={TABELA.th}>Chave</th>
-                    <th className={TABELA.thNum}>Valor</th>
-                    <th className={TABELA.th}>Unidade</th>
-                    <th className={TABELA.th}>Fonte</th>
-                    <th className={TABELA.th}>Versão</th>
-                    <th className={TABELA.th}>Vigência</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {metodo.fatores.map((f) => (
-                    <tr
-                      key={`${f.categoria}-${f.chave}-${f.versao}-${f.vigenciaInicio}`}
-                      className={f.vigenteHoje ? '' : 'text-[var(--color-apoio)]/60'}
-                    >
-                      <td className={`${TABELA.td} font-mono text-[11.5px]`}>
-                        {f.categoria}
-                      </td>
-                      <td className={`${TABELA.td} font-mono text-[11.5px]`}>
-                        {f.chave}
-                      </td>
-                      <td className={TABELA.tdNum}>{f.valor}</td>
-                      <td className={`${TABELA.td} text-[12px]`}>{f.unidade}</td>
-                      <td className={`${TABELA.td} text-[12px]`}>{f.fonte}</td>
-                      <td className={`${TABELA.td} text-[12px]`}>{f.versao}</td>
-                      <td className={`${TABELA.td} text-[12px] whitespace-nowrap`}>
-                        {f.vigenciaInicio} → {f.vigenciaFim ?? 'sem fim'}
-                        {!f.vigenteHoje && ' (fora de vigência)'}
-                      </td>
+              <Rolavel minimo={MINIMO.tabela7}>
+                <table className={TABELA.tabela}>
+                  <thead>
+                    <tr>
+                      <th className={TABELA.th}>Categoria</th>
+                      <th className={TABELA.th}>Chave</th>
+                      <th className={TABELA.thNum}>Valor</th>
+                      <th className={TABELA.th}>Unidade</th>
+                      <th className={TABELA.th}>Fonte</th>
+                      <th className={TABELA.th}>Versão</th>
+                      <th className={TABELA.th}>Vigência</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {metodo.fatores.map((f) => (
+                      <tr
+                        key={`${f.categoria}-${f.chave}-${f.versao}-${f.vigenciaInicio}`}
+                        className={f.vigenteHoje ? '' : 'text-[var(--color-apoio)]/60'}
+                      >
+                        <td className={`${TABELA.td} font-mono text-[11.5px]`}>
+                          {f.categoria}
+                        </td>
+                        <td className={`${TABELA.td} font-mono text-[11.5px]`}>
+                          {f.chave}
+                        </td>
+                        <td className={TABELA.tdNum} data-rotulo="Valor">{f.valor}</td>
+                        <td className={`${TABELA.td} text-[12px]`} data-rotulo="Unidade">{f.unidade}</td>
+                        <td className={`${TABELA.td} text-[12px]`} data-rotulo="Fonte">{f.fonte}</td>
+                        <td className={`${TABELA.td} text-[12px]`} data-rotulo="Versão">{f.versao}</td>
+                        <td className={`${TABELA.td} text-[12px] whitespace-nowrap`} data-rotulo="Vigência">
+                          {f.vigenciaInicio} → {f.vigenciaFim ?? 'sem fim'}
+                          {!f.vigenteHoje && ' (fora de vigência)'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Rolavel>
             </div>
           )}
         </Painel>

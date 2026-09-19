@@ -29,8 +29,38 @@ const PRECISAM_VIR_VAZIAS = [
   'MOBILIDADE_ANO_BASE',
   'VIAGENS_ANO_BASE',
   'FATORES_VIGENCIA_INICIO',
-  'MARITIMO_BASE_DE_DATA',
+  // Um número plausível aqui vira proporção de adesão errada, e proporção
+  // errada parece funcionar (§13). Vazio, a tela declara que não há denominador.
+  'PROGRAMA_QUADRO',
+  // Uma data plausível aqui trancaria submissão que ninguém decidiu trancar, e
+  // o viajante veria o botão sumir sem nada ter sido fechado.
+  'PROGRAMA_FECHADO_ATE',
+  // Os dois limiares do marítimo decidem o que recebe alerta e o que **não é
+  // importado** (§8.1.1). Um valor plausível aqui viraria, sem ninguém rever,
+  // ou um alerta que nunca dispara ou uma linha de emissão verdadeira recusada.
+  // Eles se escolhem medindo a fração da base que cada candidato marcaria, e
+  // essa medição é por base — não cabe num exemplo.
+  'MARITIMO_LIMIAR_ATIPICO',
+  'MARITIMO_LIMIAR_IMPOSSIVEL',
+  // E a amostra mínima decide quando um corredor vira referência: um número
+  // aqui mudaria em silêncio o que a cascata estima e o que ela deixa passar.
+  'MARITIMO_AMOSTRA_MINIMA_CORREDOR',
 ]
+
+/**
+ * Variáveis que saíram de propósito, e que não podem voltar por distração.
+ *
+ * `MARITIMO_BASE_DE_DATA` prometia escolher entre duas bases de data, e só uma
+ * tem caminho no código — a outra existe apenas na aba de resumo, que é
+ * agregada. Variável que aceita um valor que o código não honra é pior que
+ * constante: ela afirma uma configuração que não existe. A escolha ficou
+ * constante em `src/lib/env.ts`, declarada na tela de método (§8.3).
+ *
+ * `VIAGENS_CORTE_FONTE` saiu pelo mesmo tipo de motivo, na §0.1: a premissa que
+ * a justificava foi apagada, e variável que ninguém lê é armadilha esperando
+ * alguém encontrar (§7).
+ */
+const NAO_PODEM_VOLTAR = ['MARITIMO_BASE_DE_DATA', 'VIAGENS_CORTE_FONTE']
 
 function valorNoExemplo(conteudo: string, nome: string): string | null {
   const linha = conteudo
@@ -51,6 +81,19 @@ test('placeholder plausível não volta ao .env.example', () => {
       '',
       `${nome} tem valor de exemplo. Um valor plausível aqui vira número errado ` +
         'em silêncio: deixe vazio e deixe o código recusar rodar sem ele.',
+    )
+  }
+})
+
+test('variável removida de propósito não volta ao .env.example', () => {
+  const conteudo = readFileSync('.env.example', 'utf8')
+
+  for (const nome of NAO_PODEM_VOLTAR) {
+    assert.equal(
+      valorNoExemplo(conteudo, nome),
+      null,
+      `${nome} voltou ao .env.example. Ela foi removida porque o código não a lê — ` +
+        'variável que ninguém honra promete configuração que não existe.',
     )
   }
 })

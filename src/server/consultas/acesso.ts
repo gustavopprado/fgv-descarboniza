@@ -27,6 +27,15 @@ export type ContextoDeAcesso = {
   papel: Papel
   /** Preenchido no perfil `importacao` quando ele é limitado a uma empresa. */
   empresa: string | null
+  /**
+   * Vínculo com o cadastro de funcionários, quando o perfil traz um.
+   *
+   * Serve ao programa de viagens, que grava `funcionarioId` junto de
+   * `criadoPorUid` (§9.6.1) — e pode ser nulo, porque quem registra nem sempre
+   * já existe no cadastro. **Não é o controle de acesso**: quem decide o que
+   * alguém vê é o papel, e quem delimita as próprias submissões é o uid.
+   */
+  funcionarioId: string | null
 }
 
 export type Modulo = 'mobilidade' | 'viagens' | 'maritimo'

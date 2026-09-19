@@ -12,7 +12,7 @@
  */
 import { inteiro, numero, periodo, plural } from '@/lib/formato'
 import type { MapaDeCorredores } from '@/server/consultas/inventario'
-import { Nota, TABELA, Vazio } from '../componentes'
+import { MINIMO, Nota, Rolavel, TABELA, Vazio } from '../componentes'
 
 export function RegiaoAberta({
   mapa,
@@ -55,41 +55,42 @@ export function RegiaoAberta({
         </a>
       </div>
 
-      <p className="mt-0.5 text-[12.5px] text-[var(--color-apoio)]">
+      <p className="mt-0.5 max-w-[80ch] text-[12.5px] text-[var(--color-apoio)]">
         {plural(resumo.trechos, 'trecho', 'trechos')} pousando ou decolando ali, de{' '}
         {plural(resumo.pessoas, 'pessoa', 'pessoas')}, somando{' '}
         {numero(resumo.co2Kg)} kg CO₂ — {periodo(resumo.primeira, resumo.ultima)}.
       </p>
 
-      <table className={`${TABELA.tabela} mt-3.5`}>
-        <thead>
-          <tr>
-            <th className={TABELA.th}>Corredor</th>
-            <th className={TABELA.thNum}>Pessoas</th>
-            <th className={TABELA.thNum}>Trechos</th>
-            <th className={TABELA.th}>Período</th>
-            <th className={TABELA.thNum}>kg CO₂</th>
-          </tr>
-        </thead>
-        <tbody>
-          {corredores.map((c) => (
-            <tr key={c.corredor}>
-              <td className={TABELA.td}>
-                {c.origemRegiao === c.destinoRegiao
-                  ? `dentro de ${c.origemRegiao}`
-                  : c.corredor}
-              </td>
-              <td className={TABELA.tdNum}>{inteiro(c.pessoas)}</td>
-              <td className={TABELA.tdNum}>{inteiro(c.trechos)}</td>
-              <td className={`${TABELA.td} text-[var(--color-apoio)]`}>
-                {periodo(c.primeira, c.ultima)}
-              </td>
-              <td className={TABELA.tdNum}>{numero(c.co2Kg)}</td>
+      <Rolavel minimo={MINIMO.tabela5} sangria={16}>
+        <table className={`${TABELA.tabela} mt-3.5`}>
+          <thead>
+            <tr>
+              <th className={TABELA.th}>Corredor</th>
+              <th className={TABELA.thNum}>Pessoas</th>
+              <th className={TABELA.thNum}>Trechos</th>
+              <th className={TABELA.th}>Período</th>
+              <th className={TABELA.thNum}>kg CO₂</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-
+          </thead>
+          <tbody>
+            {corredores.map((c) => (
+              <tr key={c.corredor}>
+                <td className={TABELA.td}>
+                  {c.origemRegiao === c.destinoRegiao
+                    ? `dentro de ${c.origemRegiao}`
+                    : c.corredor}
+                </td>
+                <td className={TABELA.tdNum} data-rotulo="Pessoas">{inteiro(c.pessoas)}</td>
+                <td className={TABELA.tdNum} data-rotulo="Trechos">{inteiro(c.trechos)}</td>
+                <td className={`${TABELA.td} text-[var(--color-apoio)]`} data-rotulo="Período">
+                  {periodo(c.primeira, c.ultima)}
+                </td>
+                <td className={TABELA.tdNum} data-rotulo="kg CO₂">{numero(c.co2Kg)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Rolavel>
       <Nota>
         {/* Quem somar as colunas vai achar dois números diferentes do cabeçalho,
             e precisa saber por quê antes de concluir que um deles está errado. */}

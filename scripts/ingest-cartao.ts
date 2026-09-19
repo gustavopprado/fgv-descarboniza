@@ -31,11 +31,9 @@ import { existsSync } from 'node:fs'
 import ExcelJS from 'exceljs'
 
 import { aplicarUplift, emissaoTrechoAereo, faixaPorDistancia } from '../src/lib/calculo/aereo'
-import type { LimiteDeFaixa } from '../src/lib/calculo/aereo'
 import {
   CATEGORIA_AEREO_CLASSE,
   CATEGORIA_AEREO_FAIXA,
-  CATEGORIA_AEREO_FAIXA_LIMITE,
   CATEGORIA_AEREO_UPLIFT,
 } from '../src/lib/calculo/categorias'
 import { lerCartao, type LinhaDoCartao, type TrechoDoCartao } from '../src/lib/cartao'
@@ -56,7 +54,7 @@ import {
 import { validarViagemTrecho } from '../src/server/documentos/validacao'
 import { anoBaseViagens } from '../src/lib/env'
 import { apagarIds, recarregarEscopo } from '../src/server/escrita'
-import { carregarFatores } from '../src/server/fatores'
+import { carregarFatores, limitesDeFaixa } from '../src/server/fatores'
 import { COLECAO } from '../src/server/firestore'
 import {
   caminhoDaBase,
@@ -131,28 +129,14 @@ export async function lerPlanilha(caminho: string): Promise<LinhaDoCartao[]> {
   return linhas
 }
 
-type Resolvedor = Awaited<ReturnType<typeof carregarFatores>>
-
 /**
- * Os limites das faixas, lidos da coleção de fatores — nunca de número no
- * código (§7.2).
+ * Os limites das faixas moram em `src/server/fatores.ts`, e não mais aqui.
  *
- * A faixa mais longa **não tem limite superior gravado**, e isso é de propósito:
- * a ausência é o que significa "daqui para cima". Por isso a leitura do máximo
- * tolera o fator ausente, enquanto a do mínimo não.
+ * Eles são lidos da coleção de fatores, nunca de número no código (§7.2), e o
+ * formulário do programa de viagens precisa exatamente da mesma leitura: é a
+ * matemática compartilhada da §7.5. Duas cópias da mesma função é uma que
+ * envelhece sem a outra.
  */
-function limitesDeFaixa(fatores: Resolvedor, data: string): LimiteDeFaixa[] {
-  return (['curta', 'media', 'longa'] as const).map((id) => {
-    const minimo = fatores.vigente(CATEGORIA_AEREO_FAIXA_LIMITE, `${id}.min_km`, data)
-    let maxKm: number | null = null
-    try {
-      maxKm = fatores.vigente(CATEGORIA_AEREO_FAIXA_LIMITE, `${id}.max_km`, data).valor
-    } catch {
-      maxKm = null
-    }
-    return { id, minKm: minimo.valor, maxKm }
-  })
-}
 
 async function principal(): Promise<void> {
   const argumentos = process.argv.slice(2)
