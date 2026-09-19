@@ -44,6 +44,8 @@ import {
 } from '../src/lib/calculo/mobilidade'
 import { lerCartao } from '../src/lib/cartao'
 import {
+  ANO_BASE_INVENTARIO,
+  anoBaseMobilidade,
   anoBaseViagens,
   maritimoAmostraMinimaCorredor,
   maritimoLimiarAtipico,
@@ -57,7 +59,14 @@ import type {
   DocPorto,
   DocViagemTrecho,
 } from '../src/server/documentos/tipos'
+import type { ContextoDeAcesso } from '../src/server/consultas/acesso'
+import {
+  consultarMaritimo,
+  consultarMobilidade,
+  consultarViagens,
+} from '../src/server/consultas/inventario'
 import { MOTIVO_DO_ALERTA } from '../src/server/consultas/metodo'
+import { consultarVisaoGeral } from '../src/server/consultas/visao-geral'
 import { carregarFatores } from '../src/server/fatores'
 import { COLECAO } from '../src/server/firestore'
 import { lerPlanilha } from './ingest-cartao'
@@ -908,6 +917,201 @@ async function conferirMotivosDosAlertas(
   })
 }
 
+/* ------------------------------------------ coerência entre telas (§10.0) */
+
+/**
+ * **O mesmo módulo aparece em duas telas, e as duas têm que contar a mesma
+ * coisa** — CLAUDE.md §10.0.1.
+ *
+ * É a família da cobertura (§8.4), e não a da coerência interna: ela não
+ * pergunta se a conta fecha, pergunta se **as duas telas contam a mesma coisa**.
+ * A Visão geral relata um ano; a tela do módulo relata o recorte dela. Onde as
+ * duas falam do mesmo ano, o número precisa ser o mesmo — e a divergência, se
+ * existir, não estoura em lugar nenhum: os dois números continuam plausíveis, só
+ * discordam.
+ *
+ * **A recontagem aqui é independente das duas.** Ela sai das coleções e aplica
+ * as regras declaradas — `contabilizar` nas viagens, previsão fora no marítimo,
+ * exceção fora na mobilidade, taxa mensal × doze —, sem passar por nenhuma das
+ * consultas. Comparar as duas telas só entre si não provaria nada enquanto uma
+ * reusa a outra: o terceiro número é o que dá mordida.
+ *
+ * **O ano-base da mobilidade sai da coleção, não do ambiente**, e é aí que esta
+ * conferência pega o defeito silencioso da §10.0: com a variável apontando para
+ * um ano que a pesquisa não tem, o consolidado perde o módulo inteiro sem erro
+ * nenhum, e aqui a contagem de respondentes cai para zero contra um esperado que
+ * o próprio banco produziu.
+ */
+async function conferirCoerenciaDoConsolidado(db: Firestore): Promise<number> {
+  const ano = ANO_BASE_INVENTARIO
+  const inteiro = { tolerancia: 0, casas: 0 }
+  const tol = { tolerancia: 0.001, casas: 3 }
+  const conferencias: Conferencia[] = []
+
+  tituloDaEtapa(`Conferência — coerência entre telas (consolidado de ${ano})`)
+
+  /* --------------------------------- recontagem independente das coleções */
+
+  const respostas = (await db.collection(COLECAO.mobilidade).get()).docs.map(
+    (d) => d.data() as DocMobilidade,
+  )
+  const trechos = (await db.collection(COLECAO.viagemTrecho).get()).docs.map(
+    (d) => d.data() as DocViagemTrecho,
+  )
+  const embarques = (await db.collection(COLECAO.embarque).get()).docs.map(
+    (d) => d.data() as DocEmbarque,
+  )
+
+  // O ano-base da pesquisa é o mais recente que a coleção tem. Derivado do dado,
+  // e não do ambiente, de propósito: é isto que denuncia a variável apontando
+  // para o ano errado.
+  const anosBase = [...new Set(respostas.map((r) => r.anoBase))].sort()
+  const anoBaseNaColecao = anosBase[anosBase.length - 1]
+  const naMedia = respostas.filter((r) => r.anoBase === anoBaseNaColecao && !r.excecao)
+  const mobilidadeT = (somaDe(naMedia, (r) => r.co2KgMes) * 12) / 1000
+  const viagensT =
+    somaDe(
+      trechos.filter((t) => t.ano === ano && t.contabilizar),
+      (t) => t.co2Kg,
+    ) / 1000
+  const maritimoT =
+    somaDe(
+      embarques.filter((e) => e.ano === ano && !e.previsao),
+      (e) => e.co2Kg,
+    ) / 1000
+
+  if (anosBase.length > 1) {
+    console.log(
+      `  nota: a coleção de mobilidade tem ${anosBase.length} anos-base; o consolidado ` +
+        `usa o mais recente (${anoBaseNaColecao}).`,
+    )
+  }
+  if (anoBaseMobilidade() !== anoBaseNaColecao) {
+    console.log(
+      `  MOBILIDADE_ANO_BASE aponta para ${anoBaseMobilidade() ?? 'nada'} e a coleção ` +
+        `tem ${anoBaseNaColecao}: o consolidado perde o módulo sem erro aparente (§10.0).`,
+    )
+  }
+
+  /* ------------------------------------------ as duas telas, lado a lado */
+
+  const ctx: ContextoDeAcesso = {
+    uid: 'script-verificar',
+    email: 'script@local.invalid',
+    papel: 'admin',
+    empresa: null,
+    funcionarioId: null,
+  }
+
+  const consolidado = await consultarVisaoGeral(ctx, db)
+  const telaDeViagens = await consultarViagens(ctx, { ano }, db)
+  const telaDoMaritimo = await consultarMaritimo(ctx, { ano }, db)
+  const telaDaMobilidade =
+    consolidado.mobilidade.anoBase === null
+      ? null
+      : await consultarMobilidade(ctx, { anoBase: consolidado.mobilidade.anoBase }, db)
+
+  const noConsolidado = (modulo: string): number =>
+    consolidado.porModulo.find((m) => m.modulo === modulo)?.toneladas ?? 0
+
+  conferencias.push({
+    item: 'mobilidade: recontagem × consolidado',
+    esperado: mobilidadeT,
+    obtido: noConsolidado('mobilidade'),
+    origem: 'coerência',
+    ...tol,
+  })
+  conferencias.push({
+    item: 'mobilidade: consolidado × tela',
+    esperado: telaDaMobilidade?.co2ToneladasAno ?? 0,
+    obtido: noConsolidado('mobilidade'),
+    origem: 'coerência',
+    ...tol,
+  })
+  conferencias.push({
+    item: 'mobilidade: respondentes na média',
+    esperado: naMedia.length,
+    obtido: consolidado.mobilidade.respondentes,
+    origem: 'coerência',
+    ...inteiro,
+  })
+
+  conferencias.push({
+    item: 'viagens: recontagem × consolidado',
+    esperado: viagensT,
+    obtido: noConsolidado('viagens'),
+    origem: 'coerência',
+    ...tol,
+  })
+  conferencias.push({
+    item: 'viagens: consolidado × tela',
+    esperado: telaDeViagens.co2Toneladas,
+    obtido: noConsolidado('viagens'),
+    origem: 'coerência',
+    ...tol,
+  })
+
+  conferencias.push({
+    item: 'marítimo: recontagem × consolidado',
+    esperado: maritimoT,
+    obtido: noConsolidado('maritimo'),
+    origem: 'coerência',
+    ...tol,
+  })
+  conferencias.push({
+    item: 'marítimo: consolidado × tela',
+    esperado: telaDoMaritimo.co2Toneladas,
+    obtido: noConsolidado('maritimo'),
+    origem: 'coerência',
+    ...tol,
+  })
+
+  // O marítimo é o único que mostra dois números em duas telas, porque a série
+  // dele atravessa os anos (§8.4). A diferença é legítima e a Visão geral
+  // declara o recorte; o que não podia era ela aparecer sem recorte no
+  // consolidado.
+  const foraDoAno = embarques.filter((e) => e.ano !== ano && !e.previsao)
+  if (foraDoAno.length > 0) {
+    console.log(
+      `  nota: ${foraDoAno.length} embarque(s) realizados fora de ${ano} ficam fora do ` +
+        'consolidado e dentro do total do módulo; a Visão geral declara o recorte.',
+    )
+  }
+
+  conferencias.push({
+    item: 'série de doze meses × indicador',
+    esperado: consolidado.totalToneladas,
+    obtido: consolidado.porMes.reduce((s, m) => s + m.total, 0) / 1000,
+    origem: 'coerência',
+    ...tol,
+  })
+  conferencias.push({
+    item: 'meses na série',
+    esperado: 12,
+    obtido: consolidado.porMes.length,
+    origem: 'coerência',
+    ...inteiro,
+  })
+  conferencias.push({
+    item: 'fatias da faixa × indicador',
+    esperado: consolidado.totalToneladas,
+    obtido: consolidado.porModulo.reduce((s, m) => s + m.toneladas, 0),
+    origem: 'coerência',
+    ...tol,
+  })
+
+  let falhas = 0
+  for (const c of conferencias) {
+    if (Math.abs(c.obtido - c.esperado) > c.tolerancia) falhas++
+    console.log(linhaDeConferencia(c))
+  }
+  return falhas
+}
+
+function somaDe<T>(itens: T[], valor: (item: T) => number): number {
+  return itens.reduce((s, item) => s + valor(item), 0)
+}
+
 async function principal(): Promise<void> {
   const caminho = caminhoDaBase(
     argumentoPosicional(),
@@ -1154,6 +1358,10 @@ async function principal(): Promise<void> {
     /* --------------------------------------------------------- marítimo */
 
     falhas += await conferirMaritimo(db)
+
+    /* ---------------------------------- consolidado: coerência entre telas */
+
+    falhas += await conferirCoerenciaDoConsolidado(db)
 
     /* ------------------------------------------------------------ veredito */
 

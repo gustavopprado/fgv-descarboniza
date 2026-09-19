@@ -116,6 +116,45 @@ export function anoBaseViagens(): number {
   return ano
 }
 
+/**
+ * Ano-base da pesquisa de mobilidade, quando o ambiente o declara.
+ *
+ * **É a pesquisa que tem ano-base, não o ano civil.** A resposta é uma taxa
+ * mensal que vale para os doze meses do ano-base (§9.5), então recortar a
+ * coleção por ano civil devolve vazio — e um painel a menos sem erro nenhum
+ * (§10.0).
+ *
+ * Opcional de propósito, e a diferença importa: sem o valor, o módulo não tem
+ * recorte, e **isso é ausência, não zero** (§9.10). A tela declara qual dos dois
+ * é, em vez de desenhar um zero que passa por medição.
+ */
+export function anoBaseMobilidade(): number | null {
+  const bruto = opcional('MOBILIDADE_ANO_BASE')
+  if (bruto === undefined) return null
+  const ano = Number(bruto)
+  return Number.isInteger(ano) && ano > 2000 && ano < 2100 ? ano : null
+}
+
+/* ----------------------------------------------- inventário consolidado */
+
+/**
+ * **O ano que o inventário consolidado relata — constante, nunca ambiente**
+ * (§10.0).
+ *
+ * Não há seletor de ano na Visão geral, e por isso não há variável: viagens
+ * relata um ano só, e o marítimo tem pontas parciais nos dois extremos da série
+ * (§8.4). Um seletor convidaria a ler ponta parcial como ano cheio — que é a
+ * §0.1 com outra roupa, queda de cobertura lida como queda de emissão.
+ *
+ * É constante pelo mesmo motivo que a base de data do marítimo passou a ser:
+ * **a escolha que mais move o número não pode mudar por variável esquecida numa
+ * máquina.** Um ano plausível no ambiente carregaria o período errado sem nada
+ * parecer quebrado, que é a forma mais cara de estar errado.
+ *
+ * Lida pela Visão geral e pela tela de Método, nunca do ambiente.
+ */
+export const ANO_BASE_INVENTARIO = 2025
+
 /* --------------------------------------------- programa de viagens (§7.5) */
 
 /**
@@ -278,6 +317,8 @@ export function parametrosDeclarados(): {
   mobilidadeDistanciaMaximaKm: string | null
   mobilidadeAnoBase: string | null
   viagensAnoBase: string | null
+  /** A constante do consolidado: ver `ANO_BASE_INVENTARIO`. */
+  inventarioAnoBase: typeof ANO_BASE_INVENTARIO
   /** A constante, não uma variável: ver `MARITIMO_BASE_DE_DATA`. */
   maritimoBaseDeData: typeof MARITIMO_BASE_DE_DATA
   maritimoLimiarAtipico: string | null
@@ -291,6 +332,8 @@ export function parametrosDeclarados(): {
     mobilidadeDistanciaMaximaKm: opcional('MOBILIDADE_DISTANCIA_MAXIMA_KM') ?? null,
     mobilidadeAnoBase: opcional('MOBILIDADE_ANO_BASE') ?? null,
     viagensAnoBase: opcional('VIAGENS_ANO_BASE') ?? null,
+    // Constante, não variável, e pelo mesmo motivo da base de data abaixo.
+    inventarioAnoBase: ANO_BASE_INVENTARIO,
     // Constante, não variável: ver `MARITIMO_BASE_DE_DATA` acima.
     maritimoBaseDeData: MARITIMO_BASE_DE_DATA,
     maritimoLimiarAtipico: opcional('MARITIMO_LIMIAR_ATIPICO') ?? null,

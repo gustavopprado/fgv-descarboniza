@@ -153,6 +153,7 @@ test('os desenhos que ampliam em vez de refluir têm teto e piso', () => {
   const pontas: [string, string, string | null][] = [
     ['mapa-de-rotas.tsx', 'LARGURA_MAXIMA', 'LARGURA_MINIMA'],
     ['grafico-de-barras.tsx', 'AMPLIACAO_MAXIMA', 'REDUCAO_MAXIMA'],
+    ['visao-geral/serie-empilhada.tsx', 'AMPLIACAO_MAXIMA', 'REDUCAO_MAXIMA'],
     // O radar não tem piso de propósito: são quatro rótulos, e a legenda
     // carrega o significado. Ele degrada bem onde os outros viram sujeira.
     ['mobilidade/radar.tsx', 'LARGURA_MAXIMA', null],

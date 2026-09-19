@@ -51,12 +51,16 @@ const COLECAO_DO_PROGRAMA = 'viagemRegistrada'
 const COLECOES_DO_INVENTARIO = ['viagemTrecho', 'mobilidade', 'embarque']
 
 /** Módulos de consulta de cada lado. */
-const CONSULTA_DO_INVENTARIO = ['src/server/consultas/inventario.ts']
+const CONSULTA_DO_INVENTARIO = [
+  'src/server/consultas/inventario.ts',
+  'src/server/consultas/visao-geral.ts',
+]
 const CONSULTA_DO_PROGRAMA = ['src/server/consultas/programa.ts']
 
 /** As cinco telas do inventário (§10) e as do programa. */
 const TELAS_DO_INVENTARIO = [
   'src/app/page.tsx',
+  'src/app/visao-geral',
   'src/app/mobilidade',
   'src/app/viagens',
   'src/app/metodo',

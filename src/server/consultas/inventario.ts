@@ -42,7 +42,6 @@ import {
 } from './agregacao'
 import {
   exigirModulo,
-  exigirVisaoGeral,
   limiteDeEmpresa,
   type ContextoDeAcesso,
 } from './acesso'
@@ -626,6 +625,16 @@ export type ResumoDeMaritimo = {
    * existe para ele não se perder — continua contado e declarado aqui.
    */
   previsoes: { embarques: number; co2Kg: number }
+  /**
+   * Quantos agentes de carga o recorte tem detalhe de.
+   *
+   * **É fato do banco, e a tela declara a partir dele.** Quantos agentes ficam
+   * de fora é fato do arquivo, e quem responde isso é a conferência de cobertura
+   * (§8.4) — dizer aqui quantos faltam seria inventar o embarque que a §8.2 não
+   * inventa. O número existe porque o consolidado precisa declarar que o
+   * marítimo não cobre toda a importação do período (§10.0).
+   */
+  agentes: number
   /** Anos com dado no módulo, para o seletor de período. */
   anos: number[]
 }
@@ -738,6 +747,7 @@ export async function consultarMaritimo(
       }))
       .sort((a, b) => b.co2Kg - a.co2Kg),
     previsoes: { embarques: previstos.length, co2Kg: somar(previstos, valor) },
+    agentes: new Set(embarques.map((e) => e.agente)).size,
     anos: [...new Set(todos.map((e) => e.ano))].sort(),
   }
 }
@@ -864,60 +874,3 @@ function montarMapaMaritimo(
  * de nomes de porto, que a §2.2 mantém fora deste repositório.
  */
 const PAIS_DA_EMPRESA = 'BR'
-
-/* ------------------------------------------------------------ visão geral */
-
-export type VisaoGeral = {
-  ano: number
-  totalToneladas: number
-  porModulo: { modulo: string; toneladas: number; proporcao: number }[]
-  porMes: { mes: string; co2Kg: number }[]
-  /** Mobilidade não entra na série mensal: é taxa, não evento. Ver §9.3. */
-  observacaoDaSerie: string
-}
-
-export async function consultarVisaoGeral(
-  ctx: ContextoDeAcesso,
-  filtros: { ano: number },
-  db: Firestore = firestore(),
-): Promise<VisaoGeral> {
-  // A visão geral é mais estreita que o inventário: quem vê um módulo só não
-  // vê o consolidado, porque o consolidado dele não seria o consolidado (§5).
-  exigirVisaoGeral(ctx)
-
-  const [mobilidade, viagens, maritimo] = await Promise.all([
-    consultarMobilidade(ctx, { anoBase: filtros.ano }, db),
-    consultarViagens(ctx, { ano: filtros.ano }, db),
-    consultarMaritimo(ctx, { ano: filtros.ano }, db),
-  ])
-
-  const porModulo = [
-    { modulo: 'mobilidade', toneladas: mobilidade.co2ToneladasAno },
-    { modulo: 'viagens', toneladas: viagens.co2Toneladas },
-    { modulo: 'maritimo', toneladas: maritimo.co2Toneladas },
-  ]
-  const totalToneladas = porModulo.reduce((s, m) => s + m.toneladas, 0)
-
-  // A série mensal soma só o que é evento. A mobilidade é taxa mensal constante
-  // no ano-base e, se entrasse aqui, apareceria como se tivesse acontecido doze
-  // vezes num mês qualquer.
-  const porMes = new Map<string, number>()
-  for (const { mes, co2Kg } of [...viagens.porMes, ...maritimo.porMes]) {
-    porMes.set(mes, (porMes.get(mes) ?? 0) + co2Kg)
-  }
-
-  return {
-    ano: filtros.ano,
-    totalToneladas,
-    porModulo: porModulo.map((m) => ({
-      ...m,
-      proporcao: totalToneladas === 0 ? 0 : m.toneladas / totalToneladas,
-    })),
-    porMes: [...porMes.entries()]
-      .map(([mes, co2Kg]) => ({ mes, co2Kg }))
-      .sort((a, b) => a.mes.localeCompare(b.mes)),
-    observacaoDaSerie:
-      'A série mensal cobre viagens e marítimo. Mobilidade é taxa mensal do ' +
-      'ano-base e entra no total anual, não na série.',
-  }
-}

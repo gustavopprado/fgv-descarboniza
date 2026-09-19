@@ -9,11 +9,20 @@
  * **Toda a massa aqui é fictícia, inventada do zero** (§2.2).
  */
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import { test } from 'node:test'
 
 import type { Papel } from '../documentos/tipos'
 import type { ContextoDeAcesso } from './acesso'
 import { navegacaoPara, telaInicial } from './navegacao'
+
+const PAPEIS: Papel[] = [
+  'admin',
+  'sustentabilidade',
+  'gestor',
+  'importacao',
+  'colaborador',
+]
 
 function ctx(papel: Papel): ContextoDeAcesso {
   return {
@@ -49,12 +58,34 @@ test('colaborador só recebe o programa de viagens', () => {
   )
 })
 
-test('tela que ainda não existe aparece marcada como não construída', () => {
-  const itens = navegacaoPara(ctx('admin'))
-  const metodo = itens.find((i) => i.href === '/metodo')
-  const visaoGeral = itens.find((i) => i.href === '/')
-  assert.equal(metodo?.construida, true)
-  assert.equal(visaoGeral?.construida, false)
+/**
+ * **A promessa do menu virou fato conferido.**
+ *
+ * Enquanto havia tela por construir, este teste prendia a Visão geral como não
+ * construída — o que descreveu a verdade até ela existir e passaria a mentir
+ * depois. Com as sete no ar, o que resta a prender é mais forte e não envelhece:
+ * **todo item que o menu oferece tem arquivo de tela**, e nenhum aparece
+ * apagado. Menu que mostra porta fechada ensina que existe porta; menu que
+ * oferece porta inexistente é pior.
+ */
+test('toda tela oferecida no menu existe em arquivo', () => {
+  const arquivoDa = (href: string) =>
+    href === '/' ? 'src/app/page.tsx' : `src/app${href}/page.tsx`
+
+  for (const papel of PAPEIS) {
+    for (const item of navegacaoPara(ctx(papel))) {
+      assert.equal(
+        item.construida,
+        true,
+        `${papel} recebe "${item.href}" apagado, e as sete telas já existem`,
+      )
+      assert.equal(
+        existsSync(arquivoDa(item.href)),
+        true,
+        `o menu oferece "${item.href}" e não há ${arquivoDa(item.href)}`,
+      )
+    }
+  }
 })
 
 test('a tela inicial é sempre uma que o perfil pode abrir', () => {

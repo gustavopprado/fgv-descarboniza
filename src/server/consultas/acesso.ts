@@ -41,8 +41,16 @@ export type ContextoDeAcesso = {
 export type Modulo = 'mobilidade' | 'viagens' | 'maritimo'
 
 export class AcessoNegadoError extends Error {
+  /**
+   * `oQue` já vem com a preposição contraída — "ao inventário", "à visão
+   * geral" —, e o molde **não** acrescenta outra. A versão anterior escrevia
+   * `não tem acesso a ${oQue}` e produzia "não tem acesso a ao inventário" em
+   * toda recusa. Ficou invisível enquanto a mensagem só aparecia em terminal;
+   * ela é o texto da tela de "Sem acesso", que é a única coisa que um perfil
+   * recusado lê.
+   */
   constructor(readonly papel: Papel, oQue: string) {
-    super(`O perfil "${papel}" não tem acesso a ${oQue}.`)
+    super(`O perfil "${papel}" não tem acesso ${oQue}.`)
     this.name = 'AcessoNegadoError'
   }
 }

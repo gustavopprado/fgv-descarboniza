@@ -71,7 +71,7 @@ Um inventário de emissões com três módulos e um painel consolidado.
 | Mobilidade casa-trabalho | Escopo 3, cat. 7 | kg CO₂ por funcionário por mês |
 | Viagens corporativas | Escopo 3 cat. 6 / Escopo 1 | kg CO₂ por viagem |
 | Transporte marítimo de importações | Escopo 3, cat. 4 | kg CO₂ por contêiner |
-| Painel consolidado | — | toneladas de CO₂e por ano |
+| Painel consolidado | — | toneladas de CO₂e no ano-base do inventário (§10.0) |
 
 **Regra de exibição:** peso, volume, distância, tonelada-quilômetro e intensidade por quilo
 são insumo de cálculo e **não aparecem na interface**.
@@ -963,8 +963,8 @@ a coleção por fora dele — e isso é verificado por teste, não só combinado
 
 **Inventário**
 
-1. **Visão geral** — total do ano em tCO₂e, faixa proporcional dos três módulos, três cartões
-   de indicador, emissão mês a mês.
+1. **Visão geral** — o inventário consolidado do ano-base. Definida inteira na §10.0,
+   porque o que essa tela soma não é óbvio a partir dos três módulos.
 2. **Mobilidade** — kg CO₂ por funcionário/mês, total no ano, distância média, radar de onde
    o quadro mora, emissão por modal.
 3. **Viagens** — kg CO₂ por viagem, total, mapa de rotas, destinos mais frequentes, emissão
@@ -1010,6 +1010,85 @@ total somado. Se um dia alguém quiser os dois números na mesma página, isso �
 e exige rediscutir a §0.1 — não é ajuste de tela.
 
 Comportamento visual, animações e detalhe de layout: seguir o protótipo.
+
+### 10.0 Visão geral
+
+**O ano-base do inventário é 2025, e é constante, não parâmetro de ambiente.** Não há
+seletor de ano nesta tela. Viagens relata 2025; o marítimo tem 2024 e 2026 parciais
+(§8.4), e um seletor convidaria a ler ponta parcial como ano cheio — que é a §0.1 com
+outra roupa: queda de cobertura lida como queda de emissão. A constante é lida pela tela
+e pela tela de Método, nunca do ambiente, pelo mesmo motivo que a base de data do
+marítimo passou a ser constante em 19/09: a escolha que mais move o número não pode
+mudar por variável esquecida numa máquina.
+
+**O total soma os três módulos.** Mobilidade, Viagens e Marítimo.
+
+#### A mobilidade entra por decisão declarada, não por coincidência de data
+
+O levantamento de mobilidade é de 2026 e produz uma **taxa** de deslocamento
+casa-trabalho, não um evento datado: `periodicidade: 'mensal'`, `mes` nulo, `anoBase`
+2026, e o mesmo `co2KgMes` vale para os doze meses (§9.5). Essa taxa é aplicada a 2025
+como padrão de deslocamento do quadro — prática corrente em inventário, porque pesquisa
+de mobilidade quase nunca é do ano relatado.
+
+**É a única parte do total que não é medição do período**, e por isso é a única que
+carrega rótulo próprio na tela. A suposição embutida é que o quadro e o padrão de
+deslocamento de 2025 e 2026 são comparáveis; quem assina o relatório assina isso.
+
+> **A consulta da mobilidade não filtra por ano civil.** Ela lê o ano-base da pesquisa.
+> Aplicar o filtro de 2025 aos documentos de mobilidade devolve coleção vazia, e o
+> painel perderia um módulo inteiro **sem erro nenhum** — o total simplesmente
+> apareceria menor. É a família dos defeitos que a §14 vem registrando: consulta que
+> afirma um arranjo que o dado não tem. A guarda está na §10.0.1.
+
+#### O que a tela mostra
+
+- **Indicador principal** — total de 2025 em tCO₂e. O número e o ano, mais nada.
+- **Faixa proporcional** — os três módulos, na proporção do total. As três fatias somam
+  o indicador principal; se não somarem, é defeito, não arredondamento.
+- **Três cartões de indicador** — um por módulo, com o total do ano em tCO₂e. O cartão
+  da mobilidade carrega a etiqueta de ano-base 2026 aplicado a 2025 **no próprio
+  cartão**. Não em rodapé: rodapé é onde a ressalva morre.
+- **Emissão mês a mês — empilhada, nunca somada numa linha só.** A mobilidade é taxa
+  repetida nos doze meses e aparece como banda constante; empilhada, a banda plana se
+  declara sozinha. Numa linha única o mesmo dado viraria curva achatada e a variação de
+  viagens e marítimo ficaria ilegível. **A soma dos doze meses bate com o indicador
+  principal.**
+
+A nota da série vem de quem chama, não da peça (lição de 19/09): esta tela declara que
+cada módulo agrupa por uma data diferente — data do voo em viagens, base de data do
+módulo no marítimo, e taxa mensal na mobilidade.
+
+**Sem filtros.** Os quatro cortes da §10.1 ficam nas telas de módulo. A Visão geral é
+uma leitura só, e é a tela que alguém abre para ver o número do ano.
+
+#### Três declarações obrigatórias, curtas, na própria tela
+
+1. **A mobilidade é ano-base 2026 aplicada a 2025** — no cartão dela.
+2. **O marítimo de 2025 é o inventário de um agente.** Dois dos três não entregam
+   detalhe linha a linha (§13); sem a frase, o total parece cobrir toda a importação do
+   ano.
+3. **Previsão está fora do total** — regra do módulo marítimo, que continua valendo no
+   consolidado.
+
+#### 10.0.1 O que a consulta desta tela tem de diferente de todas as outras
+
+É a primeira consulta que atravessa os três módulos, e a §9.3 existe justamente porque
+somar taxa com evento produz número errado sem sinal de erro. A consolidação é
+explícita, e cada uma destas é guarda com teste que **liga a violação**:
+
+- **Mobilidade pelo ano-base da pesquisa; viagens e marítimo pelo ano civil de 2025.**
+  Três recortes, um total. Filtro único para os três é o defeito, não a simplificação.
+- **O marítimo entra recortado em 2025.** A série do módulo é contínua e começa em
+  novembro de 2024 (§8.4). Documento fora de 2025 não move o indicador desta tela.
+- **Previsão fora do total, aéreo dentro do total.** Mesma regra do módulo, e pelo mesmo
+  motivo: o aéreo é emissão do escopo e só não tem contêiner.
+- **Nenhum identificador de pessoa sai na resposta** (§3.1), e a mobilidade não é
+  recortada por bairro nem por modal aqui — é um número só.
+- **Nada de `viagemRegistrada`** (§0.1). A tela lê `mobilidade`, `viagemTrecho` e
+  `embarque`, e nenhuma outra coleção de emissão.
+- **A soma dos doze meses é igual ao indicador principal**, e o total de cada módulo
+  aqui é igual ao que a tela do módulo mostra para 2025.
 
 ### 10.1 Cortes que o painel oferece
 
@@ -1143,14 +1222,6 @@ Coisas que provavelmente vão acontecer, mas não agora.
   é resíduo de subtração. **A saída é pedir detalhe por embarque à origem, que é operação,
   não código.** Enquanto não vier, o marítimo é o inventário de um agente, a cobertura
   conta os dois blocos ausentes e a tela declara quantos embarques ficam de fora.
-- **Os três módulos cobrem períodos diferentes, e a Visão geral vai ter que dizer isso.**
-  Mobilidade tem ano-base 2026; viagens relata 2025; o marítimo cobre de novembro de 2024
-  a maio de 2026, com 2024 e 2026 parciais e **sem ano-base** — o escopo dele é agente e
-  bloco, nunca ano (§8.4). Um "total do ano" que some os três precisa declarar o que essa
-  palavra significa quando um módulo é taxa anual de um ano, outro é um relatório anual
-  fechado e o terceiro é uma série contínua recortada pelo ano civil. **Não é ajuste de
-  tela: é a definição do indicador principal do painel**, e fica para a etapa da Visão
-  geral.
 - **Chaves do Google separadas por função e por destino** (§11.8). Já estão separadas por
   API — uma para geocodificação, outra para roteamento —, porque restringir uma chave única
   a uma API derrubaria a chamada da outra ponta. Falta a separação por **destino**: a chave
@@ -1168,12 +1239,23 @@ Coisas que provavelmente vão acontecer, mas não agora.
   método declara a configuração **atual** do ambiente, e não necessariamente a que produziu
   a carga que está no banco. Enquanto a carga for manual e rara, a diferença é teórica;
   quando deixar de ser, o caminho é carimbar o provedor junto do fator.
-- **Das sete telas da §10, seis existem**: Método, Mobilidade, Viagens e Marítimo no
-  inventário, e Registrar viagem e Emissões registradas no programa — esta última com a
-  versão do próprio viajante, "Minhas viagens", porque `colaborador` não vê agregado
-  (§5.1). Falta a **Visão geral**, que ficou por último de propósito: enquanto o marítimo
-  não existisse, ela mostraria dois terços do inventário como se fosse o total. O que falta
-  a ela agora não é módulo — é a definição de período do item acima.
+- **As sete telas existem.** A Visão geral fechou a lista em 19/09, e ficou por último
+  de propósito: enquanto o marítimo não existisse, ela mostraria dois terços do
+  inventário como se fosse o total. As outras seis são Método, Mobilidade, Viagens e
+  Marítimo no inventário, e Registrar viagem e Emissões registradas no programa — esta
+  última com a versão do próprio viajante, "Minhas viagens", porque `colaborador` não vê
+  agregado (§5.1).
+
+  O que fica em aberto daqui é de outra natureza: **a consolidação continua sendo a
+  única consulta que atravessa os três módulos**, e as guardas da §10.0.1 são o que a
+  segura. Módulo novo, ano-base novo ou mudança de recorte em qualquer um dos três passa
+  por lá antes de passar pela tela.
+- **A tela de Método vai sair, e as telas vão enxugar.** Decisão do Gustavo, etapa
+  seguinte à Visão geral. Não é ajuste de texto: hoje a Método é o endereço de toda
+  escolha que muda o número — sete parâmetros só do marítimo — e tirá-la sem dar endereço
+  novo a essas declarações deixa o número sem lastro na tela. **Nada disso se antecipa na
+  etapa da Visão geral**; as três declarações da §10.0 nascem já dentro da tela, que é
+  para onde elas iriam de qualquer jeito.
 - **O denominador da adesão do programa é parâmetro, e pode não estar definido.** Ele não
   sai de coleção nenhuma: o candidato óbvio, o tamanho da coleção de funcionários, inclui
   gente que só aparece como aprovador de passagem, e com ele a adesão nasceria menor do que
@@ -1196,6 +1278,181 @@ documento.
 **Sem dado real nas entradas** — descreva o que mudou, não os números que apareceram.
 
 ### Histórico
+
+#### 2026-09-19 — Visão geral: as sete telas fechadas, e o que a consolidação cobra
+
+A última tela do sistema. Ela não tem número próprio — todo o conteúdo dela sai
+das três consultas de módulo —, e mesmo assim foi a etapa em que mais guarda
+nova precisou existir. O motivo é a §9.3: **somar taxa com evento produz número
+errado sem nenhum sinal de erro**, e todo defeito possível aqui é silencioso —
+nenhum quebra a tela, todos só fazem o total aparecer maior ou menor.
+
+**Passo 0 — os números antes do código**
+
+Medido contra o banco carregado, antes de qualquer linha de tela: os três totais
+do ano-base, a soma dos doze meses contra o indicador, e quanto da série do
+marítimo fica fora do ano. Três coisas que a medição destapou e que mudaram o que
+foi construído:
+
+- **não existe embarque previsto no banco**, então a guarda da previsão nasce sem
+  nada a excluir e só morde com massa sintética — mesma situação das duas de
+  18/09;
+- **o frete aéreo existe e pesa**, então a guarda de que ele fica *dentro* do
+  total tem mordida contra dado real;
+- **o marítimo mostra dois números em duas telas**, e a diferença não é pequena:
+  a série dele é contínua e atravessa os anos (§8.4), enquanto a Visão geral
+  relata um ano. Sem uma frase no cartão, quem abrir as duas telas lado a lado
+  vai procurar qual das duas cargas está errada. A frase foi decidida antes de
+  desenhar, no padrão curto das outras declarações.
+
+**Passo 1 — a consulta, e o defeito que já estava escrito nela**
+
+`consultarVisaoGeral` existia desde a Fase F, nunca tinha rodado, e **carregava
+dentro de si exatamente o defeito que a §10.0 avisa** — pedia a mobilidade pelo
+ano civil do filtro. A mobilidade é taxa com `anoBase` próprio e `mes` nulo
+(§9.5): filtrada por ano civil, a coleção volta vazia e o painel perde um módulo
+inteiro **sem erro nenhum**. Foi a primeira guarda a ser escrita e a primeira a
+ser conferida ligando a violação.
+
+A consulta saiu para módulo próprio. Três decisões:
+
+- **O ano-base do consolidado é constante, não ambiente**, ao lado da base de
+  data do marítimo e pelo mesmo motivo: a escolha que mais move o número não pode
+  mudar por variável esquecida numa máquina. O teste **planta um ano diferente em
+  variáveis de ambiente** e exige que a resposta continue com a constante.
+- **A consulta reusa as três consultas de módulo em vez de recalcular.**
+  Recalcular seria uma segunda implementação de "previsão fora", "aéreo dentro" e
+  `contabilizar` — duas cópias da mesma regra, e uma que envelhece sem a outra.
+  Reusando, a coerência entre esta tela e a do módulo passa a ser estrutural: não
+  há filtro para esquecer, que é o argumento da §0.1 para duas coleções em vez de
+  um campo discriminador. O preço é ler os cadastros de apoio dos mapas e
+  descartar.
+- **Zero e ausência ficaram separados no tipo, não só na tela.** Cada módulo
+  carrega quantos documentos entraram e qual recorte produziu o número; recorte
+  nulo é ausência. Sem ano-base de pesquisa declarado, a mobilidade não relata
+  nada — um zero ali passaria por medição de emissão que não houve (§9.10).
+
+**Duas das guardas não são teste: são invariante que estoura**, no molde do
+`conferirTotal` da §9.10. A soma dos doze meses contra o indicador, e as fatias
+da faixa contra o total. Um documento cujo mês caia fora do ano-base sumiria do
+gráfico e continuaria no total, e a tela desenharia doze colunas somando menos
+que o número grande em cima delas — sem nada estourar.
+
+**As oito guardas foram conferidas ligando a violação, uma a uma.** Mobilidade
+pelo ano civil, marítimo sem recorte de ano, previsão de volta no total, aéreo
+fora do total, série com um mês a menos, faixa desenhada sobre outro denominador,
+inventário lendo a coleção do programa e recorte de pessoa saindo na resposta:
+**as oito reprovam.** Guarda que não morde não é guarda.
+
+> **O banco falso deste arquivo respeita `where`, e sem isso metade delas não
+> existiria.** Os bancos falsos dos outros arquivos ignoram o filtro — bastava
+> para eles, porque testam agregação. Aqui as guardas são justamente sobre *qual
+> recorte cada módulo recebe*: com um banco que ignora `where`, "pelo ano-base" e
+> "pelo ano civil" devolvem a mesma coisa e o teste passa nos dois casos, que é o
+> pior resultado possível para uma guarda.
+
+**A conferência de coerência entre telas** entrou no `verificar`. Ela é da
+família da cobertura (§8.4): não pergunta se a conta fecha, pergunta se **as duas
+telas contam a mesma coisa**. A recontagem dela é **independente das duas** — sai
+das coleções e aplica as regras na mão —, porque comparar as duas telas só entre
+si não provaria nada enquanto uma reusa a outra. E o ano-base da mobilidade dela
+sai **da coleção, não do ambiente**: é isso que denuncia a variável apontando
+para o ano errado.
+
+Ela também foi conferida ligando a violação, contra o banco carregado: com a
+mobilidade filtrada por ano civil, três linhas reprovam e o script sai com erro;
+com o marítimo sem recorte, o `verificar` **para antes de imprimir**, porque a
+invariante da série estoura primeiro.
+
+**Passo 2 — a tela**
+
+Indicador principal, faixa proporcional, três cartões e a série empilhada. A
+faixa mora **dentro do painel do indicador**: são a mesma afirmação em duas
+formas, e separá-las em dois painéis faria procurar a relação entre dois números
+que são um.
+
+**As três declarações da §10.0 moram cada uma junto do número que qualifica**, e
+nenhuma em rodapé — rodapé é onde a ressalva morre. Ano-base da pesquisa no
+cartão da mobilidade, com etiqueta; agente único no cartão do marítimo, junto da
+frase do recorte; previsão fora do total junto do indicador, que é o total de que
+ela está fora.
+
+**A série empilhada não tem altura mínima por segmento, ao contrário da barra
+simples, e a diferença é de significado.** Na barra simples o fio de dois pixels
+existe para barra pequena não se confundir com barra ausente, e não custa nada
+porque a barra não é parte de nada. Aqui a altura da coluna **é** o total do mês:
+um mínimo por banda faria a pilha somar mais que a própria coluna, e o desenho
+afirmaria um total que o número acima dele não tem.
+
+**Três defeitos que só o desenho mostrou**
+
+- **A mesma chave de cor aparecia em duas ordens na mesma tela.** A legenda da
+  série nasceu invertida, para ler de cima para baixo como a pilha é vista, e a
+  da faixa lia da esquerda para a direita. Duas ordens para um assunto só, a três
+  centímetros de distância, é o leitor conferindo a legenda duas vezes. Ficou uma
+  ordem.
+- **Os rótulos dos meses se tocavam no celular.** Medido pela caixa do texto, e
+  não pelo passo da coluna: com o ano no rótulo, a folga entre vizinhos chegava a
+  **−0,2px**; sem ele, a menor folga é **9,8px**. Rarear o rótulo resolveria
+  escondendo metade dos meses; encurtar resolve mostrando todos — e aqui o ano é
+  redundante, porque a série cobre sempre os doze meses de um ano só, declarado
+  no título da tela.
+- **O branco migrou para dentro do painel, de novo.** Com a série em largura
+  inteira, sobravam **438px** ao lado do desenho a 1366 e **992px** a 1920 — o
+  defeito de 18/09 em pessoa, porque `viewBox` é escala e alargar o desenho
+  multiplicaria o texto junto. Excedente estrutural resolve-se com uma coluna a
+  mais: a série foi para a coluna larga e os três cartões para a de ao lado, e
+  acima de `2xl` a coluna da série ganha medida fixa, exatamente o teto do
+  desenho mais o respiro do painel. O que sobra vai para os cartões, e **é lá que
+  ele não incomoda** — a nota do cartão reflui e o cartão encolhe em altura.
+
+**Um piso mais baixo que o da barra simples, e o motivo foi medido.** Na coluna
+larga desta tela, a 1024px, o desenho fica a 0,88 da escala; com o piso de 0,9 o
+painel passaria a rolar por dentro **oito pixels**, que é a pior rolagem
+possível — ninguém percebe que ela existe e ela leva embora o último mês.
+
+**Um defeito de texto que o ensaio destapou, e que valia para quatro telas.** A
+mensagem de recusa saía como "não tem acesso **a ao** inventário": o molde
+acrescentava uma preposição que os chamadores já traziam contraída. Ficou
+invisível enquanto a mensagem só aparecia em terminal — e ela é o texto da tela
+de "Sem acesso", que é a única coisa que um perfil recusado lê.
+
+**Um teste antigo precisou mudar, e a mudança é para melhor.** Havia um que
+prendia a Visão geral como "ainda não construída" — verdade até ela existir, e
+mentira depois. Com as sete telas no ar, o que ficou prendendo é mais forte e não
+envelhece: **todo item que o menu oferece tem arquivo de tela**, conferido em
+disco, para todos os perfis.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (285 testes, 23 novos) e `next build` passam.
+  `verificar` fecha inteiro, incluindo as dez linhas novas da coerência entre
+  telas. Nenhum servidor foi subido por mim; usei o que já estava no ar.
+- **As oito guardas da §10.0.1 foram conferidas ligando a violação, uma a uma, e
+  as duas silenciosas também contra o banco carregado** — a da mobilidade
+  reprovando pelo nome do módulo, a do marítimo derrubando o `verificar` com a
+  diferença impressa.
+- Exercitado contra o Firestore carregado, por ensaio temporário apagado em
+  seguida: os três perfis que podem abrir recebem o mesmo total, **a soma dos
+  doze meses e a soma das fatias reproduzem o indicador com diferença zero**, a
+  banda da mobilidade sai constante nos doze meses, nenhum identificador de
+  pessoa e nenhum recorte de bairro ou de modal saem na resposta, e
+  `viagemRegistrada` não é lida. **`importacao` e `colaborador` são recusados
+  antes de qualquer coleção ser tocada** — não é filtro depois da leitura.
+- Os dois estados de borda foram desenhados e conferidos: sem ano-base de
+  pesquisa, a mobilidade aparece como ausente e não como zero; sem documento
+  nenhum, a tela diz que é ausência de carga.
+- O layout foi medido com rota temporária, no `.gitignore` **antes** de existir e
+  apagada no fim, desenhando a árvore real da tela com dados inventados do zero.
+  Sem rolagem lateral em 360, 390, 640, 768, 1024, 1366, 1536 e 1920; o rótulo do
+  mês entre 6,6 e 12,5px, sem nenhuma colisão em nenhuma largura; e o branco ao
+  lado do desenho em no máximo 35px em todas elas.
+
+**O que continua fora do alcance de teste automático:** a tela abrir com sessão
+de verdade. A rota temporária exercita a árvore de componentes, não a sessão, e
+`next build` compila sem renderizar — todas as páginas são dinâmicas (lição de
+15/09).
+
 
 #### 2026-09-19 — Marítimo, passos 2 e 3: a tela, e o que só aparece desenhando
 

@@ -32,6 +32,7 @@ export type ItemDeNavegacao = {
  * desabilitada — o mapa do sistema fica visível sem prometer link que não abre.
  */
 const CONSTRUIDAS: ReadonlySet<string> = new Set([
+  '/',
   '/mobilidade',
   '/viagens',
   '/maritimo',
