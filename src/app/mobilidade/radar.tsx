@@ -148,20 +148,16 @@ export function Radar({ distanciasKm }: { distanciasKm: number[] }) {
       </div>
 
       <figcaption className="mt-3 max-w-[70ch] text-[12px] text-[var(--color-apoio)]">
-        Cada ponto é uma pessoa, e os anéis marcam a distância até a fábrica — a
-        escala é comprimida para a nuvem não empilhar no centro, então o número
-        se lê no anel, não no raio.{' '}
+        {/* **As duas frases que ficam são as que impedem ler errado** (§3.1.1), e
+            é por isso que elas não foram para o botão de informações: quem
+            precisa delas é justamente quem não vai clicar. O resto — o que o
+            ponto carrega, a varredura, a supressão — está lá. */}
+        A distância se lê no anel, não no raio: a escala é comprimida para a nuvem
+        não empilhar no centro.{' '}
         <strong className="font-medium text-[var(--color-tinta)]">
           A direção não significa nada
         </strong>
-        : a pesquisa não pergunta para que lado a pessoa mora, e o ângulo serve só
-        para os pontos não se empilharem — dois pontos lado a lado podem ser
-        vizinhos ou morar em extremos opostos da cidade.{' '}
-        <strong className="font-medium text-[var(--color-tinta)]">
-          A varredura é enfeite
-        </strong>
-        : ela só escolhe a ordem em que os pontos acendem. Nenhum ponto carrega
-        informação de quem é.
+        : o ângulo serve só para os pontos não se empilharem.
       </figcaption>
     </figure>
   )

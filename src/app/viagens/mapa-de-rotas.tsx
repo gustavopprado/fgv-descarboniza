@@ -115,14 +115,13 @@ export function MapaDeCorredoresDoInventario({
         <strong className="font-medium text-[var(--color-tinta)]">
           O ponto não marca a posição exata de nada
         </strong>{' '}
-        — é a média dos aeroportos que a empresa usa na região. Cada linha é um
-        corredor, e a espessura acompanha a emissão.
+        — é a média dos aeroportos da região. A espessura acompanha a emissão.
       </>
     ),
     ressalva: (
       <>
-        Somente trechos aéreos; corredor dentro da mesma região vira anel. Contorno
-        pelo Natural Earth, divisas das regiões pelo IBGE. <NaoDesenhado mapa={mapa} />
+        Só trechos aéreos; corredor dentro da mesma região vira anel.{' '}
+        <NaoDesenhado mapa={mapa} />
       </>
     ),
   }

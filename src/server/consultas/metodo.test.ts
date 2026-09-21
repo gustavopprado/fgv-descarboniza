@@ -239,7 +239,13 @@ test('o método não declara data de corte como parâmetro', async () => {
   assert.notEqual(viagens, undefined)
   const declarado = `${viagens?.descricao} ${viagens?.situacao}`
   assert.doesNotMatch(declarado, /a partir dela|troca de fonte|passa a ser/i)
-  assert.match(declarado, /administrativas/)
+  // **Prende o fato, não a redação.** A versão anterior exigia a palavra
+  // "administrativas"; com o resumo encurtado em 20/09 ela saiu, e o que sustenta
+  // a §0.1 continua lá e é mais forte: as duas fontes aparecem pelo nome, e o
+  // programa de viagens aparece declarado como fora daqui.
+  assert.match(declarado, /agência/i)
+  assert.match(declarado, /cartão/i)
+  assert.match(declarado, /programa de viagens não entra/i)
 })
 
 test('importacao recebe só o marítimo, e a mobilidade nem é lida', async () => {
@@ -479,8 +485,13 @@ test('a fonte do marítimo declara o agente que falta, sem inventar o embarque',
 
   const fonte = metodo.fontes.find((f) => f.modulo === 'maritimo')
   assert.ok(fonte)
-  assert.match(fonte.situacao, /não inventa o embarque/)
-  assert.match(fonte.situacao, /cobertura/)
+  // Quantos agentes o inventário tem é fato do banco, e sai aqui.
+  assert.match(fonte.situacao, /agente/i)
+  // **O que nunca pode sumir:** agente sem detalhe por embarque não está no
+  // inventário, nem como estimativa — a cascata estima dentro de um embarque, não
+  // inventa o embarque. O ponteiro para a conferência de cobertura saiu da tela no
+  // enxugamento de 20/09; a afirmação que ele acompanhava ficou.
+  assert.match(fonte.situacao, /não está no inventário/i)
 })
 
 /**

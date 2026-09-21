@@ -24,6 +24,7 @@ import type { Firestore } from 'firebase-admin/firestore'
 import { ANO_BASE_INVENTARIO } from '@/lib/env'
 import type {
   DocEmbarque,
+  DocEntregaRodoviaria,
   DocMobilidade,
   DocViagemRegistrada,
   DocViagemTrecho,
@@ -198,6 +199,39 @@ function doPrograma(parcial: Partial<DocViagemRegistrada> = {}): DocViagemRegist
   }
 }
 
+function entrega(parcial: Partial<DocEntregaRodoviaria> = {}): DocEntregaRodoviaria {
+  return {
+    modulo: 'transportadoras',
+    modal: 'rodoviario',
+    escopo: 3,
+    periodicidade: 'evento',
+    ano: ANO_BASE_INVENTARIO,
+    mes: `${ANO_BASE_INVENTARIO}-04`,
+    empresa: null,
+    fator: {
+      categoria: 'frete_rodoviario_tkm',
+      chave: 'geral',
+      versao: 'ficticia-1',
+      valor: 0.1,
+      unidade: 'kg CO2e por tonelada-quilometro',
+      vigenciaInicio: `${ANO_BASE_INVENTARIO}-01-01`,
+    },
+    alertas: [],
+    alertasCodigos: [],
+    atualizadoEm: `${ANO_BASE_INVENTARIO}-05-01`,
+    filial: '01',
+    data: `${ANO_BASE_INVENTARIO}-04-10`,
+    ordem: 1,
+    clienteCodigo: '11111 01',
+    distanciaKm: 100,
+    pesoKg: 5000,
+    co2Kg: 50,
+    regimeFrete: 'indefinido',
+    nivelDado: 'calculado_tkm',
+    ...parcial,
+  }
+}
+
 /* --------------------------------------------------------- banco falso */
 
 /**
@@ -213,6 +247,11 @@ function bancoCom(dados: Record<string, unknown[]>): Firestore {
     const consulta = {
       where: (campo: string, _operador: string, valor: unknown) =>
         montar(nome, [...filtros, [campo, valor]]),
+      // A consulta de transportadoras projeta os campos que usa — a coleção dela
+      // é uma ordem de grandeza maior que as outras. O banco falso devolve o
+      // documento inteiro, que é um superconjunto: o que se testa aqui é o
+      // recorte, não a projeção.
+      select: () => consulta,
       get: async () => {
         const linhas = (dados[nome] ?? []).filter((linha) =>
           filtros.every(
@@ -259,6 +298,16 @@ function bancoCompleto() {
       embarque(),
       embarque({ ano: ANO_BASE_INVENTARIO - 1, shipmentId: 'EMB-FICTICIO-2' }),
       embarque({ ano: ANO_BASE_INVENTARIO + 1, shipmentId: 'EMB-FICTICIO-3' }),
+    ],
+    entregaRodoviaria: [
+      entrega(),
+      // Ano vizinho: não move o indicador desta tela.
+      entrega({
+        ano: ANO_BASE_INVENTARIO + 1,
+        mes: `${ANO_BASE_INVENTARIO + 1}-04`,
+        data: `${ANO_BASE_INVENTARIO + 1}-04-10`,
+        co2Kg: 900,
+      }),
     ],
     aeroporto: [],
     porto: [],
@@ -448,7 +497,7 @@ test('a mobilidade é banda constante nos doze meses', async () => {
   assert.equal([...bandas][0], 200)
 })
 
-test('as três fatias somam o indicador, e as proporções fecham em cem por cento', async () => {
+test('as quatro fatias somam o indicador, e as proporções fecham em cem por cento', async () => {
   const dados = await comAmbiente(AMBIENTE, () =>
     consultarVisaoGeral(ctx(), bancoCompleto()),
   )
@@ -457,7 +506,52 @@ test('as três fatias somam o indicador, e as proporções fecham em cem por cen
   assert.ok(Math.abs(somado - dados.totalToneladas) < 1e-9)
   const proporcoes = dados.porModulo.reduce((s, m) => s + m.proporcao, 0)
   assert.ok(Math.abs(proporcoes - 1) < 1e-9)
-  assert.equal(dados.porModulo.length, 3)
+  assert.equal(dados.porModulo.length, 4)
+})
+
+/**
+ * **Transportadoras entra recortada no ano civil, como viagens e marítimo.**
+ *
+ * A entrega é evento datado, e a coleção guarda mais de um ano: sem o recorte,
+ * o indicador do consolidado cresceria com dado de outro período — e o número
+ * continuaria parecendo plausível, que é a assinatura dos defeitos desta tela.
+ */
+test('entrega de outro ano não move o indicador', async () => {
+  const dados = await comAmbiente(AMBIENTE, () =>
+    consultarVisaoGeral(ctx(), bancoCompleto()),
+  )
+
+  const modulo = doModulo(dados, 'transportadoras')
+  assert.equal(modulo.documentos, 1, 'a entrega do ano vizinho entrou no consolidado')
+  assert.equal(modulo.recorte, `ano civil ${ANO_BASE_INVENTARIO}`)
+  assert.equal(modulo.toneladas, 0.05)
+})
+
+/**
+ * A ressalva de escopo provisório sai do **dado**, não de uma constante na tela
+ * (§9.1): o dia em que o levantamento de CIF/FOB fechar, ela some sozinha.
+ */
+test('o regime de frete provisório é declarado a partir do documento', async () => {
+  const provisorio = await comAmbiente(AMBIENTE, () =>
+    consultarVisaoGeral(ctx(), bancoCompleto()),
+  )
+  assert.equal(provisorio.transportadoras.regimeProvisorio, true)
+  assert.equal(provisorio.transportadoras.entregas, 1)
+
+  const fechado = await comAmbiente(AMBIENTE, () =>
+    consultarVisaoGeral(
+      ctx(),
+      bancoCom({
+        mobilidade: [],
+        viagemTrecho: [],
+        embarque: [],
+        entregaRodoviaria: [entrega({ regimeFrete: 'cif' })],
+        aeroporto: [],
+        porto: [],
+      }),
+    ),
+  )
+  assert.equal(fechado.transportadoras.regimeProvisorio, false)
 })
 
 /**

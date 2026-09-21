@@ -284,6 +284,32 @@ export function maritimoAmostraMinimaCorredor(): number {
   return valor
 }
 
+/* ------------------------------------------------------- transportadoras */
+
+/**
+ * Acima desta distância a linha não é entrega rodoviária doméstica (§9.3).
+ *
+ * A partir de certo ponto do relatório a distância salta para a casa dos dez mil
+ * quilômetros e o cliente passa a ser do exterior: são embarques que pertencem
+ * ao módulo marítimo, não a este. O limiar separa as duas populações.
+ *
+ * **Parâmetro sem padrão, como os dois limiares do marítimo, e pelo mesmo
+ * motivo:** ele decide o que **não entra** no inventário. Um valor embutido aqui
+ * mudaria o total sem ninguém rever — apertado, descartaria entrega doméstica
+ * verdadeira; folgado demais, importaria uma importação como se fosse caminhão.
+ * Ele se escolhe **medindo a base**: entre a maior entrega doméstica e a menor
+ * internacional há um vão largo, e o limiar mora dentro dele.
+ */
+export function transportadorasDistanciaMaximaKm(): number {
+  const valor = numeroObrigatorio('TRANSPORTADORAS_DISTANCIA_MAXIMA_KM')
+  if (!(valor > 0)) {
+    throw new Error(
+      `TRANSPORTADORAS_DISTANCIA_MAXIMA_KM precisa ser maior que zero: ${valor}`,
+    )
+  }
+  return valor
+}
+
 /** Razão de comparação: precisa ser maior que 1, senão marcaria tudo. */
 function razaoObrigatoria(nome: string): number {
   const valor = numeroObrigatorio(nome)
@@ -324,6 +350,7 @@ export function parametrosDeclarados(): {
   maritimoLimiarAtipico: string | null
   maritimoLimiarImpossivel: string | null
   maritimoAmostraMinimaCorredor: string | null
+  transportadorasDistanciaMaximaKm: string | null
 } {
   return {
     geocodeProvedor: opcional('GEOCODE_PROVEDOR') ?? null,
@@ -340,6 +367,8 @@ export function parametrosDeclarados(): {
     maritimoLimiarImpossivel: opcional('MARITIMO_LIMIAR_IMPOSSIVEL') ?? null,
     maritimoAmostraMinimaCorredor:
       opcional('MARITIMO_AMOSTRA_MINIMA_CORREDOR') ?? null,
+    transportadorasDistanciaMaximaKm:
+      opcional('TRANSPORTADORAS_DISTANCIA_MAXIMA_KM') ?? null,
   }
 }
 

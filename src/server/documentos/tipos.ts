@@ -13,14 +13,15 @@
  */
 import type { FaixaDistancia } from '@/lib/calculo/aereo'
 import type { Combustivel, Transporte } from '@/lib/calculo/mobilidade'
+import type { Filial } from '@/lib/transportadoras'
 
 /** `AAAA-MM-DD`. */
 export type DataIso = string
 /** `AAAA-MM`. */
 export type MesIso = string
 
-export type Modulo = 'mobilidade' | 'viagens' | 'maritimo'
-export type Modal = 'aereo' | 'terrestre' | 'maritimo'
+export type Modulo = 'mobilidade' | 'viagens' | 'maritimo' | 'transportadoras'
+export type Modal = 'aereo' | 'terrestre' | 'maritimo' | 'rodoviario'
 export type Periodicidade = 'mensal' | 'evento'
 export type Escopo = 1 | 3
 export type Severidade = 'informativo' | 'atencao' | 'erro'
@@ -54,6 +55,34 @@ export type NivelDado =
   | 'estimado_corredor'
   | 'estimado_media'
   | 'estimado_peso'
+
+/**
+ * De onde vem o número de uma entrega rodoviária — e **por que não é o
+ * `NivelDado` do marítimo.**
+ *
+ * Lá os degraus dizem se o CO₂ foi informado pelo agente ou estimado, e por qual
+ * média (§8.2). Aqui não existe emissão informada: a atividade é medida — peso e
+ * distância vêm do relatório — e o fator é uma **média declarada de frete
+ * rodoviário**, porque o sistema não sabe o caminhão, a carga de retorno nem a
+ * ocupação (§9.2). Compartilhar a união deixaria `medido` escrevível numa
+ * coleção onde nada é medido, e `calculado_tkm` escrevível num embarque.
+ *
+ * Um valor só, hoje. O segundo aparece no dia em que a origem trouxer dado por
+ * veículo.
+ */
+export type NivelDadoRodoviario = 'calculado_tkm'
+
+/**
+ * Quem paga o frete da entrega — e é isso que decide a categoria do Escopo 3
+ * (§9.1).
+ *
+ * `indefinido` é o estado de hoje, e é **declarado, não presumido**: o
+ * levantamento de CIF/FOB está em aberto (§14), e enquanto não fechar o módulo
+ * entra na Visão geral como cat. 4 provisória. Se apontar FOB, a classificação
+ * muda para cat. 9 e o módulo pode precisar sair do total — reclassificação de
+ * escopo, não ajuste de tela.
+ */
+export type RegimeFrete = 'cif' | 'fob' | 'indefinido'
 
 export type Alerta = {
   tipo: string
@@ -317,6 +346,53 @@ export type DocEmbarque = EnvelopeEmissao & {
   baseDaEstimativa: number | null
   status: string | null
   previsao: boolean
+}
+
+/* --------------------------------------------------- transportadoras */
+
+/**
+ * Uma entrega do relatório de distribuição rodoviária — CLAUDE.md §9 e §10.11.
+ *
+ * O documento é a unidade de emissão do módulo: uma linha do relatório, uma
+ * entrega, um documento (§10.1). A emissão sai de tonelada-quilômetro vezes um
+ * fator médio de frete rodoviário — o sistema não sabe o modelo do caminhão, a
+ * carga de retorno nem a taxa de ocupação (§9.2) —, e é por isso que o fator
+ * carimbado, com fonte e vigência, **não é acabamento**: sem ele o número é uma
+ * média que não diz de quem.
+ *
+ * O que o módulo não sabe está declarado em dois campos:
+ *
+ *  - `regimeFrete` é `indefinido` enquanto o levantamento de CIF/FOB não fechar
+ *    (§9.1, §14). A tela declara o escopo como provisório, e a decisão pode
+ *    reclassificar o módulo de cat. 4 para cat. 9 — ou tirá-lo do consolidado;
+ *  - `nivelDado` diz que o número é calculado por tonelada-quilômetro, não
+ *    medido. É o mesmo lugar em que o marítimo declara a qualidade do dado
+ *    (§8.2), com uma união própria e o motivo escrito em `NivelDadoRodoviario`.
+ *
+ * **`clienteCodigo` é o identificador do relatório de faturamento, nunca o nome
+ * do cliente** (§10.11): nome real não se versiona (§2.1) e não aparece em tela
+ * nenhuma deste módulo — o agregado é por filial (§9.4).
+ */
+export type DocEntregaRodoviaria = EnvelopeEmissao & {
+  modulo: 'transportadoras'
+  modal: 'rodoviario'
+  periodicidade: 'evento'
+  filial: Filial
+  data: DataIso
+  /**
+   * Índice da entrega dentro do mesmo par filial+data, na ordem do arquivo.
+   *
+   * Existe porque **a planilha não traz identificador de entrega**, e é ele que
+   * completa o ID determinístico: recarregar o mesmo relatório sobrescreve em vez
+   * de duplicar (§10.11). Mesmo papel que `ordem` cumpre em `viagemTrecho`.
+   */
+  ordem: number
+  clienteCodigo: string | null
+  distanciaKm: number
+  pesoKg: number
+  co2Kg: number
+  regimeFrete: RegimeFrete
+  nivelDado: NivelDadoRodoviario
 }
 
 /* ------------------------------------------------------------------- apoio */

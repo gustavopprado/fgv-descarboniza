@@ -40,13 +40,15 @@ test('importacao não recebe a visão geral no menu', () => {
   assert.equal(hrefs.includes('/maritimo'), true)
   assert.equal(hrefs.includes('/mobilidade'), false)
   assert.equal(hrefs.includes('/viagens'), false)
+  // Distribuição às filiais é frete de saída, não importação (§5).
+  assert.equal(hrefs.includes('/transportadoras'), false)
 })
 
-test('admin recebe as cinco telas do inventário', () => {
+test('admin recebe as cinco telas do inventário, na ordem da §11', () => {
   const inventario = navegacaoPara(ctx('admin')).filter((i) => i.secao === 'inventario')
   assert.deepEqual(
     inventario.map((i) => i.href),
-    ['/', '/mobilidade', '/viagens', '/maritimo', '/metodo'],
+    ['/', '/mobilidade', '/viagens', '/maritimo', '/transportadoras'],
   )
 })
 

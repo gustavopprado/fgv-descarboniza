@@ -152,8 +152,14 @@ export function Casca({
       </nav>
 
       {/* Sem `max-w`: ver o cabeçalho deste arquivo. O padding sobe um degrau
-          em tela larga para o conteúdo não encostar na borda do monitor. */}
-      <main className="min-w-0 flex-1 px-[18px] pt-[22px] pb-[60px] md:px-10 md:pt-[30px] md:pb-[70px] xl:px-14">
+          em tela larga para o conteúdo não encostar na borda do monitor.
+
+          **O rodapé é maior que o resto porque o botão “Sobre esta tela” é
+          fixo** (ver `informacoes.tsx`): ele ocupa cerca de 60px acima da borda
+          inferior, e sem a reserva ele cobriria a última linha do último painel
+          quando a página estivesse rolada até o fim. Botão flutuante que esconde
+          dado é pior que botão nenhum. */}
+      <main className="min-w-0 flex-1 px-[18px] pt-[22px] pb-[88px] md:px-10 md:pt-[30px] md:pb-[96px] xl:px-14">
         {children}
 
         {/* Em tela estreita a identificação e a saída ficam no fim da página:

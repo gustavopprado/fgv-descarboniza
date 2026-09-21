@@ -61,7 +61,7 @@ async function principal(): Promise<void> {
     if (porCoordenada.length > 0) {
       console.log(
         `\n  ${porCoordenada.length} aeroporto(s) classificados por coordenada, ` +
-          'sem uf informado. Confira estes na tela de Método.',
+          'sem uf informado. Confira estes no mapa da tela de Viagens, no botão de informações.',
       )
     }
     const indefinidos = porCriterio.get('indefinida') ?? []

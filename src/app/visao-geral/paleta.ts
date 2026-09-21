@@ -1,5 +1,5 @@
 /**
- * A chave de cor dos três módulos — CLAUDE.md §10.0.
+ * A chave de cor dos quatro módulos — CLAUDE.md §10.0.
  *
  * **Uma só, lida pela faixa e pela série.** As duas peças dizem a mesma coisa em
  * formas diferentes — a faixa é a proporção do ano, a série é a proporção mês a
@@ -14,8 +14,18 @@
  * lê como constante quando o que está sob ela não varia — no meio da pilha, ela
  * subiria e desceria junto com o marítimo e pareceria medição mensal, que é
  * exatamente a leitura que a §10.0 quer impedir.
+ *
+ * O módulo novo entra no topo, e não no meio: **trocar a ordem dos que já
+ * estavam mudaria a leitura de um gráfico que alguém já conhece**, sem nada
+ * ganhar. A quarta cor é a mais clara da paleta da §4 — o verde da FGV continua
+ * fora, porque é de marca.
  */
-export const ORDEM_DA_PILHA = ['mobilidade', 'viagens', 'maritimo'] as const
+export const ORDEM_DA_PILHA = [
+  'mobilidade',
+  'viagens',
+  'maritimo',
+  'transportadoras',
+] as const
 
 export type ModuloEmpilhado = (typeof ORDEM_DA_PILHA)[number]
 
@@ -23,6 +33,7 @@ export const COR_DO_MODULO: Record<ModuloEmpilhado, string> = {
   mobilidade: 'var(--color-folha-900)',
   viagens: 'var(--color-folha-500)',
   maritimo: 'var(--color-folha-700)',
+  transportadoras: 'var(--color-folha-300)',
 }
 
 /** Nome curto, para legenda e para o rótulo de cada banda. */
@@ -30,4 +41,5 @@ export const NOME_CURTO: Record<ModuloEmpilhado, string> = {
   mobilidade: 'Mobilidade',
   viagens: 'Viagens',
   maritimo: 'Marítimo',
+  transportadoras: 'Transportadoras',
 }

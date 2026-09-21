@@ -10,12 +10,13 @@
  * As duas partes do sistema (§1.1) aparecem separadas de propósito: o
  * inventário relata o que já aconteceu, o programa começa a medir daqui para a
  * frente.
+ *
+ * **Não há mais uma tela de Método.** O que ela declarava passou a morar no
+ * painel do número que cada escolha produz, atrás do botão de informações
+ * (§10): a sexta entrada do menu virou lastro junto do dado, em vez de uma
+ * página separada que só quem já desconfiava do número abria.
  */
-import {
-  podeVerModulo,
-  type ContextoDeAcesso,
-  type Modulo,
-} from './acesso'
+import { MODULOS, podeVerModulo, type ContextoDeAcesso, type Modulo } from './acesso'
 
 export type Secao = 'inventario' | 'programa'
 
@@ -36,7 +37,7 @@ const CONSTRUIDAS: ReadonlySet<string> = new Set([
   '/mobilidade',
   '/viagens',
   '/maritimo',
-  '/metodo',
+  '/transportadoras',
   '/programa/registrar',
   '/programa/emissoes',
   '/programa/minhas-viagens',
@@ -54,6 +55,7 @@ const TELA_DO_MODULO: Record<Modulo, { rotulo: string; href: string }> = {
   mobilidade: { rotulo: 'Mobilidade', href: '/mobilidade' },
   viagens: { rotulo: 'Viagens', href: '/viagens' },
   maritimo: { rotulo: 'Marítimo', href: '/maritimo' },
+  transportadoras: { rotulo: 'Transportadoras', href: '/transportadoras' },
 }
 
 /**
@@ -70,13 +72,15 @@ export function navegacaoPara(ctx: ContextoDeAcesso): ItemDeNavegacao[] {
     if (ctx.papel !== 'importacao') {
       itens.push(item('Visão geral', '/', 'inventario'))
     }
-    for (const modulo of ['mobilidade', 'viagens', 'maritimo'] as Modulo[]) {
+    // Os módulos na ordem das telas, da própria lista da camada de acesso: com
+    // a lista literal que estava aqui, um módulo novo nasceria fora do menu sem
+    // nada acusar.
+    for (const modulo of MODULOS) {
       if (podeVerModulo(ctx, modulo)) {
         const tela = TELA_DO_MODULO[modulo]
         itens.push(item(tela.rotulo, tela.href, 'inventario'))
       }
     }
-    itens.push(item('Método', '/metodo', 'inventario'))
   }
 
   if (ctx.papel === 'colaborador') {

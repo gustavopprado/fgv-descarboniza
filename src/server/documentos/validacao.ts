@@ -8,8 +8,10 @@
  * A validação falha alto e para a carga. Não corrige, não arredonda e não
  * assume padrão: dado que não se entende não entra no inventário.
  */
+import { ehFilial, FILIAIS } from '@/lib/transportadoras'
 import type {
   DocEmbarque,
+  DocEntregaRodoviaria,
   DocFatorEmissao,
   DocMobilidade,
   DocPorto,
@@ -398,6 +400,71 @@ export function validarEmbarque(id: string, doc: DocEmbarque): void {
 
   if (doc.containers !== null && doc.containersFonte === null) {
     falhar(ctx, 'containersFonte', 'há contagem de contêineres sem dizer de onde veio')
+  }
+}
+
+/**
+ * Uma entrega da distribuição rodoviária — CLAUDE.md §9 e §10.11.
+ *
+ * Três regras são próprias deste módulo, e cada uma fecha uma porta que o
+ * Firestore deixaria aberta:
+ *
+ *  - **a filial precisa ser uma das três** (§9.4). Código novo não é linha a
+ *    aceitar: é a lista de filiais desatualizada, e um quarto código gravado
+ *    apareceria no agregado como uma filial que a tela não sabe desenhar;
+ *  - **o regime de frete só admite os três valores**, e hoje ele é `indefinido`
+ *    em todo documento. É ele que a tela lê para declarar o escopo como
+ *    provisório (§9.1) — texto livre aqui apagaria a ressalva sem apagar o
+ *    número;
+ *  - **o fator é obrigatório, mesmo com emissão zero.** No envelope, fator nulo
+ *    se sustenta onde a emissão é zero por definição — bicicleta, a pé. Aqui não
+ *    existe entrega que não emita por definição: o zero vem de peso zero, e a
+ *    conta continua sendo fator × atividade. Sem o fator carimbado, a linha
+ *    deixaria de ser reproduzível a partir do documento (§10.1).
+ */
+export function validarEntregaRodoviaria(id: string, doc: DocEntregaRodoviaria): void {
+  const ctx = { colecao: 'entregaRodoviaria', id }
+
+  if (doc.periodicidade !== 'evento') {
+    falhar(ctx, 'periodicidade', 'entrega é evento, não taxa mensal')
+  }
+  if (doc.modal !== 'rodoviario') {
+    falhar(ctx, 'modal', `neste módulo só existe modal rodoviário: ${String(doc.modal)}`)
+  }
+
+  validarEnvelope(ctx, doc, doc.co2Kg, doc.data)
+
+  // Frete que a empresa paga e não opera é Escopo 3 — a categoria é que está em
+  // aberto entre a 4 e a 9 (§9.1), e categoria não é escopo.
+  if (doc.escopo !== 3) {
+    falhar(ctx, 'escopo', 'frete de terceiro é Escopo 3, seja cat. 4 ou cat. 9')
+  }
+  if (!ehFilial(doc.filial)) {
+    falhar(
+      ctx,
+      'filial',
+      `"${String(doc.filial)}" não está entre as conhecidas (${FILIAIS.join(', ')})`,
+    )
+  }
+  if (doc.regimeFrete !== 'cif' && doc.regimeFrete !== 'fob' && doc.regimeFrete !== 'indefinido') {
+    falhar(ctx, 'regimeFrete', `só pode ser cif, fob ou indefinido: ${String(doc.regimeFrete)}`)
+  }
+  if (doc.nivelDado !== 'calculado_tkm') {
+    falhar(ctx, 'nivelDado', `neste módulo o número é calculado por tonelada-quilômetro: ${String(doc.nivelDado)}`)
+  }
+
+  exigirData(ctx, 'data', doc.data)
+  exigirInteiroPositivo(ctx, 'ordem', doc.ordem)
+  exigirNumeroNaoNegativo(ctx, 'distanciaKm', doc.distanciaKm)
+  exigirNumeroNaoNegativo(ctx, 'pesoKg', doc.pesoKg)
+
+  if (doc.fator === null) {
+    falhar(
+      ctx,
+      'fator',
+      'é obrigatório aqui: a emissão da entrega é sempre fator médio × ' +
+        'tonelada-quilômetro, e sem o carimbo a linha não se reproduz (§9.2)',
+    )
   }
 }
 

@@ -20,10 +20,13 @@ import type { Firestore, Query } from 'firebase-admin/firestore'
 
 import { supressaoMinima } from '@/lib/env'
 import { coordenadaValida } from '@/lib/mapa'
+import { municipioPorCodigo } from '@/lib/municipios'
 import { corredor } from '@/lib/regiao'
+import { FILIAIS_DO_MODULO } from '@/lib/transportadoras'
 import type {
   DocAeroporto,
   DocEmbarque,
+  DocEntregaRodoviaria,
   DocPorto,
   DocMobilidade,
   DocViagemTrecho,
@@ -31,6 +34,7 @@ import type {
 import { COLECAO, firestore } from '../firestore'
 import {
   agrupar,
+  conferirTotal,
   emToneladas,
   maioresRecortes,
   media,
@@ -874,3 +878,179 @@ function montarMapaMaritimo(
  * de nomes de porto, que a §2.2 mantém fora deste repositório.
  */
 const PAIS_DA_EMPRESA = 'BR'
+
+/* ----------------------------------------------------- transportadoras */
+
+/**
+ * Uma filial no agregado do módulo — CLAUDE.md §9.4 e §9.5.
+ *
+ * **O ponto sai do centroide do município**, pelo código do IBGE gravado na
+ * lista de filiais, e não de coordenada escrita à mão (§7.4). Ele pode ser nulo:
+ * ausência de ponto é fato a declarar, e quem desenha diz o que não pôde
+ * desenhar — nunca some da lista, porque a filial continua tendo emissão.
+ */
+export type FilialDoModulo = {
+  filial: string
+  rotulo: string
+  cidade: string | null
+  latitude: number | null
+  longitude: number | null
+  entregas: number
+  co2Kg: number
+  /**
+   * Peso movimentado, que a §9.5 pede no painel da filial.
+   *
+   * A regra de exibição da §1 mantém peso e distância fora da interface porque
+   * são insumo de cálculo; a §9.5 é mais específica e pede este número ao clicar
+   * na filial, como a §11.2 pede a distância média na mobilidade. Vale a
+   * específica, e é ela que a tela declara.
+   */
+  pesoKg: number
+}
+
+export type ResumoDeTransportadoras = {
+  ano: number | null
+  entregas: number
+  co2Kg: number
+  co2Toneladas: number
+  pesoKg: number
+  porFilial: FilialDoModulo[]
+  porMes: { mes: string; co2Kg: number; documentos: number }[]
+  /**
+   * Quantas entregas em cada regime de frete.
+   *
+   * Hoje é uma linha só, `indefinido`, e é ela que sustenta a declaração de
+   * escopo provisório na tela (§9.1). Sai da consulta, e não de uma constante na
+   * tela, para que o dia em que o levantamento fechar apareça no número em vez
+   * de depender de alguém lembrar de trocar um texto.
+   */
+  regimes: { regime: string; entregas: number; co2Kg: number }[]
+  anos: number[]
+}
+
+/**
+ * O agregado da distribuição rodoviária — §9.5.
+ *
+ * **Não há supressão aqui, e não é omissão** (§3.1.3, pelo mesmo raciocínio do
+ * marítimo): uma entrega não tem pessoa. Um limite por contagem mediria número
+ * de entregas fingindo medir privacidade, e esconderia filial pequena sem
+ * proteger ninguém. O que não sai daqui é o cliente: o agregado é por filial, e
+ * `clienteCodigo` nem é lido.
+ *
+ * **O recorte por empresa não se aplica**, e a ausência é deliberada: a origem
+ * não informa a empresa do grupo por entrega (§14), então todo documento tem
+ * `empresa` nula. Um filtro de igualdade por empresa aqui devolveria coleção
+ * vazia e esvaziaria o módulo em silêncio para o perfil recortado — e esse
+ * perfil, `importacao`, não vê este módulo de qualquer forma (§5).
+ */
+/**
+ * Os campos que o agregado deste módulo usa — e **só eles chegam do banco**.
+ *
+ * Isto não é contador pré-calculado nem cache (§10.1.5): a agregação continua
+ * lendo a coleção e reduzindo em JavaScript, documento a documento. O que muda é
+ * não arrastar junto o que ninguém soma. **É a única coisa deste módulo que
+ * pediu medição de custo**, porque ele é uma ordem de grandeza maior que os
+ * outros três: medido contra a carga real, a projeção corta a resposta de
+ * treze megabytes para menos de três e mais que dobra a velocidade.
+ *
+ * A lista é a fonte do tipo logo abaixo, então usar um campo que não está aqui
+ * **não compila** — em vez de chegar `undefined` e virar `NaN` num total que
+ * ninguém confere.
+ */
+const CAMPOS_DO_AGREGADO = [
+  'filial',
+  'ano',
+  'mes',
+  'co2Kg',
+  'pesoKg',
+  'regimeFrete',
+] as const
+
+type EntregaAgregada = Pick<DocEntregaRodoviaria, (typeof CAMPOS_DO_AGREGADO)[number]>
+
+export async function consultarTransportadoras(
+  ctx: ContextoDeAcesso,
+  filtros: Filtros = {},
+  db: Firestore = firestore(),
+): Promise<ResumoDeTransportadoras> {
+  exigirModulo(ctx, 'transportadoras')
+
+  let consulta: Query = db.collection(COLECAO.entregaRodoviaria)
+  if (filtros.ano !== undefined) consulta = consulta.where('ano', '==', filtros.ano)
+  consulta = consulta.select(...CAMPOS_DO_AGREGADO)
+
+  const instantaneo = await consulta.get()
+  const entregas = instantaneo.docs.map((d) => d.data() as EntregaAgregada)
+  const valor = (e: EntregaAgregada) => e.co2Kg
+
+  const acumulado = new Map<string, { entregas: number; co2Kg: number; pesoKg: number }>()
+  const porRegime = new Map<string, { entregas: number; co2Kg: number }>()
+  for (const e of entregas) {
+    const atual = acumulado.get(e.filial) ?? { entregas: 0, co2Kg: 0, pesoKg: 0 }
+    atual.entregas += 1
+    atual.co2Kg += e.co2Kg
+    atual.pesoKg += e.pesoKg
+    acumulado.set(e.filial, atual)
+
+    const regime = porRegime.get(e.regimeFrete) ?? { entregas: 0, co2Kg: 0 }
+    regime.entregas += 1
+    regime.co2Kg += e.co2Kg
+    porRegime.set(e.regimeFrete, regime)
+  }
+
+  /**
+   * **As três filiais aparecem sempre, mesmo sem entrega no período** — elas são
+   * o mapa do módulo (§9.5), e uma filial que some do mapa num ano fraco seria
+   * lida como filial fechada. Zero é zero medido, não ausência (§9.10).
+   *
+   * E filial que esteja no banco sem estar na lista **também aparece**, pelo
+   * próprio código: se ela sumisse, o total geral deixaria de bater com a
+   * contagem de documentos, que é exatamente o que `conferirTotal` impede.
+   */
+  const conhecidas = new Set<string>(FILIAIS_DO_MODULO.map((f) => f.filial))
+  const desconhecidas = [...acumulado.keys()].filter((f) => !conhecidas.has(f)).sort()
+
+  const porFilial: FilialDoModulo[] = [
+    ...FILIAIS_DO_MODULO.map((f) => {
+      const municipio = municipioPorCodigo(f.codigoIbge)
+      return {
+        filial: f.filial,
+        rotulo: f.nome,
+        cidade: municipio === null ? null : `${municipio.nome}/${municipio.uf}`,
+        latitude: municipio?.latitude ?? null,
+        longitude: municipio?.longitude ?? null,
+        ...(acumulado.get(f.filial) ?? { entregas: 0, co2Kg: 0, pesoKg: 0 }),
+      }
+    }),
+    ...desconhecidas.map((filial) => ({
+      filial,
+      rotulo: `Filial ${filial}`,
+      cidade: null,
+      latitude: null,
+      longitude: null,
+      ...(acumulado.get(filial) as { entregas: number; co2Kg: number; pesoKg: number }),
+    })),
+  ]
+
+  // A invariante da §9.10: nenhum documento pode sumir de um agrupamento.
+  conferirTotal(
+    entregas.length,
+    porFilial.map((f) => ({ documentos: f.entregas })),
+  )
+
+  const co2Kg = somar(entregas, valor)
+
+  return {
+    ano: filtros.ano ?? null,
+    entregas: entregas.length,
+    co2Kg,
+    co2Toneladas: emToneladas(co2Kg),
+    pesoKg: somar(entregas, (e) => e.pesoKg),
+    porFilial,
+    porMes: serieMensal(entregas, (e) => e.mes, valor),
+    regimes: [...porRegime.entries()]
+      .map(([regime, v]) => ({ regime, ...v }))
+      .sort((a, b) => b.entregas - a.entregas),
+    anos: [...new Set(entregas.map((e) => e.ano))].sort(),
+  }
+}

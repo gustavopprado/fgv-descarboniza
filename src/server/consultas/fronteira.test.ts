@@ -47,8 +47,13 @@ import { consultarMinhasViagens, consultarPrograma } from './programa'
 /** A coleção do programa. Nome literal, para o teste não seguir a constante. */
 const COLECAO_DO_PROGRAMA = 'viagemRegistrada'
 
-/** As coleções de emissão do inventário (§9.2). */
-const COLECOES_DO_INVENTARIO = ['viagemTrecho', 'mobilidade', 'embarque']
+/** As coleções de emissão do inventário (§10.2). */
+const COLECOES_DO_INVENTARIO = [
+  'viagemTrecho',
+  'mobilidade',
+  'embarque',
+  'entregaRodoviaria',
+]
 
 /** Módulos de consulta de cada lado. */
 const CONSULTA_DO_INVENTARIO = [
@@ -57,14 +62,14 @@ const CONSULTA_DO_INVENTARIO = [
 ]
 const CONSULTA_DO_PROGRAMA = ['src/server/consultas/programa.ts']
 
-/** As cinco telas do inventário (§10) e as do programa. */
+/** As telas do inventário (§11) e as do programa. */
 const TELAS_DO_INVENTARIO = [
   'src/app/page.tsx',
   'src/app/visao-geral',
   'src/app/mobilidade',
   'src/app/viagens',
-  'src/app/metodo',
   'src/app/maritimo',
+  'src/app/transportadoras',
 ]
 const TELAS_DO_PROGRAMA = ['src/app/programa']
 

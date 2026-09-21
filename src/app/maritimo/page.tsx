@@ -22,6 +22,7 @@
 import { plural } from '@/lib/formato'
 import { AcessoNegadoError } from '@/server/consultas/acesso'
 import { consultarMaritimo } from '@/server/consultas/inventario'
+import { consultarMetodo } from '@/server/consultas/metodo'
 import { exigirSessao } from '@/server/sessao'
 import { Casca } from '../casca'
 import {
@@ -34,6 +35,13 @@ import {
   SeletorDeAno,
   Vazio,
 } from '../componentes'
+import {
+  Bloco,
+  Parametros,
+  Procedencia,
+  Sinalizacoes,
+  SobreATela,
+} from '../informacoes'
 import { SerieMensal } from '../serie-mensal'
 import { MapaDeCorredoresMaritimos, NaoDesenhado } from './mapa'
 import { ForaDoIndicador, QualidadeDoDado, TabelaDeCorredores, TabelaDePortos } from './tabelas'
@@ -66,8 +74,12 @@ export default async function Page({
   const ano = anoDe(parametros.ano)
 
   let dados
+  let metodo
   try {
-    dados = await consultarMaritimo(ctx, ano === undefined ? {} : { ano })
+    ;[dados, metodo] = await Promise.all([
+      consultarMaritimo(ctx, ano === undefined ? {} : { ano }),
+      consultarMetodo(ctx, { modulo: 'maritimo' }),
+    ])
   } catch (erro) {
     if (erro instanceof AcessoNegadoError) {
       return (
@@ -86,7 +98,7 @@ export default async function Page({
     <Casca ctx={ctx} atual="/maritimo">
       <Cabecalho
         titulo="Transporte marítimo de importações"
-        descricao="Frete das importações, Escopo 3 categoria 4. O CO₂ informado pelo agente de carga é o dado primário e não é recalculado; onde falta, a estimativa é por contêiner, por corredor."
+        descricao="Frete das importações, Escopo 3 categoria 4. O CO₂ informado pelo agente não é recalculado."
         acao={
           dados.anos.length > 1 ? (
             <SeletorDeAno
@@ -133,15 +145,15 @@ export default async function Page({
                 unidade="t CO₂e"
                 nota={
                   dados.previsoes.embarques === 0
-                    ? 'Soma o que o agente informou por embarque, sem recálculo.'
-                    : `Soma o realizado. ${plural(dados.previsoes.embarques, 'embarque previsto está', 'embarques previstos estão')} fora desta conta: o CO₂ já vem lançado, mas a viagem ainda não aconteceu.`
+                    ? 'Soma o que o agente informou, sem recálculo.'
+                    : `Soma o realizado; ${plural(dados.previsoes.embarques, 'um embarque previsto está', 'embarques previstos estão')} fora desta conta.`
                 }
               />
               <Cartao
                 rotulo="Contêineres por embarque"
                 valor={dados.embarques === 0 ? 0 : dados.containers / dados.embarques}
                 unidade="contêineres"
-                nota="Só marítimo. Valor abaixo de um indica embarque sem contagem de contêiner na origem, que é o que força a estimativa a descer um degrau na cascata."
+                nota="Só marítimo."
               />
             </Grade>
           </Revelar>
@@ -151,7 +163,7 @@ export default async function Page({
               <Painel
                 id="mapa"
                 titulo="De onde a carga vem"
-                descricao="Um ponto por porto e uma linha por corredor, com o sentido da carga — aqui o ponto é um lugar de verdade, não uma média de região como no mapa de viagens."
+                descricao="Um ponto por porto e uma linha por corredor, com o sentido da carga."
               >
                 {dados.mapa.corredores.length === 0 ? (
                   <Vazio>
@@ -169,7 +181,7 @@ export default async function Page({
             <Revelar ordem={2} className={LUGAR.portos}>
               <Painel
                 titulo="Contêineres por porto"
-                descricao="Por porto de desembarque, contados a partir dos embarques — não da tabela da aba de resumo do relatório, que usa outra base de data."
+                descricao="Por porto de desembarque, contados a partir dos embarques."
               >
                 <TabelaDePortos
                   portos={dados.porPorto}
@@ -181,11 +193,11 @@ export default async function Page({
             <Revelar ordem={3} className={LUGAR.pilha}>
               <Painel
                 titulo="Emissão por mês"
-                descricao="Pela partida prevista do primeiro carregamento, que é a base de data do módulo inteiro e está declarada na tela de Método."
+                descricao="Pela partida prevista do primeiro carregamento."
               >
                 <SerieMensal
                   serie={dados.porMes}
-                  nota="O mês é o da partida prevista do primeiro carregamento, e o embarque previsto não entra — o CO₂ dele já vem lançado, mas a viagem ainda não aconteceu. O frete aéreo de fornecedor entra: ele é do mesmo escopo e da mesma categoria."
+                  nota="Embarque previsto não entra; o frete aéreo de fornecedor entra."
                 />
               </Painel>
               <Painel titulo="Por modal">
@@ -215,7 +227,7 @@ export default async function Page({
             <Revelar ordem={4} className={LUGAR.corredores}>
               <Painel
                 titulo="Corredores"
-                descricao="Por par de portos, na ordem do transporte. Nada aqui é agrupado por contagem: embarque não tem pessoa, e um limite mediria número de embarques fingindo medir privacidade."
+                descricao="Por par de portos, na ordem do transporte."
               >
                 <TabelaDeCorredores
                   corredores={dados.mapa.corredores}
@@ -230,6 +242,17 @@ export default async function Page({
           </Revelar>
         </>
       )}
+
+      <SobreATela titulo="Transporte marítimo de importações">
+        <Procedencia metodo={metodo} modulo="maritimo" />
+        <Bloco titulo="Como o número é calculado">
+          <Parametros parametros={metodo.parametros} />
+        </Bloco>
+        <Bloco titulo="Mapa">
+          Ponto = porto do cadastro. A linha é geometria, não a derrota do navio.
+        </Bloco>
+        <Sinalizacoes metodo={metodo} modulo="maritimo" />
+      </SobreATela>
     </Casca>
   )
 }

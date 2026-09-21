@@ -38,7 +38,7 @@ export type ContextoDeAcesso = {
   funcionarioId: string | null
 }
 
-export type Modulo = 'mobilidade' | 'viagens' | 'maritimo'
+export type Modulo = 'mobilidade' | 'viagens' | 'maritimo' | 'transportadoras'
 
 export class AcessoNegadoError extends Error {
   /**
@@ -80,9 +80,21 @@ const VE_MODULO: Record<Modulo, ReadonlySet<Papel>> = {
   mobilidade: new Set(['admin', 'sustentabilidade', 'gestor']),
   viagens: new Set(['admin', 'sustentabilidade', 'gestor']),
   maritimo: new Set(['admin', 'sustentabilidade', 'gestor', 'importacao']),
+  /**
+   * `importacao` fica de fora: o escopo dele é o módulo marítimo (§5), e
+   * distribuição rodoviária às filiais é outro assunto — frete de saída, não
+   * importação.
+   */
+  transportadoras: new Set(['admin', 'sustentabilidade', 'gestor']),
 }
 
-export const MODULOS: readonly Modulo[] = ['mobilidade', 'viagens', 'maritimo']
+/** Na ordem das telas (§11). */
+export const MODULOS: readonly Modulo[] = [
+  'mobilidade',
+  'viagens',
+  'maritimo',
+  'transportadoras',
+]
 
 /**
  * `colaborador` não consulta nada do inventário: não abre painel, não vê dado

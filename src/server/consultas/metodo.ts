@@ -1,11 +1,18 @@
 /**
- * Tela de método — CLAUDE.md §10.5 e a lista mínima da §10.
+ * O método de cada módulo — CLAUDE.md §10.
  *
  * É aqui que **cada escolha que muda o número fica registrada**. Um inventário
  * não é só o total: é o total mais as decisões que o produziram. Provedor de
  * rota, classe de cabine assumida, ocupação por veículo e base de data não são
  * detalhe de infraestrutura — trocar qualquer um deles muda o resultado, e sem
  * este registro a mudança fica invisível.
+ *
+ * **Não existe mais uma tela de método.** Ela saiu em 19/09, e o que ela
+ * declarava não saiu junto: cada parâmetro passou a morar no painel do número
+ * que ele produz, atrás do botão de informações (`src/app/informacoes.tsx`). A
+ * ligação entre um parâmetro e o painel que o mostra é a `chave`, e há uma
+ * guarda conferindo que nenhuma ficou sem painel — perder o endereço das
+ * declarações era o risco que a §13 apontou nesta mudança.
  *
  * Duas regras valem para tudo que sai daqui:
  *
@@ -183,11 +190,31 @@ const BASE_DE_DATA_POR_EXTENSO: Record<typeof MARITIMO_BASE_DE_DATA, string> = {
 export type EscopoDoParametro = 'geral' | Modulo
 
 export type ParametroDeclarado = {
+  /**
+   * Identidade estável do parâmetro, usada pelas telas para escolher o que cada
+   * botão de informações mostra.
+   *
+   * **Existe para a declaração não poder perder endereço.** Com a tela de Método
+   * fora, cada parâmetro passou a morar num painel de módulo; sem uma chave, a
+   * ligação seria por texto do rótulo, e renomear o rótulo desligaria a
+   * declaração da tela **sem erro nenhum** — a §13 avisou que esse era o risco
+   * desta mudança. A guarda que confere que toda chave tem lugar é
+   * `informacoes.test.ts`.
+   */
+  chave: string
   rotulo: string
   valor: string
   /** Falso quando a decisão está pendente; a tela marca, não deixa em branco. */
   definido: boolean
-  observacao: string
+  /**
+   * Uma glosa curtíssima, **só onde o valor não carrega a consequência**.
+   *
+   * Nula na maioria: "21 dias úteis" ou "econômica, assumida" já dizem tudo, e
+   * uma frase abaixo de cada linha transforma o resumo na tela de Método que ele
+   * substituiu. Onde ela existe, é o que muda o número — não a justificativa da
+   * decisão, que mora neste repositório.
+   */
+  observacao: string | null
   escopo: EscopoDoParametro
 }
 
@@ -283,41 +310,41 @@ function parametros(
     // prometer uma regra que o código não aplica.
     const supressao = texto(opcional('MOBILIDADE_SUPRESSAO_MINIMA') ?? null)
     lista.push({
+      chave: 'mob-supressao',
       rotulo: 'Supressão de grupos pequenos',
       valor: supressao.definido ? `${supressao.valor} pessoas` : NAO_DEFINIDO,
       definido: supressao.definido,
-      observacao:
-        'Vale só na mobilidade: bairro ou cidade com menos pessoas que isso vira "outros", porque onde alguém mora não é fato da operação e um recorte pequeno identifica quem está nele. A contagem é de pessoas, não de registros. Viagens não suprime rota nem destino, e o marítimo não tem pessoa a suprimir.',
+      observacao: null,
       escopo: 'mobilidade',
     })
 
     const geo = texto(env.geocodeProvedor)
     lista.push({
+      chave: 'mob-geocodificacao',
       rotulo: 'Geocodificação',
       ...geo,
-      observacao:
-        'A distância é medida a partir do CEP; o endereço é descartado depois do cálculo e nunca é gravado. Provedor de precisão municipal devolve a mesma coordenada para CEPs diferentes e invalida o módulo. Este é o valor configurado hoje: o documento de emissão carimba o fator, não o provedor.',
+      observacao: 'O endereço é descartado e nunca gravado.',
       escopo: 'mobilidade',
     })
 
     const modo = texto(env.mobilidadeDistanciaModo)
     const rotas = texto(env.rotasProvedor)
     lista.push({
+      chave: 'mob-distancia',
       rotulo: 'Distância do deslocamento',
       valor:
         modo.definido && rotas.definido ? `${modo.valor} (${rotas.valor})` : modo.valor,
       definido: modo.definido,
-      observacao:
-        'Distância rodoviária e distância ortodrômica dão números diferentes, e a diferença não se corrige com fator fixo. Trocar de provedor muda o número do inventário.',
+      observacao: null,
       escopo: 'mobilidade',
     })
 
     lista.push({
+      chave: 'mob-deslocamentos-dia',
       rotulo: 'Deslocamentos por dia útil',
       valor: '2 (ida e volta)',
       definido: true,
-      observacao:
-        'Cada dia útil conta duas vezes a distância entre residência e fábrica.',
+      observacao: null,
       escopo: 'mobilidade',
     })
 
@@ -326,57 +353,56 @@ function parametros(
         ? { valor: String(diasUteisNaCarga), definido: true }
         : texto(opcional('MOBILIDADE_DIAS_UTEIS_MES') ?? null)
     lista.push({
+      chave: 'mob-dias-uteis',
       rotulo: 'Dias úteis por mês',
       ...dias,
-      observacao:
-        diasUteisNaCarga !== null
-          ? 'Valor efetivamente usado nos registros carregados, lido do próprio documento.'
-          : 'Nenhum registro carregado; este é o valor configurado no ambiente.',
+      observacao: diasUteisNaCarga !== null ? null : 'Nenhum registro carregado.',
       escopo: 'mobilidade',
     })
 
     lista.push({
+      chave: 'mob-ocupacao',
       rotulo: 'Ocupação de carro e moto',
       valor: '1 ocupante por veículo',
       definido: true,
-      observacao:
-        'A pesquisa não pergunta carona. A emissão do deslocamento é atribuída inteira a quem respondeu.',
+      observacao: null,
       escopo: 'mobilidade',
     })
 
     lista.push({
+      chave: 'mob-onibus',
       rotulo: 'Ônibus',
       valor: 'fator por passageiro-km',
       definido: true,
-      observacao:
-        'O fator do transporte público já é por passageiro e não depende do combustível. Combustível preenchido nessa resposta é erro de entrada e vira alerta, sem tirar a linha da média.',
+      observacao: null,
       escopo: 'mobilidade',
     })
 
     lista.push({
+      chave: 'mob-zero',
       rotulo: 'Bicicleta e a pé',
       valor: 'emissão zero',
       definido: true,
-      observacao: 'Emissão zero por definição, sem fator: não é fator faltando.',
+      observacao: null,
       escopo: 'mobilidade',
     })
 
     lista.push({
+      chave: 'mob-serie-mensal',
       rotulo: 'Valor anual na série mensal',
       valor: 'repetido nos doze meses',
       definido: true,
-      observacao:
-        'A pesquisa é anual e o resultado é uma taxa mensal do ano-base. Por isso a mobilidade entra no total do ano e não na série mensal da visão geral: somada ali, apareceria como se tivesse acontecido doze vezes num mês só.',
+      observacao: null,
       escopo: 'mobilidade',
     })
 
     const limite = texto(env.mobilidadeDistanciaMaximaKm)
     lista.push({
+      chave: 'mob-distancia-maxima',
       rotulo: 'Distância máxima aceita',
       valor: limite.definido ? `${limite.valor} km` : NAO_DEFINIDO,
       definido: limite.definido,
-      observacao:
-        'Acima disso o deslocamento não se sustenta como diário: a resposta vira exceção, fica fora da média e aparece na lista de exceções. O limite não protege contra origem errada — ele só transforma o erro em exceção.',
+      observacao: 'Acima disso, exceção fora da média.',
       escopo: 'mobilidade',
     })
   }
@@ -384,28 +410,28 @@ function parametros(
   if (visiveis.includes('viagens')) {
     const anoBase = texto(env.viagensAnoBase)
     lista.push({
+      chave: 'via-ano-base',
       rotulo: 'Ano-base do inventário de viagens',
       ...anoBase,
-      observacao:
-        'O trecho entra pelo ano do voo, não pelo da emissão da passagem: há passagem comprada num ano com voo no seguinte. Trecho de outro ano não é carregado — ele pertence ao relatório daquele ano, e uma carga com outro ano-base o traz sem derrubar este.',
+      observacao: 'Pelo ano do voo, não pelo da passagem.',
       escopo: 'viagens',
     })
 
     lista.push({
+      chave: 'via-classe',
       rotulo: 'Classe da cabine',
       valor: 'econômica, assumida',
       definido: true,
-      observacao:
-        'Nenhuma das duas fontes administrativas informa a cabine. Econômica é assumida em todos os trechos do inventário, e o multiplicador correspondente fica gravado em cada um deles.',
+      observacao: null,
       escopo: 'viagens',
     })
 
     lista.push({
+      chave: 'via-unidade',
       rotulo: 'Unidade de cálculo do aéreo',
       valor: 'o trecho, não a reserva',
       definido: true,
-      observacao:
-        'Cada trecho é um passageiro. Escala conta como trecho separado e emite mais que um voo direto equivalente.',
+      observacao: null,
       escopo: 'viagens',
     })
 
@@ -416,60 +442,60 @@ function parametros(
     // planilha do cartão, que a frase não mencionava. A tela declarava um
     // caminho que o módulo não tem e omitia o que ele tem.
     lista.push({
+      chave: 'via-uplift',
       rotulo: 'Acréscimo sobre a distância ortodrômica',
       valor: '8%',
       definido: true,
-      observacao:
-        'No relatório da agência a distância já vem pronta, com o acréscimo embutido, e não é reaplicada. Na planilha do cartão não há distância: ela é calculada na carga, pela ortodrômica entre os aeroportos, e aí o acréscimo é aplicado.',
+      observacao: 'Já embutido na base da agência.',
       escopo: 'viagens',
     })
 
     // As duas declarações abaixo são da §7, que exige que o que a planilha do
     // cartão muda no número fique nesta tela. Uma delas muda a série mensal.
     lista.push({
+      chave: 'via-data-cartao',
       rotulo: 'Data dos trechos da planilha do cartão',
       valor: 'a da primeira linha, herdada pelo bloco',
       definido: true,
-      observacao:
-        'A planilha traz data só na primeira linha de cada viagem, e os demais trechos herdam. Para o total do ano não muda nada; na série mensal, um trecho de volta pode cair no mês seguinte e ser contado no anterior. O trecho afetado carrega alerta próprio, listado abaixo.',
+      observacao: 'Muda a série mensal, não o total do ano.',
       escopo: 'viagens',
     })
 
     lista.push({
+      chave: 'via-viajante-cartao',
       rotulo: 'Viajante da planilha do cartão',
       valor: 'só o primeiro nome, vinculado ao cadastro',
       definido: true,
-      observacao:
-        'Nome de uma palavra não identifica ninguém, e vincular pelo palpite atribuiria a viagem à pessoa errada — é o vínculo que liga emissão a funcionário. A ponte entre o primeiro nome e o cadastro é feita fora da aplicação; nome sem correspondência para a carga em vez de virar pessoa nova, para não inflar o quadro com quem não existe.',
+      observacao: 'Sem correspondência, a carga para.',
       escopo: 'viagens',
     })
 
     lista.push({
+      chave: 'via-agrupamento',
       rotulo: 'Agrupamento no tempo',
       valor: 'data do voo',
       definido: true,
-      observacao:
-        'Nunca a data de lançamento da passagem: há passagem emitida num ano com voo no ano seguinte.',
+      observacao: null,
       escopo: 'viagens',
     })
 
     lista.push({
+      chave: 'via-fatores',
       rotulo: 'Fatores aéreos',
       valor: 'por faixa de distância, com forçamento radiativo',
       definido: true,
-      observacao:
-        'Quem aprovou a passagem não entra na conta: para emissão vale quem viajou. Reserva marcada como duplicada fica gravada e fora do total.',
+      observacao: null,
       escopo: 'viagens',
     })
   }
 
   if (visiveis.includes('maritimo')) {
     lista.push({
+      chave: 'mar-alocacao',
       rotulo: 'Alocação do CO₂',
       valor: 'por contêiner, por corredor',
       definido: true,
-      observacao:
-        'O valor informado pelo agente é o dado primário e não é recalculado — nem por tonelada-quilômetro, nem por peso, nem por contêiner. Onde é preciso estimar o que ele não informou, a unidade é o contêiner por corredor: é a unidade que o agente de fato movimenta, e estimar por peso importaria para dentro do inventário a conta circular da aba de resumo.',
+      observacao: 'O valor do agente não é recalculado.',
       escopo: 'maritimo',
     })
 
@@ -481,11 +507,11 @@ function parametros(
     // módulo. O rótulo legível mora aqui porque é apresentação; a decisão mora
     // na constante.
     lista.push({
+      chave: 'mar-base-de-data',
       rotulo: 'Base de data do embarque',
       valor: BASE_DE_DATA_POR_EXTENSO[env.maritimoBaseDeData],
       definido: true,
-      observacao:
-        'A aba de detalhe e a de resumo do relatório usam bases de data diferentes, e a do resumo não é escolha possível: ela é registro aduaneiro, existe só na aba agregada e não tem coluna por linha, enquanto o inventário guarda um documento por embarque. Entre partida e chegada, a partida é a que existe em quase toda linha e a que não muda de mês: partida prevista e partida efetiva concordam no mês em todos os embarques que têm as duas. O total por ano civil não bate com o total por aba do relatório, porque um bloco atravessa a virada do ano e o embarque pertence ao ano em que o navio partiu.',
+      observacao: null,
       escopo: 'maritimo',
     })
 
@@ -496,52 +522,112 @@ function parametros(
     const atipico = texto(env.maritimoLimiarAtipico)
     const amostra = texto(env.maritimoAmostraMinimaCorredor)
     lista.push({
+      chave: 'mar-atipica',
       rotulo: 'Linha atípica — entra com alerta',
       valor: atipico.definido
         ? `${atipico.valor}× a mediana do corredor` +
           (amostra.definido ? `, com amostra mínima de ${amostra.valor} linhas` : '')
         : NAO_DEFINIDO,
       definido: atipico.definido,
-      observacao:
-        'A linha plausível que destoa da mediana do próprio corredor entra no total e recebe alerta, listado abaixo. O limiar é folgado porque a dispersão do CO₂ por contêiner dentro dos corredores de maior volume é alta, e alerta que dispara em boa parte da base é alerta que se aprende a ignorar. Abaixo da amostra mínima o corredor não tem mediana confiável e a comparação não é feita.',
+      observacao: null,
       escopo: 'maritimo',
     })
 
     const impossivel = texto(env.maritimoLimiarImpossivel)
     lista.push({
+      chave: 'mar-impossivel',
       rotulo: 'Linha impossível — não é importada',
       valor: impossivel.definido ? `${impossivel.valor}× a mediana geral do módulo` : NAO_DEFINIDO,
       definido: impossivel.definido,
-      observacao:
-        'Este é o único parâmetro do módulo que decide o que fica de fora. A linha cuja ordem de grandeza não pertence ao módulo — sintoma típico de fórmula errada na origem — não entra até ser conferida, porque sozinha ela domina o total e torna o resto invisível. A comparação é contra a mediana geral, não contra o corredor: linha assim costuma estar sozinha no corredor dela, e um corredor de uma linha só tem essa linha como mediana. A recusa é anunciada com motivo e contada como diferença na conferência de cobertura.',
+      observacao: null,
       escopo: 'maritimo',
     })
 
     lista.push({
+      chave: 'mar-previsao',
       rotulo: 'Embarque previsto',
       valor: 'fora do total, contado à parte',
       definido: true,
-      observacao:
-        'O relatório já traz CO₂ lançado para embarque que ainda não partiu. Previsão sai de todos os totais do módulo — emissão, contêineres, série mensal, corredores e mapa — e aparece declarada à parte. Só sai do total quem não tem itinerário nenhum: itinerário com data prevista e sem data de fato continua contando, porque pode ter acontecido e não ter sido lançado.',
+      observacao: null,
       escopo: 'maritimo',
     })
 
     lista.push({
+      chave: 'mar-aereo',
       rotulo: 'Frete aéreo de fornecedor',
       valor: 'no total do módulo, fora do indicador por contêiner',
       definido: true,
-      observacao:
-        'O arquivo do agente traz carga aérea de fornecedor: Escopo 3 categoria 4, frete upstream, e não viagem de passageiro, que é categoria 6 e mora no módulo de viagens. Ela é emissão da empresa e fica no total; sai do indicador por contêiner, da tabela de portos, dos corredores e do mapa, porque o destino dela é aeroporto ou ponto interior — desenhá-la num mapa marítimo afirmaria que existe porto ali e que a linha é rota de navio.',
+      observacao: null,
       escopo: 'maritimo',
     })
 
     lista.push({
+      chave: 'mar-periodo',
       rotulo: 'Período relatado',
       valor: 'série contínua, sem ano-base',
       definido: true,
-      observacao:
-        'Diferente do módulo de viagens, este não relata um ano: ele cobre a série contínua que o relatório do agente traz, atravessando anos civis que ficam parciais nas pontas. O escopo de recarga é agente e bloco de origem, nunca agente e ano — um bloco atravessa a virada do ano, então dois blocos do mesmo agente contêm documentos do mesmo ano, e com o ano no escopo recarregar um apagaria o outro.',
+      observacao: null,
       escopo: 'maritimo',
+    })
+  }
+
+  if (visiveis.includes('transportadoras')) {
+    lista.push({
+      chave: 'tra-alocacao',
+      rotulo: 'Alocação do CO₂',
+      valor: 'por tonelada-quilômetro',
+      definido: true,
+      observacao: 'Peso da entrega vezes a distância, com fator médio de carga.',
+      escopo: 'transportadoras',
+    })
+
+    lista.push({
+      chave: 'tra-distancia',
+      rotulo: 'Distância',
+      valor: 'trecho único filial → cliente',
+      definido: true,
+      observacao: 'Sem ida e volta: a origem não registra o retorno.',
+      escopo: 'transportadoras',
+    })
+
+    lista.push({
+      chave: 'tra-frota',
+      rotulo: 'Veículo',
+      valor: 'média da frota de carga, assumida',
+      definido: true,
+      observacao: 'O relatório não diz o veículo nem a transportadora.',
+      escopo: 'transportadoras',
+    })
+
+    // **O limiar decide o que não é importado** (§9.3), como os dois do
+    // marítimo — e por isso é parâmetro declarado, não constante escondida.
+    const limiar = texto(env.transportadorasDistanciaMaximaKm)
+    lista.push({
+      chave: 'tra-internacional',
+      rotulo: 'Linha internacional — não é importada',
+      valor: limiar.definido ? `acima de ${limiar.valor} km` : NAO_DEFINIDO,
+      definido: limiar.definido,
+      observacao: 'São embarques do módulo marítimo, não entrega rodoviária.',
+      escopo: 'transportadoras',
+    })
+
+    lista.push({
+      chave: 'tra-regime-frete',
+      rotulo: 'Regime de frete',
+      valor: 'indefinido, provisório',
+      definido: true,
+      observacao:
+        'Enquanto CIF/FOB não fechar, o módulo entra como Escopo 3 cat. 4 provisória.',
+      escopo: 'transportadoras',
+    })
+
+    lista.push({
+      chave: 'tra-periodo',
+      rotulo: 'Período relatado',
+      valor: 'ano civil da entrega',
+      definido: true,
+      observacao: null,
+      escopo: 'transportadoras',
     })
   }
 
@@ -556,12 +642,28 @@ function parametros(
  */
 export async function consultarMetodo(
   ctx: ContextoDeAcesso,
-  filtros: { anoBase?: number } = {},
+  filtros: { anoBase?: number; modulo?: Modulo } = {},
   db: Firestore = firestore(),
 ): Promise<Metodo> {
   exigirInventario(ctx)
 
-  const visiveis = modulosVisiveis(ctx)
+  /**
+   * **O recorte por módulo não é otimização, é o formato novo do método.**
+   *
+   * Cada tela de módulo pede o método do próprio módulo e o mostra nos botões
+   * de informações dos painéis dela (§10). Sem o recorte, abrir a tela do
+   * marítimo leria as coleções de mobilidade e de viagens para jogar fora — e
+   * ler o que não se vai usar é como um recorte errado começa a existir.
+   *
+   * A autorização continua por cima: pedir um módulo que o perfil não vê
+   * devolve o método vazio, porque `podeVerModulo` continua mandando.
+   */
+  const visiveis = modulosVisiveis(ctx).filter(
+    (m) => filtros.modulo === undefined || m === filtros.modulo,
+  )
+  const pedido = (modulo: Modulo) =>
+    podeVerModulo(ctx, modulo) &&
+    (filtros.modulo === undefined || filtros.modulo === modulo)
   const fontes: FonteDeclarada[] = []
   const qualidade: QualidadeDoModulo[] = []
   const excecoes: ExcecaoDeclarada[] = []
@@ -602,7 +704,7 @@ export async function consultarMetodo(
     alertas.push(...contagem.values())
   }
 
-  if (podeVerModulo(ctx, 'mobilidade')) {
+  if (pedido('mobilidade')) {
     const anoBase =
       filtros.anoBase ?? Number(opcional('MOBILIDADE_ANO_BASE') ?? Number.NaN)
     const consulta = Number.isFinite(anoBase)
@@ -619,7 +721,7 @@ export async function consultarMetodo(
       modulo: 'mobilidade',
       descricao: 'Pesquisa de mobilidade respondida pelo quadro de funcionários.',
       situacao: Number.isFinite(anoBase)
-        ? `Ano-base ${anoBase}. Carga única por ano; recarregar substitui o ano inteiro.`
+        ? `Ano-base ${anoBase}. Carga única por ano.`
         : 'Ano-base não configurado no ambiente.',
     })
 
@@ -648,7 +750,7 @@ export async function consultarMetodo(
     contarAlertas('mobilidade', registros)
   }
 
-  if (podeVerModulo(ctx, 'viagens')) {
+  if (pedido('viagens')) {
     const trechos = (await db.collection(COLECAO.viagemTrecho).get()).docs.map(
       (d) => d.data() as DocViagemTrecho,
     )
@@ -666,9 +768,8 @@ export async function consultarMetodo(
     fontes.push({
       modulo: 'viagens',
       descricao:
-        'Duas fontes administrativas: o relatório da agência de viagens e a planilha do cartão empresarial, que traz a viagem paga fora da agência e por isso ausente daquele relatório. O que os colaboradores registram no programa de viagens não entra neste módulo.',
-      situacao:
-        'O histórico da agência é carga única e imutável. Cada fonte tem escopo de recarga próprio, então regravar uma não enxerga nem apaga a outra. Não há data de corte: as duas cobrem o mesmo tipo de registro e somam sem ressalva.',
+        'Relatório da agência de viagens e planilha do cartão empresarial.',
+      situacao: 'Carga única e imutável. O programa de viagens não entra aqui.',
     })
 
     qualidade.push({
@@ -709,7 +810,7 @@ export async function consultarMetodo(
     }
   }
 
-  if (podeVerModulo(ctx, 'maritimo')) {
+  if (pedido('maritimo')) {
     const todos = (await db.collection(COLECAO.embarque).get()).docs.map(
       (d) => d.data() as DocEmbarque,
     )
@@ -731,12 +832,11 @@ export async function consultarMetodo(
 
     fontes.push({
       modulo: 'maritimo',
-      descricao:
-        'Relatório do agente de carga, um documento por embarque, lido das abas de detalhe. A aba de resumo não é usada: ela usa outra base de data e deriva peso de contagem de contêiner e contagem de peso, que é conta circular.',
+      descricao: 'Relatório do agente de carga, um documento por embarque.',
       situacao:
         embarques.length === 0
           ? 'Módulo ainda não carregado. O painel consolidado segue parcial até ele existir.'
-          : `Detalhe linha a linha de ${agentes === 1 ? 'um agente' : `${agentes} agentes`}, em ${blocos === 1 ? 'um bloco' : `${blocos} blocos`} de origem. Agente que não entrega detalhe por embarque não está no inventário, nem como estimativa: a cascata estima o que falta dentro de um embarque, não inventa o embarque. A saída para trazê-los é pedir detalhe à origem, que é operação e não código; enquanto não vier, a conferência de cobertura conta os blocos ausentes.`,
+          : `${agentes === 1 ? 'Um agente' : `${agentes} agentes`}, ${blocos === 1 ? 'um bloco' : `${blocos} blocos`}. Agente sem detalhe por embarque não está no inventário.`,
     })
 
     const porNivel = new Map<NivelDado, { embarques: number; co2Kg: number }>()
@@ -775,6 +875,33 @@ export async function consultarMetodo(
     // banco, e uma tela que a contasse em lugar nenhum esconderia justamente o
     // que a decisão de excluí-la produziu.
     contarAlertas('maritimo', todos)
+  }
+
+  if (pedido('transportadoras')) {
+    /**
+     * **Este é o único módulo cujo "o que entrou" não sai daqui, e a razão é de
+     * custo medido.**
+     *
+     * A coleção de entregas é uma ordem de grandeza maior que as outras três, e
+     * a tela já leu a dela para desenhar o número. Lê-la de novo aqui seria
+     * ler a coleção inteira duas vezes para responder à mesma
+     * pergunta — e ler o que não se vai usar é como um recorte errado começa a
+     * existir. A contagem do resumo vem do próprio agregado da tela, que é a
+     * mesma leitura: os dois números não podem divergir porque são um só.
+     *
+     * **A carga deste módulo não emite alerta** — o que ela não entende, ela
+     * recusa com motivo, e a recusa é contada na conferência de cobertura em vez
+     * de virar aviso no documento (§9.3). É isso que permite não ler a coleção
+     * aqui, e é fato preso por teste: no dia em que a carga passar a emitir
+     * alerta, este bloco precisa voltar a lê-la.
+     */
+    fontes.push({
+      modulo: 'transportadoras',
+      descricao:
+        'Relatório de entregas por filial, um documento por entrega, sem identificação da transportadora.',
+      situacao:
+        'Carga por ano civil. Linha internacional e linha sem cliente ficam fora, declaradas na conferência de cobertura.',
+    })
   }
 
   const hoje = hojeIso()

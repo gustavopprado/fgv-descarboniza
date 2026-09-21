@@ -94,7 +94,7 @@ const LIMITE_DO_INSERTO = 0.3
 /* ------------------------------------------------------------- desenho */
 
 /** Contorno de terra recortado no enquadramento, para não levar o mundo no HTML. */
-function Terra({ projecao, chave }: { projecao: Projecao; chave: string }) {
+export function Terra({ projecao, chave }: { projecao: Projecao; chave: string }) {
   const { oeste, leste, sul, norte } = projecao.limites
   const aneis = CONTORNO_DO_MUNDO.filter(
     (anel) =>
@@ -143,7 +143,7 @@ function Terra({ projecao, chave }: { projecao: Projecao; chave: string }) {
  * do vizinho sem virar outra camada de informação: o mapa continua sendo sobre
  * corredores.
  */
-function Brasil({ projecao, chave }: { projecao: Projecao; chave: string }) {
+export function Brasil({ projecao, chave }: { projecao: Projecao; chave: string }) {
   return (
     <>
       {CONTORNO_DO_BRASIL.map((anel, i) => (
@@ -332,7 +332,7 @@ function Ligacoes({
  * **o ponto continua desenhado**, então nada some do alcance; o que sai é o
  * rótulo que não cabia.
  */
-function Pontos({
+export function Pontos({
   lugares,
   projecao,
   atraso,
@@ -439,6 +439,15 @@ function lugaresDe(ligacoes: LigacaoDoMapa[]): PontoDoMapa[] {
 }
 
 /* ----------------------------------------------------------------- mapa */
+
+/**
+ * **Três peças do desenho são públicas, e a razão é a da §7.5.**
+ *
+ * `Terra`, `Brasil` e `Pontos` não sabem o que é uma ligação: sabem projetar
+ * contorno e marcar lugar. O mapa das filiais, que não tem ligação nenhuma para
+ * desenhar, usa as três — compartilhar o desenho é legítimo, e duplicá-las seria
+ * ter dois traçados do mesmo país envelhecendo separados.
+ */
 
 function coordenadasDe(ligacoes: LigacaoDoMapa[]): Coordenada[] {
   return ligacoes.flatMap((l) => [l.origem, l.destino])
@@ -679,20 +688,20 @@ export function MapaDeRotasSvg({
             quadrado de poucos pixels —, escrever todos os nomes produz sujeira
             em vez de texto. Fica o do traço mais pesado, e os outros estão nas
             tabelas da tela. */}
+{/* **O que não coube é declarado, nunca some calado** — mas em uma
+            linha: quem lê a legenda precisa saber que faltam nomes, não por quê. */}
         {semNome > 0 && (
           <>
             {' '}
             {semNome === 1
-              ? 'Um ponto ficou sem nome no desenho'
-              : `${semNome} pontos ficaram sem nome no desenho`}{' '}
-            porque os rótulos se sobrepunham: onde eles disputam o mesmo lugar,
-            fica o do traço mais pesado, e os demais estão nas tabelas desta tela.
+              ? 'Um ponto ficou sem nome'
+              : `${semNome} pontos ficaram sem nome`}{' '}
+            por sobreposição; os nomes estão nas tabelas desta tela.
           </>
         )}
         <span className="sm:hidden">
-          {' '}Nesta largura os nomes dos pontos e o quadro ampliado do Brasil não
-          são desenhados — o traçado é o mesmo, e os nomes estão nas tabelas
-          abaixo.
+          {' '}Nesta largura os nomes e o quadro ampliado do Brasil não são
+          desenhados.
         </span>
         {textos.ressalva !== undefined && (
           <span className="mt-1.5 block text-[11.5px] text-[var(--color-apoio)]/80">

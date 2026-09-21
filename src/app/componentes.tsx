@@ -157,32 +157,6 @@ export function Painel({
 }
 
 /**
- * Bloco de seção sem superfície, para agrupar painéis sob um título.
- * Mantido porque a tela de Método organiza conteúdo longo em blocos.
- */
-export function Secao({
-  titulo,
-  descricao,
-  children,
-}: {
-  titulo: string
-  descricao?: string
-  children: React.ReactNode
-}) {
-  return (
-    <section className="mt-4">
-      <h2 className="text-[14.5px] font-semibold text-[var(--color-tinta)]">{titulo}</h2>
-      {descricao !== undefined && (
-        <p className="mt-0.5 max-w-[62ch] text-[12.5px] text-[var(--color-apoio)]">
-          {descricao}
-        </p>
-      )}
-      <div className="mt-4">{children}</div>
-    </section>
-  )
-}
-
-/**
  * Estado vazio.
  *
  * **A caixa ocupa a largura inteira e o texto dentro dela é que tem medida.**
@@ -272,8 +246,6 @@ export const MINIMO = {
   tabela3: 420,
   /** Cinco colunas, com a de período — a forma mais comum aqui. */
   tabela5: 520,
-  /** Sete colunas, a de fatores. */
-  tabela7: 640,
 } as const
 
 /* ------------------------------------------------------------ etiqueta */

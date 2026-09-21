@@ -1,17 +1,18 @@
 /**
  * A Visão geral — CLAUDE.md §10.0 e §10.0.1.
  *
- * **É a primeira consulta que atravessa os três módulos**, e a §9.3 existe
+ * **É a primeira consulta que atravessa os quatro módulos**, e a §9.3 existe
  * justamente porque somar taxa com evento produz número errado sem nenhum sinal
  * de erro. Por isso a consolidação é explícita e mora aqui, fora das consultas
  * de módulo: cada decisão do consolidado é uma linha que alguém pode ler.
  *
- * Três recortes, um total:
+ * Quatro recortes, um total:
  *
  *  - **mobilidade pelo ano-base da pesquisa**, que é 2026 e não o ano relatado;
- *  - **viagens e marítimo pelo ano civil** de `ANO_BASE_INVENTARIO`.
+ *  - **viagens, marítimo e transportadoras pelo ano civil** de
+ *    `ANO_BASE_INVENTARIO`.
  *
- * > **Filtro único para os três é o defeito, não a simplificação.** A resposta
+ * > **Filtro único para os quatro é o defeito, não a simplificação.** A resposta
  * > da mobilidade é uma taxa mensal com `mes` nulo e `anoBase` próprio (§9.5):
  * > aplicar a ela o filtro do ano civil devolve coleção vazia, e o painel perde
  * > um módulo inteiro **sem erro nenhum** — o total simplesmente aparece menor.
@@ -27,7 +28,14 @@
  * que os mapas usam e descartar; no volume deles, é barato.
  *
  * **Nada de `viagemRegistrada`** (§0.1). Esta tela lê `mobilidade`,
- * `viagemTrecho` e `embarque`, e nenhuma outra coleção de emissão.
+ * `viagemTrecho`, `embarque` e `entregaRodoviaria`, e nenhuma outra coleção de
+ * emissão.
+ *
+ * **Transportadoras entra com o regime de frete ainda `indefinido`** (§9.1,
+ * §14): é a leitura provisória, não a definitiva. Se o levantamento de CIF/FOB
+ * apontar FOB, a categoria muda para a 9 e o módulo pode precisar sair deste
+ * total — reclassificação de escopo, não ajuste de tela, e é por isso que a
+ * ressalva viaja no próprio dado do módulo em vez de virar texto na tela.
  */
 import type { Firestore } from 'firebase-admin/firestore'
 
@@ -35,7 +43,12 @@ import { ANO_BASE_INVENTARIO, anoBaseMobilidade } from '@/lib/env'
 import { firestore } from '../firestore'
 import { exigirVisaoGeral, type ContextoDeAcesso, type Modulo } from './acesso'
 import { emToneladas, MESES_NO_ANO } from './agregacao'
-import { consultarMaritimo, consultarMobilidade, consultarViagens } from './inventario'
+import {
+  consultarMaritimo,
+  consultarMobilidade,
+  consultarTransportadoras,
+  consultarViagens,
+} from './inventario'
 
 /**
  * Uma fatia do consolidado: um módulo, o total dele no ano e a proporção.
@@ -56,12 +69,13 @@ export type ModuloDaVisaoGeral = {
   recorte: string | null
 }
 
-/** Um mês da série empilhada, em kg, com as três bandas e o total. */
+/** Um mês da série empilhada, em kg, com as quatro bandas e o total. */
 export type MesDaVisaoGeral = {
   mes: string
   mobilidade: number
   viagens: number
   maritimo: number
+  transportadoras: number
   total: number
 }
 
@@ -74,6 +88,17 @@ export type VisaoGeral = {
   /** O que o cartão da mobilidade declara: ano-base da pesquisa e respondentes. */
   mobilidade: { anoBase: number | null; respondentes: number }
   viagens: { trechos: number }
+  /** O que o cartão de Transportadoras declara: entregas e regime de frete. */
+  transportadoras: {
+    entregas: number
+    /**
+     * Verdadeiro enquanto houver entrega com regime `indefinido` — o estado de
+     * hoje (§9.1). Sai do dado, e não de uma constante na tela: o dia em que o
+     * levantamento fechar aparece no número, sem depender de alguém lembrar de
+     * apagar um texto.
+     */
+    regimeProvisorio: boolean
+  }
   maritimo: {
     embarques: number
     /** Agentes com detalhe por embarque; é daqui que sai a segunda declaração. */
@@ -87,6 +112,10 @@ const ROTULO: Record<Modulo, string> = {
   mobilidade: 'Mobilidade casa-trabalho',
   viagens: 'Viagens corporativas',
   maritimo: 'Transporte marítimo',
+  // O rótulo existe desde já; o módulo entra no consolidado num passo próprio,
+  // porque somar um módulo à Visão geral é decisão da §11.0 e não consequência
+  // de ele existir.
+  transportadoras: 'Distribuição rodoviária',
 }
 
 /**
@@ -109,7 +138,7 @@ export async function consultarVisaoGeral(
   const ano = ANO_BASE_INVENTARIO
   const anoBaseDaPesquisa = anoBaseMobilidade()
 
-  const [mobilidade, viagens, maritimo] = await Promise.all([
+  const [mobilidade, viagens, maritimo, transportadoras] = await Promise.all([
     // **Pelo ano-base da pesquisa, nunca pelo ano civil.** Sem ano-base não há
     // recorte, e o módulo entra como ausente em vez de entrar como zero.
     anoBaseDaPesquisa === null
@@ -119,6 +148,8 @@ export async function consultarVisaoGeral(
     // O marítimo entra recortado no ano: a série do módulo é contínua e começa
     // antes (§8.4). Documento fora do ano não move o indicador desta tela.
     consultarMaritimo(ctx, { ano }, db),
+    // Transportadoras também pelo ano civil: a entrega é evento datado.
+    consultarTransportadoras(ctx, { ano }, db),
   ])
 
   const porModulo: ModuloDaVisaoGeral[] = [
@@ -147,6 +178,14 @@ export async function consultarVisaoGeral(
       documentos: maritimo.embarques,
       recorte: `ano civil ${ano}`,
     },
+    {
+      modulo: 'transportadoras',
+      rotulo: ROTULO.transportadoras,
+      toneladas: transportadoras.co2Toneladas,
+      proporcao: 0,
+      documentos: transportadoras.entregas,
+      recorte: `ano civil ${ano}`,
+    },
   ]
 
   const totalToneladas = porModulo.reduce((s, m) => s + m.toneladas, 0)
@@ -154,7 +193,13 @@ export async function consultarVisaoGeral(
     m.proporcao = totalToneladas === 0 ? 0 : m.toneladas / totalToneladas
   }
 
-  const porMes = montarSerie(ano, mobilidade?.co2KgMes ?? 0, viagens.porMes, maritimo.porMes)
+  const porMes = montarSerie(
+    ano,
+    mobilidade?.co2KgMes ?? 0,
+    viagens.porMes,
+    maritimo.porMes,
+    transportadoras.porMes,
+  )
 
   conferirSerie(porMes, totalToneladas)
   conferirFatias(porModulo, totalToneladas)
@@ -169,6 +214,10 @@ export async function consultarVisaoGeral(
       respondentes: mobilidade?.respondentes ?? 0,
     },
     viagens: { trechos: viagens.trechos },
+    transportadoras: {
+      entregas: transportadoras.entregas,
+      regimeProvisorio: transportadoras.regimes.some((r) => r.regime === 'indefinido'),
+    },
     maritimo: {
       embarques: maritimo.embarques,
       agentes: maritimo.agentes,
@@ -194,20 +243,24 @@ function montarSerie(
   co2KgMobilidadeMes: number,
   viagens: { mes: string; co2Kg: number }[],
   maritimo: { mes: string; co2Kg: number }[],
+  transportadoras: { mes: string; co2Kg: number }[],
 ): MesDaVisaoGeral[] {
   const deViagens = new Map(viagens.map((p) => [p.mes, p.co2Kg]))
   const deMaritimo = new Map(maritimo.map((p) => [p.mes, p.co2Kg]))
+  const daEstrada = new Map(transportadoras.map((p) => [p.mes, p.co2Kg]))
 
   return Array.from({ length: MESES_NO_ANO }, (_, i) => {
     const mes = `${ano}-${String(i + 1).padStart(2, '0')}`
     const daViagem = deViagens.get(mes) ?? 0
     const doMar = deMaritimo.get(mes) ?? 0
+    const daEntrega = daEstrada.get(mes) ?? 0
     return {
       mes,
       mobilidade: co2KgMobilidadeMes,
       viagens: daViagem,
       maritimo: doMar,
-      total: co2KgMobilidadeMes + daViagem + doMar,
+      transportadoras: daEntrega,
+      total: co2KgMobilidadeMes + daViagem + doMar + daEntrega,
     }
   })
 }
@@ -233,7 +286,7 @@ function conferirSerie(porMes: MesDaVisaoGeral[], totalToneladas: number): void 
 }
 
 /**
- * **As três fatias somam o indicador** (§10.0).
+ * **As quatro fatias somam o indicador** (§10.0).
  *
  * A faixa proporcional é a tradução visual do total, e fatia que não soma é
  * defeito, não arredondamento: um módulo que entrasse na faixa e não no total —

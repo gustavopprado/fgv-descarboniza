@@ -45,7 +45,7 @@ export default async function Page() {
             </p>
           </div>
         ) : (
-          <Entrada destino="/metodo" />
+          <Entrada destino="/" />
         )}
       </div>
     </main>

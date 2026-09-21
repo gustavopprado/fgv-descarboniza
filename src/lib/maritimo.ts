@@ -17,14 +17,24 @@
  * rápido de fazer um agente novo nascer invisível.
  */
 
-/** O que uma célula pode ser depois de lida da planilha. */
-export type CelulaBruta = string | number | Date | boolean | null
+import {
+  chave,
+  dataOuNulo,
+  numeroOuNulo,
+  texto,
+  textoOuNulo,
+  type AbaLida,
+  type CelulaBruta,
+} from './planilha'
 
-/** Uma aba, em matriz. `linhas[r][c]`, ambos começando em zero. */
-export type AbaLida = {
-  nome: string
-  linhas: CelulaBruta[][]
-}
+/**
+ * Os primitivos de planilha moram em `planilha.ts` desde que o segundo leitor
+ * apareceu — as lições de data inválida e de fuso são de qualquer base em
+ * Excel, e duas cópias delas seriam uma que envelhece sem a outra.
+ *
+ * Os tipos continuam saindo daqui porque é isto que o script de carga importa.
+ */
+export type { AbaLida, CelulaBruta }
 
 export type AlertaDeLeitura = { tipo: string; descricao: string }
 
@@ -116,69 +126,6 @@ export const ALERTA_SEM_CONTAGEM_DE_CONTAINER = 'sem_contagem_de_container'
 export const ALERTA_CONTAGEM_POR_TIPO = 'contagem_de_container_pelo_tipo'
 export const ALERTA_SEM_LOCODE = 'embarque_sem_locode'
 export const ALERTA_CARGA_AEREA = 'carga_aerea_de_fornecedor'
-
-/* ------------------------------------------------------------- utilidades */
-
-/**
- * Data inválida existe de verdade neste arquivo.
- *
- * A planilha tem célula de data com valor que o leitor entrega como `Date`
- * inválido. Chamar `toISOString()` nela lança, e a exceção sobe da leitura de
- * uma linha até derrubar a carga inteira — o padrão que já custou duas vezes
- * aqui. Data inválida é **ausência de data**, tratada como tal.
- */
-function dataValida(valor: Date): boolean {
-  return Number.isFinite(valor.getTime())
-}
-
-function texto(valor: CelulaBruta): string {
-  if (valor === null || valor === undefined) return ''
-  if (valor instanceof Date) {
-    return dataValida(valor) ? valor.toISOString().slice(0, 10) : ''
-  }
-  return String(valor).trim()
-}
-
-function chave(valor: CelulaBruta): string {
-  return texto(valor).replace(/\s+/g, ' ').trim().toUpperCase()
-}
-
-function textoOuNulo(valor: CelulaBruta): string | null {
-  const t = texto(valor)
-  return t === '' ? null : t
-}
-
-function numeroOuNulo(valor: CelulaBruta): number | null {
-  if (typeof valor === 'number') return Number.isFinite(valor) ? valor : null
-  const t = texto(valor)
-  if (t === '') return null
-  // Planilha digitada à mão traz número como texto, às vezes com separador
-  // brasileiro. Ler ao pé da letra e devolver nulo quando não for número:
-  // adivinhar aqui seria inventar peso.
-  const limpo = t.replace(/\s/g, '').replace(/\.(?=\d{3}\b)/g, '').replace(',', '.')
-  const n = Number(limpo)
-  return Number.isFinite(n) ? n : null
-}
-
-/**
- * Data da planilha em `AAAA-MM-DD` (§9.1).
- *
- * As partes são lidas em UTC porque é assim que o Excel entrega meia-noite —
- * converter pelo fuso local jogaria o dia primeiro para o último do mês
- * anterior em São Paulo, que é exatamente o bug que a §9.1 evita guardando data
- * como texto.
- */
-function dataOuNulo(valor: CelulaBruta): string | null {
-  if (valor instanceof Date) {
-    if (!dataValida(valor)) return null
-    const a = valor.getUTCFullYear()
-    const m = String(valor.getUTCMonth() + 1).padStart(2, '0')
-    const d = String(valor.getUTCDate()).padStart(2, '0')
-    return `${a}-${m}-${d}`
-  }
-  const t = texto(valor)
-  return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : null
-}
 
 /**
  * Agente de carga a partir do nome da aba.

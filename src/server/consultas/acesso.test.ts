@@ -45,15 +45,25 @@ test('importacao continua entrando no inventário e no módulo marítimo', () =>
   assert.deepEqual(modulosVisiveis(ctx('importacao')), ['maritimo'])
 })
 
-test('importacao não alcança mobilidade nem viagens', () => {
+test('importacao não alcança mobilidade, viagens nem transportadoras', () => {
   assert.throws(() => exigirModulo(ctx('importacao'), 'mobilidade'), AcessoNegadoError)
   assert.throws(() => exigirModulo(ctx('importacao'), 'viagens'), AcessoNegadoError)
+  // Distribuição rodoviária às filiais é frete de saída, não importação (§5).
+  assert.throws(
+    () => exigirModulo(ctx('importacao'), 'transportadoras'),
+    AcessoNegadoError,
+  )
 })
 
-test('admin, sustentabilidade e gestor veem a visão geral e os três módulos', () => {
+test('admin, sustentabilidade e gestor veem a visão geral e os quatro módulos', () => {
   for (const papel of ['admin', 'sustentabilidade', 'gestor'] as const) {
     exigirVisaoGeral(ctx(papel))
-    assert.deepEqual(modulosVisiveis(ctx(papel)), ['mobilidade', 'viagens', 'maritimo'])
+    assert.deepEqual(modulosVisiveis(ctx(papel)), [
+      'mobilidade',
+      'viagens',
+      'maritimo',
+      'transportadoras',
+    ])
   }
 })
 

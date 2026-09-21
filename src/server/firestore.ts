@@ -69,10 +69,10 @@ export function authAdmin(): Auth {
  * Nomes de coleção num lugar só (§9.2). String solta espalhada pelo código é
  * como se erra o nome de uma coleção e se cria outra, vazia, sem nenhum erro.
  *
- * As três coleções de emissão do inventário são `mobilidade`, `viagemTrecho` e
- * `embarque`. **`viagemRegistrada` não é uma delas** (§0.1): é o programa de
- * viagens, que compartilha casca, sessão e visual com o inventário e nada
- * além disso.
+ * As quatro coleções de emissão do inventário são `mobilidade`, `viagemTrecho`,
+ * `embarque` e `entregaRodoviaria`. **`viagemRegistrada` não é uma delas**
+ * (§0.1): é o programa de viagens, que compartilha casca, sessão e visual com o
+ * inventário e nada além disso.
  */
 export const COLECAO = {
   funcionario: 'funcionario',
@@ -81,6 +81,8 @@ export const COLECAO = {
   /** Programa de viagens, não inventário (§0.1, §7.5). */
   viagemRegistrada: 'viagemRegistrada',
   embarque: 'embarque',
+  /** Entregas da distribuição rodoviária às filiais (§9, §10.11). */
+  entregaRodoviaria: 'entregaRodoviaria',
   containerPortoMes: 'containerPortoMes',
   fatorEmissao: 'fatorEmissao',
   aeroporto: 'aeroporto',

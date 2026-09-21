@@ -15,12 +15,14 @@
     "gerar:municipios": "tsx scripts/gerar-municipios.ts",
     "seed:fatores": "tsx scripts/seed-fatores.ts",
     "seed:fatores-mobilidade": "tsx scripts/seed-fatores-mobilidade.ts",
+    "seed:fatores-transportadoras": "tsx scripts/seed-fatores-transportadoras.ts",
     "seed:aeroportos": "tsx scripts/seed-aeroportos.ts",
     "seed:portos": "tsx scripts/seed-portos.ts",
     "ingest:viagens": "tsx scripts/ingest-viagens.ts",
     "ingest:mobilidade": "tsx scripts/ingest-mobilidade.ts",
     "ingest:cartao": "tsx scripts/ingest-cartao.ts",
     "ingest:maritimo": "tsx scripts/ingest-maritimo.ts",
+    "ingest:transportadoras": "tsx scripts/ingest-transportadoras.ts",
     "verificar": "tsx scripts/verificar.ts"
   },
   "dependencies": {

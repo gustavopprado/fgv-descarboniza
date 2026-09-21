@@ -24,7 +24,7 @@ colunas reais de cada base, os valores de conferência, as armadilhas de formato
 de referência. Consulte-o para implementar; **nunca copie o conteúdo dele para cá, para
 comentário de código, para mensagem de commit ou para teste.**
 
-**Registre o que fizer** na seção 14.
+**Registre o que fizer** na seção 15.
 
 ---
 
@@ -36,7 +36,7 @@ nada mais.** Quem confundir os dois vai produzir número errado, e já produziu.
 | | **Inventário** | **Programa de viagens** |
 |---|---|---|
 | O que é | Relatório de emissões da empresa | Registro voluntário de viagem pelo colaborador |
-| Telas | Visão geral, Mobilidade, Viagens, Marítimo, Método | Registrar viagem, Emissões registradas |
+| Telas | Visão geral, Mobilidade, Viagens, Marítimo | Registrar viagem, Emissões registradas |
 | Origem do dado | Planilha, carga controlada, fora da aplicação | Formulário, escrita pela aplicação |
 | Completude | Fonte administrativa completa do período | Adesão parcial e voluntária |
 | Coleções | `trecho`, `embarque`, `respostaMobilidade` | `viagemRegistrada` |
@@ -56,14 +56,14 @@ relatório que alguém assina, isso é pior que não ter o dado.
 formulário eram a mesma série separadas por uma data de corte. Estava errado, e
 foi a origem da maior parte da complexidade acidental do sistema: contagem de
 trecho por fonte, marca de virada na série mensal, data de corte como parâmetro,
-declaração de fonte na tela de Método e o defeito da subtração. Nada disso tem
+declaração de fonte no método do módulo e o defeito da subtração. Nada disso tem
 razão de existir depois desta separação.
 
 ---
 
 ## 1. O que este sistema é
 
-Um inventário de emissões com três módulos e um painel consolidado.
+Um inventário de emissões com quatro módulos e um painel consolidado.
 **Somente relatórios de emissão** — sem cenários de redução, sem simulações, sem projeções.
 
 | Módulo | Escopo GHG | Métrica exibida |
@@ -71,7 +71,8 @@ Um inventário de emissões com três módulos e um painel consolidado.
 | Mobilidade casa-trabalho | Escopo 3, cat. 7 | kg CO₂ por funcionário por mês |
 | Viagens corporativas | Escopo 3 cat. 6 / Escopo 1 | kg CO₂ por viagem |
 | Transporte marítimo de importações | Escopo 3, cat. 4 | kg CO₂ por contêiner |
-| Painel consolidado | — | toneladas de CO₂e no ano-base do inventário (§10.0) |
+| Distribuição rodoviária às filiais | Escopo 3, cat. 4 — **provisório, ver §14** | kg CO₂ por filial |
+| Painel consolidado | — | toneladas de CO₂e no ano-base do inventário (§11.0) |
 
 **Regra de exibição:** peso, volume, distância, tonelada-quilômetro e intensidade por quilo
 são insumo de cálculo e **não aparecem na interface**.
@@ -79,7 +80,7 @@ são insumo de cálculo e **não aparecem na interface**.
 ### 1.1 O sistema tem duas partes separadas
 
 **Inventário** — retrospectivo, alimentado por bases fechadas. Telas: Visão geral,
-Mobilidade, Viagens, Marítimo, Método.
+Mobilidade, Viagens, Marítimo e Transportadoras.
 
 **Programa de viagens** — prospectivo, alimentado pelos próprios funcionários.
 Telas: Registrar viagem, Emissões registradas.
@@ -152,7 +153,7 @@ novo, não `git rm`. Avise o Gustavo se encontrar rastro assim.
   tabela, nem em tooltip, nem em legenda, nem em exportação.
 - O identificador interno existe no banco para cálculo e deduplicação, mas **não é enviado
   ao cliente**. Ele é lido na camada de consulta, serve para contar e agrupar, e morre ali:
-  o agregado sai pronto do servidor (§9.10, §11.5).
+  o agregado sai pronto do servidor (§10.10, §12.5).
 - A base histórica de viagens contém nomes de passageiros. Eles são carregados para ligar a
   viagem ao funcionário e **não aparecem em tela nenhuma do inventário**.
 
@@ -163,7 +164,7 @@ entre os módulos.
 #### O raciocínio, que importa mais que a regra
 
 **O objeto deste painel é a empresa, não as pessoas.** A pergunta que ele responde é quanto
-a empresa emitiu, direta e indiretamente, pelos três módulos. **Uma rota é fato da operação
+a empresa emitiu, direta e indiretamente, pelos módulos do inventário. **Uma rota é fato da operação
 da empresa**, não dado pessoal de quem embarcou: o voo aconteceu a serviço, foi pago pela
 empresa e faz parte do que ela precisa relatar.
 
@@ -275,7 +276,7 @@ pequeno — ordem de centenas a poucos milhares de documentos por ano. Não há 
 prático em manter um banco relacional separado.
 
 **Firebase Storage não é usado e não deve ser configurado.** Serviço sem uso é
-credencial a mais para administrar. Ver seção 13.
+credencial a mais para administrar. Ver seção 14.
 
 Identidade visual: ver protótipo. Paleta `#618264` `#79AC78` `#B0D9B1` `#D0E7D2`, com
 `#7BC258` (verde da FGV) reservado para marca, item ativo de menu e elementos vivos.
@@ -296,7 +297,7 @@ Quatro papéis consultam o painel. O quinto não consulta nada — só alimenta.
 
 **`importacao` não vê a visão geral.** "Somente módulo marítimo" inclui o consolidado:
 um total que soma um módulo só seria um número menor que o inventário apresentado como se
-fosse o inventário — o erro que a §9.10 existe para impedir. A navegação não oferece a tela
+fosse o inventário — o erro que a §10.10 existe para impedir. A navegação não oferece a tela
 e a consulta recusa quem chegar pela URL. Recusar ali é o comportamento correto, não um bug.
 
 ### 5.1 `colaborador` é o papel de menor privilégio
@@ -336,7 +337,8 @@ de staging, nem em log, nem em cache, nem em arquivo temporário.
 - Coordenada da fábrica: variável de ambiente.
 - Bicicleta e deslocamento a pé: emissão zero.
 - Ônibus: fator de transporte público, por passageiro-km.
-- Respostas marcadas como exceção não entram na média e são listadas na tela de método.
+- Respostas marcadas como exceção não entram na média e são listadas no método do
+  módulo (§11.5).
 
 O campo de combustível só é válido para modais motorizados; preenchido em modal não
 motorizado, ou vazio em modal motorizado, é erro de entrada e deve ser sinalizado.
@@ -368,7 +370,7 @@ foi assim que as viagens intercontinentais entraram no inventário. Ela tem esco
 próprio (`fonte = cartao`), então regravá-la não enxerga nem apaga o que veio das outras
 duas fontes.
 
-Três coisas dela mudam o número e ficam declaradas na tela de método:
+Três coisas dela mudam o número e ficam declaradas no método do módulo (§11.5):
 
 - **a distância é calculada na carga**, pela ortodrômica entre os aeroportos com o uplift
   aplicado, porque a planilha não traz distância — ao contrário da base da agência, em que
@@ -408,7 +410,7 @@ uma carga com outro ano-base o traz.
 
 **O escopo de recarga é fonte E ano.** A fonte protege o que veio de outra origem; o ano
 protege os outros períodos. Sem o ano no escopo, carregar um ano apagaria o anterior
-inteiro, porque a recarga remove do escopo tudo que não está na carga nova (§9.9) — e um
+inteiro, porque a recarga remove do escopo tudo que não está na carga nova (§10.9) — e um
 inventário que só consegue guardar um ano de cada vez não é um inventário.
 
 A variável **não tem padrão**: ano de exemplo é placeholder plausível, que carregaria o
@@ -440,7 +442,7 @@ kg_co2e = trecho.distancia_km
 - **Agrupar o inventário pela data do voo, nunca pela data de lançamento da passagem.** Há
   passagem emitida num ano com voo no ano seguinte.
 - O relatório não informa a cabine. Classe econômica é assumida em todos os trechos, e isso
-  é declarado na tela de método.
+  é declarado no método do módulo (§11.5).
 - Escalas contam como trechos separados e emitem mais que um voo direto equivalente.
 
 Fatores: DEFRA/UK DESNZ, kg CO₂e por passageiro-km, **com forçamento radiativo**, por faixa
@@ -473,7 +475,7 @@ fez, continua contando e não se apaga. **Fechar é operação, não tela** — 
 aplicação, como conceder perfil e rodar carga (§5). Um botão que fechasse precisaria de
 quem pode apertá-lo, de registro de quem apertou e de como desfazer, e nada disso se paga
 num programa que não é fonte de relatório. Vazia, nada está fechado: é o estado inicial, e
-a tela o declara. A trava está **na escrita**, não na interface (§11.3) — a tela deixa de
+a tela o declara. A trava está **na escrita**, não na interface (§12.3) — a tela deixa de
 oferecer o botão, mas quem impede é a consulta.
 
 **Reenviar a mesma viagem grava uma.** O identificador da submissão é derivado de quem
@@ -517,7 +519,7 @@ do formulário mínimo:
 
 **O documento guarda a emissão do veículo; a divisão acontece ao atribuir.** Gravar já
 dividido esconderia a conta dentro do número — o que distância e fator reproduzem é o
-veículo (§9.1). E a divisão precisa acontecer em **toda** atribuição a pessoa, não só na
+veículo (§10.1). E a divisão precisa acontecer em **toda** atribuição a pessoa, não só na
 tela do viajante: sem isso, dois caronas que registrem a mesma viagem somam o mesmo carro
 duas vezes no total do programa, e o total continua parecendo plausível.
 
@@ -525,7 +527,7 @@ duas vezes no total do programa, e o total continua parecendo plausível.
 quilômetro o que emite, indo trabalhar ou indo a cliente, e a §7.5 já diz que a matemática
 se compartilha. Não existe um segundo arquivo de fatores para o mesmo número físico: dois
 arquivos são um que envelhece sem o outro. Sem o fator carregado, o cálculo falha
-explicitamente (§9.8) — não há valor aproximado.
+explicitamente (§10.8) — não há valor aproximado.
 
 ### 7.4 Distância rodoviária
 
@@ -537,7 +539,8 @@ Distância **rodoviária**, nunca ortodrômica. Em trajetos regionais a diferen�
   pesquisa mais de uma vez no mesmo dia, e cota esgotada derruba a carga. Geocodificação
   também é do Google, pelo mesmo teste — o provedor gratuito devolve a coordenada do
   município para a maioria dos CEPs. **A troca de provedor muda o número**, por isso está
-  declarada na tela de método (§10) e não é tratada como detalhe de infraestrutura.
+  declarada no método do módulo (§11.5) e não é tratada como detalhe de
+  infraestrutura.
 - **Cachear toda rota no banco**, com chave = sequência ordenada de códigos IBGE. As rotas
   da empresa se repetem muito.
 - Seleção de município via **lista do IBGE embarcada na aplicação**, não campo de texto
@@ -546,7 +549,7 @@ Distância **rodoviária**, nunca ortodrômica. Em trajetos regionais a diferen�
   A lista vem de um **gerador versionado**, no mesmo padrão do contorno do mapa: o script
   baixa da API de localidades do IBGE, declara origem e licença no cabeçalho do arquivo, e
   o resultado é reprodutível — quem duvidar roda de novo e compara. **A coleção
-  `municipio` da §9.2 não é criada enquanto o arquivo for a fonte**: duas cópias do mesmo
+  `municipio` da §10.2 não é criada enquanto o arquivo for a fonte**: duas cópias do mesmo
   dado é uma que diverge da outra em silêncio, e a que a tela lê não seria a que alguém
   corrigiu.
 
@@ -570,7 +573,7 @@ Distância **rodoviária**, nunca ortodrômica. Em trajetos regionais a diferen�
   um lugar que existe.
 
 - **A chave do roteamento chamado pela aplicação é outra**, separada da das cargas
-  (§11.8). O provedor passa a ser consultado por quem usa o sistema, e não só por quem roda
+  (§12.8). O provedor passa a ser consultado por quem usa o sistema, e não só por quem roda
   carga: a chamada acontece **no envio do formulário, nunca enquanto alguém digita**, e o
   cache deixa de ser conveniência para ser o que segura a conta. A chave do cache é o **par
   ordenado** de códigos — uma sequência de dois —, e não o trajeto inteiro: por trajeto,
@@ -611,14 +614,14 @@ número impossível entra e domina o total, ou emissão verdadeira é apagada po
 
 **Linha atípica — entra, com alerta.** É a linha plausível que destoa da mediana do próprio
 corredor: contêiner pouco carregado, carga solta, embarque partido. **Ela entra no total e
-recebe alerta**, que aparece na tela de método. Tirá-la seria remover emissão real do
+recebe alerta**, que aparece no método do módulo. Tirá-la seria remover emissão real do
 inventário por ser incomum, quando é justamente o incomum que um inventário existe para
 mostrar.
 
 O limiar é **folgado, e isso é medido, não arbitrado**: a dispersão por contêiner dentro dos
 corredores de maior volume é alta o bastante para que um limiar apertado marcasse uma fração
 grande da base. **Alerta que dispara em boa parte das linhas é alerta que se aprende a
-ignorar** — a mesma lição já registrada na §14 sobre teste com alarme falso. O limiar é
+ignorar** — a mesma lição já registrada na §15 sobre teste com alarme falso. O limiar é
 parâmetro declarado, não constante no código.
 
 **Linha impossível — não é importada.** É a linha cuja ordem de grandeza não pertence ao
@@ -664,7 +667,7 @@ Gravar `nivelDado` em todo documento. No rodapé do módulo, uma linha de texto:
   confundir com o módulo de viagens**, que é passageiro, cat. 6.
 - **Abas de template do sistema de origem são lixo.** Ignorar.
 - **A aba de detalhe e a de resumo usam bases de data diferentes.** Escolher uma, aplicar em
-  todo o sistema e declarar qual é na tela de método.
+  todo o sistema e declarar qual é no método do módulo (§11.5).
 - **Linha atípica entra com alerta; linha impossível não é importada.** São regras
   diferentes, com limiares diferentes — ver §8.1.1, que é onde elas moram.
 
@@ -673,7 +676,7 @@ Gravar `nivelDado` em todo documento. No rodapé do módulo, uma linha de texto:
 **O marítimo entra na lista de fontes conhecidas do `verificar` na mesma leva do script de
 ingestão, nunca depois.** A conferência de cobertura responde *"chegou tudo?"*, que é a
 pergunta que coerência e plausibilidade não fazem — e é a única que pega uma fonte inteira
-ficando de fora. Ela custou duas vezes neste projeto (§14), e na segunda só apareceu porque
+ficando de fora. Ela custou duas vezes neste projeto (§15), e na segunda só apareceu porque
 alguém notou por acaso.
 
 A contagem é **por bloco de origem — agente e período —, nunca contra o arquivo inteiro.**
@@ -685,17 +688,107 @@ ficaram sem conferir.
 **O escopo de recarga é agente E bloco de origem, nunca agente e ano.** Um bloco do relatório
 atravessa a virada do ano — o período dele não coincide com o ano civil —, então dois blocos
 do mesmo agente contêm documentos do mesmo ano. Com o ano no escopo, recarregar um bloco
-apagaria os documentos do outro que caíssem naquele ano (§9.9).
+apagaria os documentos do outro que caíssem naquele ano (§10.9).
 
 ---
 
-## 9. Modelo de dados
+## 9. Módulo Transportadoras (distribuição rodoviária)
+
+Fonte: relatório de entregas por filial, uma linha por entrega, com data, filial, cliente,
+distância e peso. Estrutura, armadilhas e números de referência ficam em `CONTEXTO.md`
+quando a base entrar em carga recorrente.
+
+### 9.1 O que este módulo cobre, e o que não sabe
+
+Cobre a distribuição rodoviária de produtos vendidos, entregue por transportadora
+terceirizada, a partir das três filiais (§9.4). **A planilha não identifica qual
+transportadora fez cada entrega** — só filial, cliente, distância e peso —, então o módulo
+separa a emissão **por filial**, não por transportadora individual, mesmo o nome do módulo
+se referindo à origem terceirizada da emissão (frete que a empresa não opera, mesma lógica
+do marítimo em §8).
+
+**Escopo GHG: provisório.** O marítimo e as viagens entraram como Escopo 3, cat. 4 — frete
+pago pela empresa. Se a entrega aqui for CIF (frete pago pela FGV), a mesma leitura vale; se
+for FOB (frete pago pelo cliente), a categoria correta é a 9, e o módulo pode nem pertencer a
+este inventário. **O Gustavo está levantando o regime de frete das entregas; enquanto isso
+não fechar, todo documento grava `regimeFrete: 'indefinido'`** e a tela declara o escopo como
+provisório, no mesmo lugar em que o marítimo declara `nivelDado` (§8.2). Ver §14.
+
+### 9.2 Como o CO₂ é calculado
+
+Toneladas-quilômetro: peso convertido de kg para toneladas, vezes a distância informada. O
+sistema não sabe o modelo do caminhão, a carga de retorno nem a taxa de ocupação — a
+exigência não é exatidão, é **"a fonte que chegue mais perto de um resultado coerente"**
+(pedido do Gustavo), então o fator não pode ser específico de veículo.
+
+**Fator: um fator médio de frete rodoviário de carga, por tonelada-quilômetro, de fonte
+pública e citável.** **O valor não está fixado neste documento**, e não se hardcoda aqui nem
+se inventa de memória: ele é buscado na fonte, gravado em `fatorEmissao` com `fonte` e
+`vigência` — mesma regra de todo fator do sistema (§10.8) — e declarado na tela de método.
+Sem fator carregado, a carga falha explicitamente, como em qualquer outro módulo.
+
+**A fonte adotada é a ferramenta de cálculo do Programa Brasileiro GHG Protocol**, a mesma
+de onde saem os fatores da mobilidade — o GLEC ficou de fora para não haver duas fontes e
+duas vintages no mesmo inventário. Três coisas da adoção são decisão, e ficam registradas
+porque mudam o número:
+
+- **a linha da tabela é a média de toda a frota de carga**, sem distinguir rígido de
+  articulado nem carga refrigerada. É a suposição que corresponde a não saber o veículo
+  (§9.1); a linha de caminhão rígido quase dobraria o total do módulo;
+- **a derivação é a das fórmulas da própria ferramenta**, e não a coluna de conveniência em
+  CO₂e que ela traz ao lado: diesel fóssil e biodiesel entram separados, ponderados pela
+  mistura média do ano, com os GWP da tabela da ferramenta;
+- **o valor é CO₂e não biogênico** — o CO₂ da parcela de biodiesel fica fora, como já fica o
+  da parcela de etanol nos fatores da mobilidade. Adotar a coluna de conveniência colocaria
+  carbono biogênico dentro deste módulo enquanto o outro o mantém fora, e **duas convenções
+  no mesmo inventário é a que ninguém revisa que sobrevive**.
+
+### 9.3 Regras de ingestão
+
+- **Distância é o trecho único filial → cliente**, sem ida e volta contabilizada — decisão
+  do Gustavo, sem detalhe de rota na origem para calcular diferente.
+- **Peso em kg**, convertido para toneladas no cálculo.
+- **Linha internacional não entra.** Na base atual, a partir de um certo ponto do relatório
+  a distância salta para a casa dos 13 mil km e o cliente passa a ser do exterior (China) —
+  são entregas que pertencem ao módulo marítimo, não a este. Regra: **descartar toda linha
+  cuja distância não seja compatível com entrega rodoviária doméstica.** O limiar é
+  parâmetro declarado, não constante que muda sem registro — mesmo princípio da linha
+  impossível do marítimo (§8.1.1). Referência da base atual: nenhuma entrega doméstica
+  passa de ~5.000 km: um limiar nessa faixa já separa as duas populações sem ambiguidade.
+- **Linha sem cliente é descartada, sem alerta.** É formato de exportação — linha em
+  branco, rodapé com o resumo dos filtros aplicados do relatório —, não dado incompleto que
+  precise virar exceção visível.
+
+### 9.4 Filiais
+
+| Código | Nome | Cidade |
+|---|---|---|
+| `01` | Matriz | Curitiba/PR |
+| `02` | Filial Itajaí | Itajaí/SC |
+| `03` | Filial Pernambuco | Cabo de Santo Agostinho/PE |
+
+Nome de cliente não aparece em nenhuma tela deste módulo, só o agregado por filial — mesma
+regra de identificação do resto do inventário (§3).
+
+### 9.5 Tela
+
+Mesmo padrão das outras telas do inventário (§11): kg CO₂ total, por filial, por mês. Peso
+e distância são insumo de cálculo e não aparecem soltos na interface (regra de exibição da
+§1). **Sem coordenada exata de cliente, não há mapa de rota** como em Viagens ou Marítimo:
+**um mapa com as três filiais marcadas** (Curitiba, Itajaí, Cabo de Santo Agostinho), e ao
+clicar em cada uma, os números daquela filial — total, número de entregas, peso
+movimentado. O método do módulo (§11.5) declara o regime de frete provisório (§9.1) e a
+fonte do fator (§9.2).
+
+---
+
+## 10. Modelo de dados
 
 Firestore, coleções de topo e documentos rasos. **Nenhuma tela lê coleção direto:**
-tudo passa pela camada de consulta agregada da seção 9.9, que é onde moram o
+tudo passa pela camada de consulta agregada da seção 10.9, que é onde moram o
 anonimato e a supressão de grupos pequenos.
 
-### 9.1 Princípios
+### 10.1 Princípios
 
 1. **Um documento por unidade de emissão** — um trecho, uma resposta de mobilidade,
    um embarque. **Sem array aninhado de trechos.** Viagem com conexão vira dois
@@ -715,7 +808,7 @@ anonimato e a supressão de grupos pequenos.
 7. **ID de documento é determinístico**, derivado da origem. Recarregar sobrescreve
    em vez de duplicar — é o que substitui o índice único do modelo anterior.
 
-### 9.2 Coleções
+### 10.2 Coleções
 
 ```
 funcionario/{matriculaOuChaveDeOrigem}
@@ -723,6 +816,7 @@ mobilidade/{anoBase}_{matricula}
 viagemTrecho/{fonte}_{refOrigem}_{ordem}
 viagemRegistrada/{uid}_{reservaId}_{ordem}
 embarque/{agente}_{shipmentId}
+entregaRodoviaria/{filial}_{data}_{ordem}
 containerPortoMes/{ano}_{mes}_{porto}   -- prevista, NÃO criada: ver abaixo
 fatorEmissao/{categoria}__{chave}__{versao}__{vigenciaInicio}
 aeroporto/{iata}
@@ -732,7 +826,7 @@ rotaCache/{chave}
 usuarioPerfil/{uid}
 ```
 
-**`containerPortoMes` não é criada, e o motivo é o da §9.1.5.** Contêineres por
+**`containerPortoMes` não é criada, e o motivo é o da §10.1.5.** Contêineres por
 porto por mês é **contador agregado**: sai de `embarque` com uma redução em
 JavaScript, no volume deste módulo, e pré-calculá-lo é justamente o que
 desincroniza em silêncio e trava a criação de cortes novos. Duas cópias da mesma
@@ -744,25 +838,25 @@ outra base de data (§8.3) e o total dela embute a contagem derivada dos agentes
 sem detalhe, que é a conta circular que a §8.1 proíbe reproduzir. A tela monta a
 dela a partir dos documentos.
 
-### 9.3 Por que três coleções de emissão, e não uma
+### 10.3 Por que quatro coleções de emissão, e não uma
 
-Mobilidade é **taxa mensal**; viagem e embarque são **eventos**. Somar os dois num
-mesmo `sum(co2)` produz número errado sem nenhum sinal de erro. Coleções separadas
-tornam a mistura impossível por descuido, e todo documento ainda carrega
+Mobilidade é **taxa mensal**; viagem, embarque e entrega rodoviária são **eventos**. Somar
+os dois tipos num mesmo `sum(co2)` produz número errado sem nenhum sinal de erro. Coleções
+separadas tornam a mistura impossível por descuido, e todo documento ainda carrega
 `periodicidade` (`mensal` | `evento`) para que a consolidação seja explícita.
 
-### 9.4 Envelope comum das coleções de emissão
+### 10.4 Envelope comum das coleções de emissão
 
-Todo documento de `mobilidade`, `viagemTrecho` e `embarque` carrega:
+Todo documento de `mobilidade`, `viagemTrecho`, `embarque` e `entregaRodoviaria` carrega:
 
 ```
-modulo          'mobilidade' | 'viagens' | 'maritimo'
-modal           'aereo' | 'terrestre' | 'maritimo'
+modulo          'mobilidade' | 'viagens' | 'maritimo' | 'transportadoras'
+modal           'aereo' | 'terrestre' | 'maritimo' | 'rodoviario'
 escopo          1 | 3
 periodicidade   'mensal' | 'evento'
 ano             number             -- 2026
-mes             'AAAA-MM' | null   -- null só onde não se aplica (ver 9.5)
-empresa         string | null      -- nulo é categoria visível, ver 9.9
+mes             'AAAA-MM' | null   -- null só onde não se aplica (ver 10.5)
+empresa         string | null      -- nulo é categoria visível, ver 10.9
 fator           { categoria, chave, versao, valor, unidade, vigenciaInicio }
 alertas         [{ tipo, descricao, severidade }]
 alertasCodigos  [string]
@@ -777,7 +871,7 @@ duplicidade" sem varrer a coleção.
 **Não existe campo de valor, custo, orçamento ou aprovação financeira em nenhuma
 coleção.** Isto é inventário de emissões, não controle de gastos.
 
-### 9.5 `mobilidade` — uma resposta da pesquisa
+### 10.5 `mobilidade` — uma resposta da pesquisa
 
 ```
 funcionarioId, anoBase, transporte, combustivel, distanciaKm,
@@ -788,9 +882,10 @@ bairro, cidade, diasUteisMes, co2KgMes, excecao, motivoExcecao
 
 `periodicidade: 'mensal'` e o valor se chama `co2KgMes`, com a unidade no nome. `mes`
 é nulo: a pesquisa é anual e o valor vale para todo mês do ano-base — na série
-mensal o mesmo valor se repete nos doze meses, e isso é declarado na tela de método.
+mensal o mesmo valor se repete nos doze meses, e isso é declarado no método do
+módulo (§11.5).
 
-### 9.6 `viagemTrecho` — um documento por trecho do inventário
+### 10.6 `viagemTrecho` — um documento por trecho do inventário
 
 ```
 reservaId, ordem, funcionarioId,
@@ -818,7 +913,7 @@ usando a aplicação — todos vêm de carga —, e enquanto o campo esteve aqui
 nulo em todo documento gravado. Ele mora em `viagemRegistrada`, onde é
 obrigatório.
 
-### 9.6.1 `viagemRegistrada` — uma viagem registrada pelo colaborador
+### 10.6.1 `viagemRegistrada` — uma viagem registrada pelo colaborador
 
 **Não é inventário** (§0.1, §7.5). Coleção própria, telas próprias, e nenhum
 dado daqui entra em consulta, indicador, série ou mapa do inventário.
@@ -864,11 +959,11 @@ recarregar o arquivo que precisa sobrescrever; aqui não existe arquivo, e a
 origem é quem registrou. `funcionarioId` é o vínculo com o cadastro quando quem
 registrou já existe nele, e pode ser nulo.
 
-Além das regras da §9.9, que valem inteiras aqui, a validação exige que a data
+Além das regras da §10.9, que valem inteiras aqui, a validação exige que a data
 de volta não anteceda a de ida: esta é a única coleção preenchida à mão por
 gente usando a aplicação, e é onde erro de digitação chega.
 
-### 9.7 `embarque` — um embarque do relatório do agente
+### 10.7 `embarque` — um embarque do relatório do agente
 
 ```
 agente, empresa, shipmentId, houseRef, trans, mode,
@@ -878,9 +973,9 @@ co2Kg, nivelDado, status, previsao
 ```
 
 `ano` e `mes` saem da base de data escolhida na §8.3, e qual é fica declarado na
-tela de método.
+método do módulo (§11.5).
 
-### 9.8 `fatorEmissao` e apoio
+### 10.8 `fatorEmissao` e apoio
 
 ```
 fatorEmissao   categoria, chave, valor, unidade, fonte, versao,
@@ -901,7 +996,7 @@ a vigência em JavaScript, sem índice composto.
 **A granularidade da falha é o registro, não a carga.** Na mobilidade, combinação
 de modal e combustível sem fator é **erro de dado, não modal a estimar**: moto a
 diesel e moto elétrica não têm fator de propósito. A resposta recebe alerta, vira
-exceção com motivo, fica fora da média e aparece na tela de método — e o restante
+exceção com motivo, fica fora da média e aparece no método do módulo — e o restante
 da carga continua. Uma linha ruim não derruba as outras, e nenhuma delas recebe
 valor aproximado.
 
@@ -913,7 +1008,7 @@ subestimaria o inventário em silêncio. Por isso a carga de viagens para.
 `usuarioPerfil.empresa` existe para o perfil `importacao`, que pode ser filtrado por
 empresa (§5).
 
-### 9.9 O que o banco não garante mais
+### 10.9 O que o banco não garante mais
 
 O modelo relacional recusava dado inválido. O Firestore aceita qualquer coisa, então
 estas regras passam a ser **validação obrigatória na escrita**, num único ponto por
@@ -922,7 +1017,9 @@ coleção — se não estiverem no código, não existem:
 - `escopo` só pode ser 1 ou 3;
 - `propriedadeVeiculo: 'frota'` obriga `escopo: 1`; `proprio` e `locado` obrigam 3;
 - `ocupantes` inteiro ≥ 1; `passageiros` inteiro ≥ 1;
-- `distanciaKm` ≥ 0;
+- `distanciaKm` ≥ 0; `pesoKg` ≥ 0;
+- `regimeFrete` só pode ser `cif`, `fob` ou `indefinido`; `filial` só pode ser `01`, `02` ou
+  `03`;
 - `vigenciaFim`, quando existe, é posterior a `vigenciaInicio`;
 - toda data casa com `AAAA-MM-DD`;
 - `ano` e `mes` batem com a data de referência do próprio documento.
@@ -941,7 +1038,7 @@ documento antigo, que a execução seguinte limpa — nunca falta.
 inteiro sem nada no lugar; quase sempre é erro de leitura do arquivo. Esvaziar de
 propósito é opção explícita.
 
-### 9.10 Agregação e camada de consulta
+### 10.10 Agregação e camada de consulta
 
 A agregação acontece no servidor, lendo a coleção e reduzindo em JavaScript, dentro
 de **um único módulo de consulta**, em `src/server/consultas`. Nenhuma tela alcança
@@ -957,27 +1054,47 @@ a coleção por fora dele — e isso é verificado por teste, não só combinado
   geral sempre bate com a contagem de documentos da coleção; se não bater, é bug.**
   Inventário com registro sumindo de agregação é erro que só aparece em auditoria.
 
+### 10.11 `entregaRodoviaria` — uma entrega do relatório de distribuição
+
+```
+filial, data, clienteCodigo, distanciaKm, pesoKg,
+co2Kg, regimeFrete, nivelDado
+```
+
+`ano` e `mes` saem da `data` da entrega. `clienteCodigo` é o identificador do relatório de
+faturamento, nunca o nome do cliente — nome real de cliente não se versiona (§2.1) e não
+aparece em nenhuma tela do módulo, só o agregado por filial (§9.4).
+
+`regimeFrete` (`cif` | `fob` | `indefinido`) fica pendente enquanto o levantamento do
+Gustavo sobre CIF/FOB não fechar (§14): hoje toda entrega grava `indefinido`, e a tela
+declara o escopo do módulo como provisório.
+
+O documento carrega o mesmo núcleo de emissão dos outros módulos do inventário — fator
+carimbado com versão, alertas, `atualizadoEm` — pela mesma razão da §9.2: sem saber o
+veículo, o fator é uma média declarada, não uma medição.
+
+**`ordem` no ID existe porque a planilha não traz identificador de entrega.** É o índice da
+linha dentro do mesmo par filial+data na carga — mesmo papel que `ordem` já cumpre em
+`viagemTrecho` e `viagemRegistrada` (§10.1, princípio 7): recarregar o mesmo relatório
+sobrescreve pelo ID determinístico em vez de duplicar.
+
 ---
 
-## 10. Telas
+## 11. Telas
 
 **Inventário**
 
-1. **Visão geral** — o inventário consolidado do ano-base. Definida inteira na §10.0,
-   porque o que essa tela soma não é óbvio a partir dos três módulos.
+1. **Visão geral** — o inventário consolidado do ano-base. Definida inteira na §11.0,
+   porque o que essa tela soma não é óbvio a partir dos módulos.
 2. **Mobilidade** — kg CO₂ por funcionário/mês, total no ano, distância média, radar de onde
    o quadro mora, emissão por modal.
 3. **Viagens** — kg CO₂ por viagem, total, mapa de rotas, destinos mais frequentes, emissão
    por mês.
 4. **Marítimo** — kg CO₂ por contêiner, total, mapa de rotas com navios em movimento, emissão
    por mês, contêineres por porto, tabela de corredores.
-5. **Método** — fontes, fatores com vigência, qualidade do dado, alertas e exceções.
-
-A tela de Método é onde cada escolha que muda o número fica registrada. No mínimo:
-provedor de geocodificação e de roteamento (§7.4), base de data escolhida no marítimo
-(§8.3), classe econômica assumida no aéreo (§7.2), um ocupante por carro e por moto na
-mobilidade (§6.2), repetição do valor anual da mobilidade nos doze meses (§9.5), fatores
-com fonte e vigência, e a lista de exceções com motivo.
+5. **Transportadoras** — kg CO₂ por filial, total, mapa com as três filiais e os números de
+   cada uma ao clicar, emissão por mês. Regime de frete provisório (§9.1) declarado no botão
+   de método.
 
 **Programa de viagens** — sistema separado (§0.1, §7.5). Estas duas telas leem
 `viagemRegistrada` e **nenhuma coleção do inventário**; as cinco de cima leem o inventário
@@ -1011,23 +1128,86 @@ e exige rediscutir a §0.1 — não é ajuste de tela.
 
 Comportamento visual, animações e detalhe de layout: seguir o protótipo.
 
-### 10.0 Visão geral
+### 11.5 O método mora no painel do número, não numa tela separada
+
+**Não existe tela de Método.** Ela existiu até 19/09 e saiu: cada tela do inventário
+ganhou **um botão fixo**, sempre no mesmo canto, que abre um resumo de tudo que produz os
+números daquela tela. A tela lida fica curta e o lastro fica a um clique, em vez de numa
+página separada que só quem já desconfiava do número abria.
+
+**Um botão por tela, não um por painel.** A primeira versão desta mudança pôs um botão em
+cada cartão e cada painel; oito botões numa tela são oito coisas disputando atenção, e
+quem quer entender o número não sabe qual abrir. Um lugar previsível responde antes de ser
+procurado.
+
+**O resumo é rótulo e valor, e quase nada além disso.** A glosa de um parâmetro só existe
+onde o valor não carrega a consequência — "21 dias úteis" e "econômica, assumida" já dizem
+tudo, e uma frase abaixo de cada linha transforma o resumo na tela que ele substituiu. Sete
+dos vinte e cinco parâmetros têm glosa; os outros são uma linha de duas colunas.
+
+**O alerta aparece pelo próprio código, sem a regra ao lado.** Os códigos são descritivos —
+`geocodificacao_falhou`, `embarque_previsto`, `fator_ausente` —, e o sublinhado vira espaço
+na exibição. A regra que levanta cada um continua escrita junto do código e continua
+conferida: o `verificar` recusa alerta no banco sem motivo declarado. **O que saiu foi a
+frase na tela, não a explicação do sistema.**
+
+**O que a tela declarava continua declarado, e isso não é detalhe de acabamento.** Um
+inventário não é só o total: é o total mais as decisões que o produziram. A lista mínima
+continua valendo inteira — provedor de geocodificação e de roteamento (§7.4), base de data
+do marítimo (§8.3), classe econômica assumida no aéreo (§7.2), um ocupante por carro e por
+moto na mobilidade (§6.2), repetição do valor anual da mobilidade nos doze meses (§10.5),
+fatores com fonte e vigência, e a lista de exceções com motivo —, e o que mudou foi
+**onde** cada uma aparece, nunca **se** aparece.
+
+**Cada tela mostra todos os parâmetros do próprio módulo, e não uma lista escolhida a
+dedo.** Perder o endereço de uma declaração era o risco desta mudança: uma escolha que muda
+o número e não aparece em tela nenhuma deixa o número sem lastro, e nada quebra. Com a
+lista vindo do próprio módulo, **parâmetro novo aparece sozinho** — não há lista para
+alguém esquecer de atualizar, que é o mesmo argumento da §0.1. O que resta é conferido por
+teste: todo parâmetro tem módulo, todo módulo tem tela, e cada tela tem um botão e só um.
+
+**A divisão entre o que fica na tela e o que fica atrás do botão é de significado, não de
+espaço:**
+
+- **Ressalva que impede leitura errada fica visível** — o ângulo do radar não significar
+  nada (§3.1.1), o ponto do mapa de Viagens não ser um aeroporto, a linha do mapa marítimo
+  não ser a derrota do navio, o que não pôde ser desenhado, a proporção da cascata (§8.2) e
+  as três declarações da §11.0. Quem precisa delas é justamente quem não vai clicar.
+- **Lastro vai para o resumo** — fonte, situação da carga, parâmetro, fator com vigência,
+  exceção com motivo e alerta com a regra que o levanta.
+
+**A telinha é `popover` nativo do HTML, sem uma linha de JavaScript**, pela mesma regra das
+animações: o que depende de script não pode ser o que sustenta o conteúdo. Num navegador
+sem suporte ela aparece aberta — o pior caso é a declaração visível demais, nunca
+inalcançável.
+
+**O botão é fixo, e por isso a casca reserva o rodapé.** Botão flutuante que cobre a última
+linha do último painel é botão que esconde dado.
+
+**O piso do enxugamento é a declaração, não o tamanho.** O que pode sair é prosa que
+explica uma decisão; o que não pode sair é o que muda o número — e a diferença entre as
+duas é que a segunda some sem nada quebrar. Quando uma guarda prender a redação de uma
+declaração em vez do fato dela, o conserto é prender o fato, nunca afrouxar a guarda.
+
+### 11.0 Visão geral
 
 **O ano-base do inventário é 2025, e é constante, não parâmetro de ambiente.** Não há
 seletor de ano nesta tela. Viagens relata 2025; o marítimo tem 2024 e 2026 parciais
 (§8.4), e um seletor convidaria a ler ponta parcial como ano cheio — que é a §0.1 com
 outra roupa: queda de cobertura lida como queda de emissão. A constante é lida pela tela
-e pela tela de Método, nunca do ambiente, pelo mesmo motivo que a base de data do
+e pelo método do módulo, nunca do ambiente, pelo mesmo motivo que a base de data do
 marítimo passou a ser constante em 19/09: a escolha que mais move o número não pode
 mudar por variável esquecida numa máquina.
 
-**O total soma os três módulos.** Mobilidade, Viagens e Marítimo.
+**O total soma os quatro módulos.** Mobilidade, Viagens, Marítimo e Transportadoras —
+esta última somada com `regimeFrete` ainda `indefinido` (§9.1, §14): é a leitura provisória,
+não a definitiva.
 
 #### A mobilidade entra por decisão declarada, não por coincidência de data
 
 O levantamento de mobilidade é de 2026 e produz uma **taxa** de deslocamento
 casa-trabalho, não um evento datado: `periodicidade: 'mensal'`, `mes` nulo, `anoBase`
-2026, e o mesmo `co2KgMes` vale para os doze meses (§9.5). Essa taxa é aplicada a 2025
+2026, e o mesmo `co2KgMes` vale para os doze meses (§10.5). Essa taxa é aplicada a 2025
 como padrão de deslocamento do quadro — prática corrente em inventário, porque pesquisa
 de mobilidade quase nunca é do ano relatado.
 
@@ -1038,17 +1218,18 @@ deslocamento de 2025 e 2026 são comparáveis; quem assina o relatório assina i
 > **A consulta da mobilidade não filtra por ano civil.** Ela lê o ano-base da pesquisa.
 > Aplicar o filtro de 2025 aos documentos de mobilidade devolve coleção vazia, e o
 > painel perderia um módulo inteiro **sem erro nenhum** — o total simplesmente
-> apareceria menor. É a família dos defeitos que a §14 vem registrando: consulta que
-> afirma um arranjo que o dado não tem. A guarda está na §10.0.1.
+> apareceria menor. É a família dos defeitos que a §15 vem registrando: consulta que
+> afirma um arranjo que o dado não tem. A guarda está na §11.0.1.
 
 #### O que a tela mostra
 
 - **Indicador principal** — total de 2025 em tCO₂e. O número e o ano, mais nada.
-- **Faixa proporcional** — os três módulos, na proporção do total. As três fatias somam
-  o indicador principal; se não somarem, é defeito, não arredondamento.
-- **Três cartões de indicador** — um por módulo, com o total do ano em tCO₂e. O cartão
+- **Faixa proporcional** — os quatro módulos, na proporção do total. As quatro fatias
+  somam o indicador principal; se não somarem, é defeito, não arredondamento.
+- **Quatro cartões de indicador** — um por módulo, com o total do ano em tCO₂e. O cartão
   da mobilidade carrega a etiqueta de ano-base 2026 aplicado a 2025 **no próprio
-  cartão**. Não em rodapé: rodapé é onde a ressalva morre.
+  cartão**. O de Transportadoras carrega a etiqueta de regime de frete provisório
+  (§9.1). Não em rodapé: rodapé é onde a ressalva morre.
 - **Emissão mês a mês — empilhada, nunca somada numa linha só.** A mobilidade é taxa
   repetida nos doze meses e aparece como banda constante; empilhada, a banda plana se
   declara sozinha. Numa linha única o mesmo dado viraria curva achatada e a variação de
@@ -1057,45 +1238,48 @@ deslocamento de 2025 e 2026 são comparáveis; quem assina o relatório assina i
 
 A nota da série vem de quem chama, não da peça (lição de 19/09): esta tela declara que
 cada módulo agrupa por uma data diferente — data do voo em viagens, base de data do
-módulo no marítimo, e taxa mensal na mobilidade.
+módulo no marítimo, data da entrega em transportadoras, e taxa mensal na mobilidade.
 
-**Sem filtros.** Os quatro cortes da §10.1 ficam nas telas de módulo. A Visão geral é
+**Sem filtros.** Os quatro cortes da §11.1 ficam nas telas de módulo. A Visão geral é
 uma leitura só, e é a tela que alguém abre para ver o número do ano.
 
-#### Três declarações obrigatórias, curtas, na própria tela
+#### Quatro declarações obrigatórias, curtas, na própria tela
 
 1. **A mobilidade é ano-base 2026 aplicada a 2025** — no cartão dela.
 2. **O marítimo de 2025 é o inventário de um agente.** Dois dos três não entregam
-   detalhe linha a linha (§13); sem a frase, o total parece cobrir toda a importação do
+   detalhe linha a linha (§14); sem a frase, o total parece cobrir toda a importação do
    ano.
 3. **Previsão está fora do total** — regra do módulo marítimo, que continua valendo no
    consolidado.
+4. **Transportadoras entra com regime de frete provisório** — `indefinido` até o
+   levantamento de CIF/FOB fechar (§9.1, §14); o total pode ser recortado de novo depois.
 
-#### 10.0.1 O que a consulta desta tela tem de diferente de todas as outras
+#### 11.0.1 O que a consulta desta tela tem de diferente de todas as outras
 
-É a primeira consulta que atravessa os três módulos, e a §9.3 existe justamente porque
+É a primeira consulta que atravessa os quatro módulos, e a §10.3 existe justamente porque
 somar taxa com evento produz número errado sem sinal de erro. A consolidação é
 explícita, e cada uma destas é guarda com teste que **liga a violação**:
 
-- **Mobilidade pelo ano-base da pesquisa; viagens e marítimo pelo ano civil de 2025.**
-  Três recortes, um total. Filtro único para os três é o defeito, não a simplificação.
+- **Mobilidade pelo ano-base da pesquisa; viagens, marítimo e transportadoras pelo ano
+  civil de 2025.** Quatro recortes, um total. Filtro único para os quatro é o defeito,
+  não a simplificação.
 - **O marítimo entra recortado em 2025.** A série do módulo é contínua e começa em
   novembro de 2024 (§8.4). Documento fora de 2025 não move o indicador desta tela.
 - **Previsão fora do total, aéreo dentro do total.** Mesma regra do módulo, e pelo mesmo
   motivo: o aéreo é emissão do escopo e só não tem contêiner.
 - **Nenhum identificador de pessoa sai na resposta** (§3.1), e a mobilidade não é
   recortada por bairro nem por modal aqui — é um número só.
-- **Nada de `viagemRegistrada`** (§0.1). A tela lê `mobilidade`, `viagemTrecho` e
-  `embarque`, e nenhuma outra coleção de emissão.
+- **Nada de `viagemRegistrada`** (§0.1). A tela lê `mobilidade`, `viagemTrecho`,
+  `embarque` e `entregaRodoviaria`, e nenhuma outra coleção de emissão.
 - **A soma dos doze meses é igual ao indicador principal**, e o total de cada módulo
   aqui é igual ao que a tela do módulo mostra para 2025.
 
-### 10.1 Cortes que o painel oferece
+### 11.1 Cortes que o painel oferece
 
 São quatro, e só esses:
 
 - **por período** — ano e mês;
-- **por modal** — aéreo, marítimo, terrestre;
+- **por modal** — aéreo, marítimo, terrestre, rodoviário;
 - **por rota ou destino**;
 - **por empresa**, nos módulos onde essa informação existe.
 
@@ -1107,7 +1291,7 @@ contagem de documentos da coleção.
 
 ---
 
-## 11. Segurança e LGPD
+## 12. Segurança e LGPD
 
 O sistema fica público na Vercel. Regras não negociáveis:
 
@@ -1144,7 +1328,7 @@ O sistema fica público na Vercel. Regras não negociáveis:
    produção sempre; em desenvolvimento local ele fica desligado porque o
    navegador recusaria um cookie `secure` em http e ninguém conseguiria entrar.
    `sameSite: lax`, que não envia o cookie em requisição disparada por outro
-   site e é o que fecha o CSRF do caminho de escrita da §10.6, sem quebrar quem
+   site e é o que fecha o CSRF do caminho de escrita da §11.6, sem quebrar quem
    chega por um link externo. E `path` na raiz: uma sessão para o sistema
    inteiro. **O cliente nunca lê nem escreve esse cookie**; quem o emite e quem
    o apaga é o servidor.
@@ -1180,7 +1364,7 @@ acessíveis pelo navegador, é vazamento ativo hoje.
 
 ---
 
-## 12. Fora de escopo
+## 13. Fora de escopo
 
 - Cenários de redução, simulações e projeções de qualquer tipo
 - Tela de upload de arquivo
@@ -1191,13 +1375,13 @@ acessíveis pelo navegador, é vazamento ativo hoje.
   inventário de emissões, não controle de gastos. Também não há centro de custo:
   o corte por área não é dimensão deste sistema
 - **Firebase Storage** — não configurar, não criar regra, não adicionar dependência
-- Contador agregado, saldo armazenado ou qualquer total pré-calculado (§9.1)
+- Contador agregado, saldo armazenado ou qualquer total pré-calculado (§10.1)
 - Mecanismo de cobrança, validação cruzada ou fluxo de aprovação do registro de
   viagem do colaborador. Assume-se que os colaboradores vão registrar
 
 ---
 
-## 13. Pontos em aberto
+## 14. Pontos em aberto
 
 Coisas que provavelmente vão acontecer, mas não agora.
 
@@ -1209,7 +1393,7 @@ Coisas que provavelmente vão acontecer, mas não agora.
   por embarque; mobilidade e viagens nascem com o campo nulo até a origem passar a
   informar. O campo existe desde já porque acrescentar campo depois, em base
   existente, é migração de backfill — e o nulo é tratado como categoria visível
-  (§9.10), não como registro ausente.
+  (§10.10), não como registro ausente.
 - **Fatores da mobilidade** não vêm de nenhuma base do inventário: são escolha
   metodológica de quem assina o relatório e entram por arquivo próprio.
 - **A data de corte deixou de existir** (§0.1, §7). Agência e formulário não são a mesma
@@ -1222,7 +1406,7 @@ Coisas que provavelmente vão acontecer, mas não agora.
   é resíduo de subtração. **A saída é pedir detalhe por embarque à origem, que é operação,
   não código.** Enquanto não vier, o marítimo é o inventário de um agente, a cobertura
   conta os dois blocos ausentes e a tela declara quantos embarques ficam de fora.
-- **Chaves do Google separadas por função e por destino** (§11.8). Já estão separadas por
+- **Chaves do Google separadas por função e por destino** (§12.8). Já estão separadas por
   API — uma para geocodificação, outra para roteamento —, porque restringir uma chave única
   a uma API derrubaria a chamada da outra ponta. Falta a separação por **destino**: a chave
   usada nas cargas roda da máquina de quem opera e admite restrição por IP; a que o
@@ -1235,27 +1419,47 @@ Coisas que provavelmente vão acontecer, mas não agora.
   com alerta e acrescentar a variável na Vercel. Sem ela o formulário cai na chave das
   cargas — conveniente em desenvolvimento, e não é o que deve ir para produção.
 - **O provedor de rota não fica carimbado no documento.** O documento de emissão carimba o
-  fator (§9.1), não o provedor de geocodificação nem o de roteamento — então a tela de
+  fator (§10.1), não o provedor de geocodificação nem o de roteamento — então a tela de
   método declara a configuração **atual** do ambiente, e não necessariamente a que produziu
   a carga que está no banco. Enquanto a carga for manual e rara, a diferença é teórica;
   quando deixar de ser, o caminho é carimbar o provedor junto do fator.
-- **As sete telas existem.** A Visão geral fechou a lista em 19/09, e ficou por último
-  de propósito: enquanto o marítimo não existisse, ela mostraria dois terços do
-  inventário como se fosse o total. As outras seis são Método, Mobilidade, Viagens e
-  Marítimo no inventário, e Registrar viagem e Emissões registradas no programa — esta
-  última com a versão do próprio viajante, "Minhas viagens", porque `colaborador` não vê
-  agregado (§5.1).
+- **São oito telas.** A Visão geral fechou a lista do inventário em 19/09 e a de
+  Transportadoras entrou em 21/09. Visão geral, Mobilidade, Viagens, Marítimo e
+  Transportadoras (§9) compõem o inventário; Registrar viagem e Emissões registradas
+  compõem o programa — esta última com a versão do próprio viajante, "Minhas viagens",
+  porque `colaborador` não vê agregado (§5.1). **A tela de Método saiu em 19/09** e o
+  método passou a morar no botão fixo de cada tela (§11.5).
 
   O que fica em aberto daqui é de outra natureza: **a consolidação continua sendo a
-  única consulta que atravessa os três módulos**, e as guardas da §10.0.1 são o que a
-  segura. Módulo novo, ano-base novo ou mudança de recorte em qualquer um dos três passa
-  por lá antes de passar pela tela.
-- **A tela de Método vai sair, e as telas vão enxugar.** Decisão do Gustavo, etapa
-  seguinte à Visão geral. Não é ajuste de texto: hoje a Método é o endereço de toda
-  escolha que muda o número — sete parâmetros só do marítimo — e tirá-la sem dar endereço
-  novo a essas declarações deixa o número sem lastro na tela. **Nada disso se antecipa na
-  etapa da Visão geral**; as três declarações da §10.0 nascem já dentro da tela, que é
-  para onde elas iriam de qualquer jeito.
+  única consulta que atravessa os módulos**, e as guardas da §11.0.1 são o que a segura.
+  Módulo novo, ano-base novo ou mudança de recorte em qualquer um deles passa por lá antes
+  de passar pela tela.
+- **Regime de frete das entregas rodoviárias (§9.1).** Está sob levantamento do Gustavo —
+  CIF, FOB ou os dois. Enquanto não fechar, todo documento de `entregaRodoviaria` grava
+  `regimeFrete: 'indefinido'` e o módulo Transportadoras entra na Visão geral como cat. 4
+  provisória. **Se o levantamento apontar FOB, a classificação muda para cat. 9 e o módulo
+  pode precisar sair do total consolidado** — reclassificação de escopo, não ajuste de
+  tela, mesma natureza de decisão da §0.1.
+
+  Desde 21/09 isto deixou de ser hipótese e passou a ser o maior número do
+  inventário: **o módulo entrou no consolidado e responde pela maior parte do
+  total do ano.** A decisão sobre o regime não muda mais só um rótulo — ela
+  decide se o total publicado é este ou uma fração dele. A ressalva sai do
+  documento, e não de texto na tela: o dia em que o levantamento fechar, ela some
+  sozinha.
+- ~~**Fator de frete rodoviário de carga ainda não tem fonte fixada (§9.2).**~~ Fechado em
+  21/09/2026: a fonte é a ferramenta do GHG Protocol Brasil, na linha de média da frota de
+  carga, com a derivação da própria ferramenta e em CO₂e não biogênico (§9.2). **O valor
+  continua fora deste documento e fora do repositório**: ele mora em `fatorEmissao`, gravado
+  por seed a partir de um arquivo que quem assina o relatório monta, no mesmo padrão dos
+  fatores da mobilidade. O que fica em aberto é a **revisão anual**: a mistura de biodiesel
+  muda por ano e por mês, então o fator tem vigência e o ano seguinte pede um valor novo —
+  não uma edição do que está gravado.
+- **O enxugamento tem um piso, e ele não é de gosto.** As telas foram encurtadas em
+  19/09 junto com a saída da Método, e o que sobrou de prosa visível é o que impede leitura
+  errada (§11.5). Abaixo disso a tela fica muda: um radar sem a frase do ângulo vira um
+  mapa, um mapa com metade da emissão sem a frase do recorte vira falha de carga. **Cortar
+  mais é cortar declaração**, e declaração se move de lugar, não se apaga.
 - **O denominador da adesão do programa é parâmetro, e pode não estar definido.** Ele não
   sai de coleção nenhuma: o candidato óbvio, o tamanho da coleção de funcionários, inclui
   gente que só aparece como aprovador de passagem, e com ele a adesão nasceria menor do que
@@ -1268,7 +1472,7 @@ Coisas que provavelmente vão acontecer, mas não agora.
 
 ---
 
-## 14. Registro de execução
+## 15. Registro de execução
 
 **Seção mantida pelo Claude Code.** Registrar em ordem cronológica: o que foi implementado e
 quando; correções pedidas pelo Gustavo e o que mudou; bugs encontrados e como foram
@@ -1279,11 +1483,685 @@ documento.
 
 ### Histórico
 
+#### 2026-09-21 — Transportadoras, passo 1: o leitor que o projeto não tinha, e o modelo do quarto módulo
+
+Começo do módulo da §9. O passo é leitura, modelo de dados, simulação e
+conferência de cobertura — **nada foi gravado no Firestore**: a carga depende de
+duas decisões do Gustavo, o limiar da linha internacional e o fator da §9.2.
+
+**O arquivo não abre no leitor das outras cargas, e isso foi medido antes de
+decidir qualquer coisa.** O export do sistema de faturamento é um pacote OOXML
+válido que escreve o XML com prefixo de namespace e grava as partes numa ordem
+que o leitor de stream não espera. Com o arquivo cru ele lança antes de chegar às
+abas; com o pacote reempacotado em ordem canônica ele **pendura o processo**, que
+é pior que falhar — foram duas tentativas, as duas com tempo limite.
+
+> **A saída óbvia era operacional, e foi recusada por um motivo só.** Reabrir e
+> salvar pelo Excel produz um pacote que o leitor antigo lê — é o que o
+> `.env.example` já manda fazer com o formato antigo do marítimo. Mas ali a
+> conversão é de uma base congelada, e **esta é para carga recorrente** (§9): um
+> passo manual por carga é um passo que se esquece, e o arquivo reaberto é uma
+> chance a mais de alguém salvar em outro formato. O leitor entrou no
+> repositório; a conversão à mão, não.
+
+**`scripts/_xlsx.ts` lê o pacote com o que o Node já tem** — `zlib` para o zip e
+expressão regular para o XML —, sem dependência nova. Ele interpreta o mínimo:
+nome de aba, texto compartilhado e a grade. Formato de célula, estilo e largura
+de coluna são ignorados de propósito, porque quanto menos do pacote ele
+interpreta, menos ele tem para errar. **Tudo que ele não entende falha alto,
+nomeando o que encontrou:** tipo de célula desconhecido, índice de texto
+compartilhado fora da lista, zip64, compressão que não é deflate, CRC que não
+confere e o sistema de data de 1904 — este último porque deslocaria o inventário
+inteiro em quatro anos sem nada parecer quebrado.
+
+**A data volta como número, e a conversão mora onde se sabe o que a coluna
+significa.** Descobrir que uma célula é data exige interpretar o formato dela, a
+parte mais frágil de ler xlsx. O leitor devolve o número de série cru; quem
+converte é o leitor do relatório, que sabe que aquela coluna é a data da entrega.
+A regra vale no sentido inverso também: nenhuma coluna vira data por acidente.
+
+> **O defeito do leitor foi o primeiro, e é da família deste log: deslocamento
+> silencioso.** A primeira versão casava a tag de abertura antes da forma vazia,
+> então `<c />` era lido como abertura de célula e o corpo dela passava a ser tudo
+> até o próximo `</c>` — **a célula vazia engolia a seguinte e a linha andava uma
+> coluna**, sem erro nenhum. Ele não apareceu na primeira leitura do arquivo real
+> por sorte: as células vazias daquele export estão no fim da linha, e no fim não
+> há fechamento à frente para capturar. Apareceu ao conferir a contagem de linhas
+> contra uma leitura independente do XML, que deu uma linha de diferença.
+>
+> O conserto é de forma — a forma vazia primeiro, e a forma com corpo recusando
+> terminar em `/` —, e o teste que o prende tem **célula vazia no meio da linha e
+> um par de vazias seguidas**, que são as duas maneiras de acertar por acidente.
+> Conferido ligando o defeito de volta: as duas guardas reprovam, as outras nove
+> passam.
+
+**Os primitivos de planilha saíram do módulo marítimo para `src/lib/planilha.ts`,
+e a razão é uma lição que já estava paga.** `texto`, `chave` e a conversão de data
+carregam o caso da data inválida que derrubava a carga inteira e o do fuso que
+jogava o dia primeiro para o mês anterior. Duas cópias delas seriam uma que
+envelhece sem a outra — é o mesmo movimento que tirou o tipo do desenho de dentro
+da pasta de Viagens. A mudança é de lugar, não de comportamento, e typecheck mais
+suíte inteira provam isso.
+
+> **E a função de número ficou com um aviso que virou teste.** A limpeza de
+> separador brasileiro do marítimo remove o ponto seguido de três dígitos, o que
+> é certo numa coluna de peso digitada à mão em quilos. **Nesta base ela
+> multiplicaria a distância por mil:** um valor como "1.701" é um quilômetro e
+> setecentos metros numa entrega urbana e mil setecentos e um na leitura da outra
+> coluna, e não há como decidir qual é sem olhar a origem. Por isso o leitor de
+> entregas **exige célula numérica e recusa texto em coluna de medida** — recusa a
+> linha, com motivo, em vez de adivinhar. Adivinhar aqui inventa distância, e mil
+> vezes a distância passa como número plausível.
+
+**O que a leitura descarta, e a diferença entre os três casos**
+
+- **Linha sem cliente sai sem alerta** (§9.3): é linha em branco e o rodapé com os
+  filtros do relatório. Contada, porque descarte que não é contado é buraco na
+  cobertura, mas não é exceção visível.
+- **Linha internacional sai contada e anunciada**, com a faixa de distância que
+  ela ocupa. O limiar é parâmetro sem padrão, no molde dos dois do marítimo:
+  ele decide o que **não entra**, e número que muda sem registro muda o total sem
+  registro.
+- **Filial fora das conhecidas é recusada com o código no motivo.** Ela não é
+  linha a ignorar: é a §9.4 desatualizada, e a decisão é de quem mantém a lista de
+  filiais — não de um descarte silencioso.
+
+**A ordem conta só as entregas aceitas, e isso é identidade, não estatística.** O
+relatório não traz identificador de entrega, então o ID é filial, data e a ordem
+da linha dentro desse par (§10.11). Se a linha descartada consumisse um número,
+mudar o limiar deslocaria o identificador de todas as seguintes daquele dia — e a
+recarga passaria a **gravar documento novo em vez de sobrescrever**, dobrando o
+módulo em silêncio. Tem teste, e o teste tem descarte no meio da sequência.
+
+**Três decisões de modelo que não estavam no documento**
+
+- **`NivelDadoRodoviario` é união própria, e não o `NivelDado` do marítimo.** Lá
+  os degraus dizem se o CO₂ foi informado pelo agente ou estimado, e por qual
+  média; aqui não existe emissão informada — a atividade é medida e o fator é uma
+  média declarada. Compartilhar a união deixaria `medido` escrevível numa coleção
+  onde nada é medido. Um valor só hoje, e o segundo aparece no dia em que a origem
+  trouxer dado por veículo.
+- **O escopo de recarga é o ano da entrega, nunca a filial.** As três filiais vêm
+  no mesmo relatório, e um escopo por filial faria uma carga apagar as entregas
+  das outras duas. O export é filtrado por ano na origem — o rodapé do arquivo diz
+  qual —, então o ano é o recorte que a recarga pode substituir inteiro.
+- **O fator é obrigatório no documento, mesmo com emissão zero.** No envelope,
+  fator nulo se sustenta onde a emissão é zero por definição — bicicleta, a pé.
+  Aqui não existe entrega que não emita por definição: o zero vem de peso zero, e
+  a conta continua sendo fator × atividade. Sem o carimbo, a linha deixa de ser
+  reproduzível a partir do documento.
+
+**A conferência de cobertura entrou na mesma leva da ingestão, nunca depois**
+(§8.4). São duas identidades, cada uma respondendo a uma coisa: **por ano**,
+documentos no banco contra entregas aceitas na origem, porque o ano é o escopo de
+recarga e é nele que uma carga parcial apareceria; e **no arquivo inteiro**,
+linhas com cliente contra aceitas mais internacionais mais recusadas com motivo —
+sem o segundo termo, um descarte silencioso passaria por cobertura correta. Junto
+vai a integridade do que está no banco, independente da origem, inclusive **o ID
+recalculado pela regra de hoje**: documento gravado por outra regra de identidade
+continuaria somando e deixaria de ser sobrescrito pela recarga.
+
+**A simulação roda sem o fator; a gravação para.** Sem fator carregado, seguir
+seria inventar o número do módulo, e a §10.8 é explícita. Mas parar a simulação
+esconderia justamente o que se quer conferir antes de o fator existir: quantas
+linhas entram, quantas saem e por quê. Então a ausência do fator é anunciada, a
+emissão fica em branco e a carga com `--gravar` falha com o nome da categoria e da
+chave que faltam.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (333 testes, 43 novos) e `next build` passam. Nenhum
+  servidor foi subido.
+- O leitor de pacote foi exercitado contra as **duas formas** do mesmo arquivo:
+  a do export, com prefixo de namespace e texto embutido, e a do Excel, com texto
+  compartilhado e posição pela referência de célula. O pacote de teste é montado
+  byte a byte pelo próprio teste, com massa inventada do zero.
+- A simulação rodou contra o arquivo real e as contagens fecham por identidade:
+  aceitas mais descartadas mais linhas sem cliente mais cabeçalho é o total de
+  linhas do arquivo, conferido contra uma leitura independente do XML.
+- Exercitado por ensaio temporário apagado em seguida: **todo documento montado
+  passa pela validação**, nenhum identificador colide, a ordem máxima dentro de um
+  par filial+data é coerente com a base, e os doze meses do ano aparecem.
+- `verificar` fecha tudo o que já fechava; **a única conferência que falha é a de
+  cobertura deste módulo**, com a diferença exata entre o arquivo e a coleção
+  vazia. Falhar aqui é o comportamento correto enquanto a carga não roda — foi o
+  mesmo estado do marítimo entre o passo 1 e o passo 2 dele.
+
+**O que este passo deixa em aberto, e é decisão, não pendência técnica:** o valor
+do limiar da linha internacional e o fator de frete rodoviário de carga com fonte
+e vigência (§9.2). Os dois são parâmetros declarados, os dois vêm vazios no
+`.env.example` e o segundo é o passo 2.
+
+#### 2026-09-21 — Transportadoras, passo 5: o módulo entra no consolidado
+
+O quarto módulo no total do ano. **O inventário de 2025 passou a ser somado com
+quatro parcelas**, e a nova é a maior delas — o que é, por si, o achado desta
+etapa: a distribuição rodoviária responde por cerca de dois terços do total, e o
+número que a Visão geral mostrava antes era a fração do inventário que não a
+incluía.
+
+**Tudo que a §11.0 pede entrou junto, e cada peça no lugar que ela manda:** a
+quarta fatia na faixa proporcional, a quarta banda na série empilhada, o quarto
+cartão — e a **quarta declaração obrigatória no próprio cartão**, não em rodapé:
+regime de frete `indefinido`, cat. 4 provisória. A ressalva sai do **dado**, e não
+de uma constante na tela: no dia em que o levantamento de CIF/FOB fechar, ela
+some sozinha, e se apontar FOB o módulo pode precisar sair deste total — é
+reclassificação de escopo, não ajuste de tela (§14).
+
+**A cor da quarta banda é a mais clara da paleta da §4, e o módulo novo entra no
+topo da pilha.** Trocar a ordem dos que já estavam mudaria a leitura de um
+gráfico que alguém já conhece, sem nada ganhar; a mobilidade continua embaixo,
+porque banda constante só se lê como constante quando o que está sob ela não
+varia.
+
+**A coerência entre as telas foi estendida ao módulo novo**, e é ela que dá a
+garantia que a §11.0.1 pede: a recontagem independente — feita direto da coleção,
+sem passar por consulta nenhuma — bate com o consolidado, e o consolidado bate
+com a tela do módulo. As duas invariantes que já estouravam continuam valendo com
+quatro parcelas: a soma dos doze meses reproduz o indicador e as fatias reproduzem
+o indicador, as duas com diferença zero.
+
+**A correção do passo 4, que só apareceu ao medir com a casca**
+
+> **A rota temporária do passo 4 desenhava a tela sem o menu**, e o menu tem
+> 232px fixos a partir de `md`. Toda largura de coluna que eu medi saiu maior que
+> a real, e a conclusão — "cabe uma coluna fixa de 824px, e acima de 1800 cabem
+> três colunas" — era sobre um layout que não existe. Com a casca no ensaio, a
+> mesma tela **rolava de lado a 1366**, com a coluna da direita espremida em
+> 167px.
+>
+> É a lição de 18/09 outra vez, e agora pelo avesso: lá o erro foi deduzir em vez
+> de medir; aqui foi **medir a coisa errada**. Um ensaio que não inclui a casca
+> não é a tela — é uma tela mais larga que ela.
+
+A grade voltou a ser proporcional e ganhou dois números medidos, cada um por um
+motivo: **duas colunas só a partir de `xl`**, porque a 1024 cada coluna ficaria
+abaixo do piso dos dois desenhos e os dois passariam a rolar por dentro; e a
+razão **1,1 e não 1,2**, porque a 1280 — o degrau em que as duas colunas começam
+— a de 1,2 deixava a série onze pixels abaixo do piso dela, e rolagem de uma
+dezena de pixels é a pior que existe: ninguém percebe que ela está lá e ela leva
+embora o último mês (19/09).
+
+O degrau de tema criado no passo 4 saiu junto com a coluna fixa que o justificava:
+**variável que ninguém lê é armadilha esperando alguém encontrar** (§7). A lição
+sobre a ordem das media queries ficou escrita, porque vale para o próximo.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (356 testes, 2 novos) e `next build` passam, com as
+  oito rotas na lista. Nenhum servidor foi subido por mim; usei o que já estava
+  no ar.
+- `verificar` fecha inteiro, incluindo as duas linhas novas da coerência entre
+  telas e as duas invariantes do consolidado, todas com diferença zero.
+- As guardas do consolidado ganharam as duas que faltavam e **foram conferidas
+  ligando a violação**: entrega de outro ano movendo o indicador, e a ressalva de
+  regime provisório saindo de constante em vez de sair do documento. O banco
+  falso daquele arquivo ganhou a projeção de campos que a consulta nova usa.
+- **O layout foi medido com a casca**, em rota temporária no `.gitignore` antes
+  de existir e apagada no fim, com dados inventados do zero. Sem rolagem lateral
+  em 360, 390, 640, 1024, 1280, 1366 e 1920, e **sem rolagem por dentro de painel
+  nenhum** em nenhuma delas. O branco ao lado do mapa ficou em 2px de 1280 a 1920;
+  o que sobra ao lado da série mensal a 1920 são 167px, que é o teto do desenho
+  compartilhado e não um excedente desta tela.
+- A Visão geral foi medida com os quatro cartões: a 1920 a coluna da série
+  continua com 2px de sobra e os cartões refluem, como em 19/09.
+
+#### 2026-09-21 — Transportadoras, passo 4: a tela, e a ordem das media queries
+
+A quinta tela do inventário. O menu passou a oferecê-la — e a oferecer **pela
+lista de módulos da camada de acesso**, em vez da lista literal de três que
+estava escrita ali: com a literal, um módulo novo nasceria fora do menu sem nada
+acusar.
+
+**O mapa deste módulo não é o mapa de rotas, e a diferença é do dado.** A
+planilha não traz coordenada de cliente: traz a **distância** até ele. Não há de
+onde tirar a outra ponta de uma linha, e desenhar uma linha para um ponto
+inventado afirmaria um destino que o dado não tem. O que existe são três lugares
+e os números de cada um, que é o que a §9.5 pede.
+
+> **Compartilhar o desenho, não o dado** (§7.5, outra vez). Três peças do mapa de
+> rotas — o contorno do mundo, o do Brasil e a marca de lugar — viraram públicas
+> e o mapa novo usa as três. Elas não sabem o que é uma ligação: sabem projetar
+> contorno e marcar ponto. Duplicá-las seria ter dois traçados do mesmo país
+> envelhecendo separados.
+
+**O enquadramento é o país inteiro, e não os três pontos.** Enquadrar pelos
+pontos daria um retângulo entre o Paraná e Pernambuco, com o país cortado nas
+quatro bordas — um mapa que parece truncado. Com o país inteiro, a distância
+entre as filiais é a que é, e o Norte vazio também informa.
+
+**Clicar numa filial abre os números dela**, por âncora e endereço, como o clique
+na região do mapa de Viagens: recarregar mantém a filial aberta, o endereço pode
+ser enviado, e o ponto continua clicável com script bloqueado. A filial que vem
+na URL é conferida contra o que existe — sem isso, qualquer texto no endereço
+viraria título de painel.
+
+**O resumo da tela declara o que muda o número**: alocação por
+tonelada-quilômetro, trecho único sem ida e volta, veículo médio assumido, o
+limiar da linha internacional, o regime de frete provisório e o período. Mais o
+fator, com fonte, versão e vigência.
+
+> **E o "o que entrou" deste módulo vem do agregado da tela, não de uma segunda
+> leitura da coleção.** Ela é uma ordem de grandeza maior que as outras três, e a
+> tela acabou de lê-la para desenhar o número: relê-la no método seria vinte e
+> cinco mil documentos duas vezes para a mesma pergunta. Vindo de onde veio o
+> total, os dois números não podem divergir — são um só.
+>
+> Isso só se sustenta porque **esta carga não emite alerta**: o que a leitura não
+> entende, ela recusa com motivo, e a recusa é contada na conferência de
+> cobertura. É fato, não suposição, e virou teste — no dia em que a carga passar a
+> emitir alerta, o teste reprova e o resumo precisa voltar a ler a coleção.
+
+**Dois defeitos de layout, e o segundo é da família que este log vem
+registrando**
+
+- **Branco dentro do painel, outra vez.** Medido a 1920, o painel do mapa ficava
+  233px mais largo que o desenho, e branco dentro de uma caixa com borda se lê
+  como dado faltando (18/09). A coluna do mapa passou a ter medida fixa acima de
+  `xl` — o teto do desenho mais o respiro do painel —, e o excedente foi para a
+  coluna que reflui. Aí o mesmo branco reapareceu do outro lado, 464px na coluna
+  da série: **excedente estrutural resolve-se com uma coluna a mais**, e a terceira
+  coluna entrou.
+
+- **A terceira coluna existia no CSS e não valia na tela, por ordem de media
+  query.** Declarada como largura arbitrária — `min-[1800px]:` —, ela era emitida
+  **antes** de todos os degraus de fábrica, e o `xl:`, que vem depois, desfazia a
+  grade: a tela seguia com duas colunas a 1920 e nada acusava. Como degrau de
+  tema ela entrou na ordem certa, **e só depois de ir para `rem`**: em pixels, o
+  Tailwind continuava emitindo-a antes das outras, que são todas em `rem`.
+  Medido no CSS construído: a ordem passou a ser 40, 48, 64, 80, 96 e 112,5rem.
+
+  **A terceira coluna não sobreviveu ao passo 5**, quando a medição foi refeita
+  com o menu: ela não cabe em largura nenhuma de monitor real. O degrau de tema
+  saiu junto — variável que ninguém lê é armadilha (§7). **A lição sobre a ordem
+  das media queries fica**, porque ela vale para o próximo degrau que alguém
+  declarar.
+
+  > **É a lição de 18/09 pela terceira vez, e agora com nome.** Coerência interna
+  > passa em tudo — a classe existe, o valor está certo, o elemento a tem —, e o
+  > resultado é layout, que só existe com navegador fazendo layout. O que pegou
+  > foi medir a caixa renderizada, e depois ler a ordem das regras no arquivo
+  > construído.
+
+**Um deslize meu no meio do caminho, e ele custou uma medição inteira.** A rota
+temporária de medição nasceu sem a classe de colocação que a tela real tinha —
+duas substituições de texto, e uma não pegou. Medi uma árvore que não era a da
+tela, e a primeira conclusão ("a grade de três colunas não está aplicando") era
+sobre o ensaio, não sobre a tela. **É o mesmo erro de 19/09**: edição aplicada
+sem conferir se pegou. O que o achou foi ler o `className` do elemento no
+navegador em vez de confiar no arquivo.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (354 testes, 5 novos) e `next build` passam, e
+  `/transportadoras` aparece na lista de rotas. Nenhum servidor foi subido por
+  mim; usei o que já estava no ar.
+- **O layout foi medido com rota temporária**, no `.gitignore` **antes** de
+  existir e apagada no fim, desenhando a árvore real da tela com dados inventados
+  do zero. **A medição estava errada e foi refeita no passo seguinte**: a rota
+  desenhava a tela sem o menu de 232px, então toda largura de coluna saía maior
+  que a real, e a grade de colunas fixas que ela justificou fazia a página rolar
+  de lado a 1366. O que vale é a medição do passo 5, com a casca.
+- No celular o mapa **muda de forma em vez de encolher o texto**: os nomes das
+  filiais saem do desenho e a legenda declara que saíram, como nos outros mapas
+  (18/09).
+- O método do módulo foi exercitado contra o Firestore carregado, por ensaio
+  temporário apagado em seguida: os seis parâmetros saem definidos, o fator sai
+  com fonte, versão e vigência, **nenhum alerta e nenhuma exceção**, e a consulta
+  não encosta na coleção de entregas — 866ms, contra os dois segundos de quem a
+  lê. `importacao` pedindo o módulo recebe zero parâmetros e zero fontes.
+- `/transportadoras` sem sessão manda para a tela de entrada, que é o caminho da
+  autorização funcionando.
+
+**O que continua fora do alcance de teste automático:** a tela abrir com sessão
+de verdade. A rota temporária exercita a árvore de componentes, não a sessão, e
+`next build` compila sem renderizar — todas as páginas são dinâmicas (lição de
+15/09).
+
+#### 2026-09-21 — Transportadoras, passo 3: a consulta agregada
+
+A camada ganhou o quarto módulo. Nenhuma tela ainda: o que entrou foi a porta de
+autorização, o agregado por filial e por mês, e as guardas que dizem o que **não**
+sai daqui.
+
+**O que este módulo não tem, e por que é decisão e não omissão**
+
+- **Não suprime** (§3.1.3, pelo raciocínio do marítimo): uma entrega não tem
+  pessoa. Um limite por contagem esconderia filial pequena sem proteger ninguém,
+  e mediria número de entregas fingindo medir privacidade. Tem teste: recorte de
+  uma entrega só aparece pelo nome, e o agregado serializado não tem balde de
+  suprimidos.
+- **Não recorta por empresa**, e a ausência é deliberada. A origem não informa a
+  empresa do grupo por entrega (§14), então todo documento tem o campo nulo — um
+  filtro de igualdade devolveria coleção vazia e **esvaziaria o módulo em
+  silêncio** para o perfil recortado. Esse perfil é o `importacao`, que não vê
+  este módulo de qualquer forma.
+- **Não expõe o cliente.** O agregado é por filial (§9.4) e o código do cliente
+  nem é lido; há teste sobre a resposta serializada.
+
+**`importacao` não vê o módulo.** O escopo dele é o marítimo (§5), e distribuição
+às filiais é frete de saída, não importação. A `Modulo` da camada de acesso
+passou a ter quatro valores, e os dois `Record` que ela indexa — o do menu e o
+dos rótulos do consolidado — ganharam a entrada correspondente. **O item de menu
+não foi ligado**: oferecer a tela antes de o arquivo dela existir é prometer
+porta que não abre, e é o que o teste de navegação prende.
+
+**As três filiais aparecem sempre, mesmo sem entrega no período.** Elas são o
+mapa do módulo (§9.5), e filial que some num ano fraco é lida como filial
+fechada — zero é zero medido, ausência é outra coisa (§10.10). E filial que
+esteja no banco **sem estar na lista da §9.4 também aparece**, pelo próprio
+código: se sumisse, o total geral deixaria de bater com a contagem de documentos,
+que é exatamente o que a invariante do agrupamento impede. As duas pontas têm
+teste.
+
+**O ponto de cada filial sai do centroide do município, pelo código do IBGE** —
+a mesma fonte que o programa de viagens usa para desenhar (§7.4). Não há
+coordenada escrita à mão no código, e isso fecha uma porta que valia fechar: a
+coordenada da fábrica é parâmetro de ambiente (§2.1), e "o ponto da matriz" seria
+o disfarce perfeito para ela virar constante versionada.
+
+**O peso movimentado entra no agregado, e a §1 diz que peso não aparece na
+tela.** A §9.5 é mais específica e pede o número no painel da filial, como a
+§11.2 pede a distância média na mobilidade — vale a específica, e o comentário no
+tipo diz por quê. É a mesma decisão de 15/09, no módulo de mobilidade.
+
+**A única otimização do passo, e ela foi medida antes de existir**
+
+> Este módulo é **uma ordem de grandeza maior que os outros três**, e a consulta
+> lê a coleção inteira para reduzir em JavaScript, como as outras (§10.1.5). Com
+> a carga real, ler todos os campos custava treze megabytes e alguns segundos
+> por abertura de tela. A consulta passou a **projetar só os campos que o
+> agregado usa** — mesma leitura documento a documento, sem contador
+> pré-calculado e sem cache: o que muda é não arrastar o que ninguém soma.
+> Medido: menos de três megabytes e mais que o dobro da velocidade.
+>
+> A lista de campos é a **fonte do tipo** que a agregação enxerga, então usar um
+> campo que não está nela **não compila**. Sem isso, o campo esquecido chegaria
+> `undefined` e viraria `NaN` num total que ninguém confere — que é a forma
+> silenciosa do mesmo erro.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (349 testes, 9 novos) e `next build` passam. Nenhum
+  servidor foi subido.
+- O banco falso dos testes **respeita o `where`**, pela lição de 19/09: com um
+  que o ignora, "com recorte de ano" e "sem recorte" devolvem a mesma coisa e o
+  teste do filtro passa nos dois casos.
+- Um teste antigo precisou mudar e a mudança é correta: ele prendia "os três
+  módulos" que cada perfil enxerga. Virou quatro, e ganhou a recusa do
+  `importacao` no módulo novo, que é decisão desta etapa.
+- A guarda da §0.1 passou a conhecer a coleção nova: a consulta do programa não
+  pode ler `entregaRodoviaria`, como já não pode ler as outras três.
+- Exercitado contra o Firestore carregado, por ensaio temporário apagado em
+  seguida: o total do agregado, o de cada filial e a soma dos doze meses
+  reproduzem exatamente o que a carga relatou; os três perfis que podem abrir
+  recebem o mesmo número; `importacao` é recusado **antes de a coleção ser
+  tocada**; as três filiais saem com cidade e ponto; e a resposta inteira cabe em
+  um kilobyte e meio, sem código de cliente, sem distância e sem ordem.
+
+#### 2026-09-21 — Transportadoras, passo 2: o fator, e a carga rodando
+
+**As duas decisões do Gustavo, e a segunda foi a que mudou o desenho.** O limiar
+ficou no meio do vão medido entre a maior entrega doméstica e a menor
+internacional — qualquer valor ali produz o mesmo resultado hoje, e o escolhido
+é o que deixa folga para uma entrega doméstica mais longa aparecer sem ser
+rotulada de importação. O fator ficou na média de toda a frota de carga da
+tabela de caminhão da ferramenta do GHG Protocol Brasil.
+
+**A bifurcação do fator não era entre fontes, era dentro do mesmo arquivo.** A
+tabela traz uma coluna pronta em CO₂e ao lado das colunas por combustível — e
+**a ferramenta não usa a coluna pronta nos cálculos dela**, o que foi conferido
+lendo as fórmulas: ela procura as colunas de diesel fóssil e de biodiesel,
+pondera pela mistura média do ano e manda o CO₂ do biodiesel para uma coluna de
+biogênico à parte. As duas leituras do mesmo arquivo diferem em mais de dez por
+cento, e a diferença é quase exatamente esse carbono biogênico.
+
+> **O que decidiu não foi metodologia, foi consistência.** O arquivo de fatores
+> da mobilidade, que já está em produção, declara a mesma ferramenta, o mesmo
+> ano, a mesma mistura, o mesmo conjunto de GWP e — escrito na própria string de
+> fonte — que os valores são **CO₂e não biogênico**. Pegar a coluna pronta aqui
+> colocaria carbono biogênico dentro deste módulo enquanto o outro o mantém
+> fora. **Duas convenções no mesmo inventário é a que ninguém revisa que
+> sobrevive**, e a §9.2 ficou dizendo qual é a daqui.
+
+A escolha da **linha** da tabela é suposição declarada, e pesa: a média da frota
+inteira contra a linha de caminhão rígido quase dobra o total do módulo. Os três
+candidatos foram medidos contra a base e apresentados com o total de cada um
+antes de qualquer coisa ser gravada — a planilha não identifica o veículo, e
+essa é a escolha que a §9.1 obriga a declarar em vez de embutir.
+
+**O seed segue o padrão do de mobilidade: não traz valor nenhum.** Ele lê um
+arquivo que quem assina o relatório monta, valida a forma e grava com fonte,
+versão e vigência. A derivação inteira vai para o campo `fonte`, com as parcelas
+e as entradas, para a tela de método declarar de onde o número veio. O arquivo
+não é versionado, e o valor não está neste documento (§9.2).
+
+**Uma guarda nova, e ela é sobre unidade.** A mesma tabela da fonte traz o fator
+por quilômetro na coluna seguinte à do fator por tonelada-quilômetro. Trocar uma
+pela outra produziria um número centenas de vezes errado **com tudo parecendo
+funcionar**: a carga rodaria, o total fecharia com a soma das entregas e a tela
+desenharia. Então o seed recusa arquivo cuja unidade não seja por
+tonelada-quilômetro, e a recusa foi conferida contra a unidade por quilômetro.
+
+> **Ela reprovou o arquivo certo na primeira execução, e o alarme falso era
+> meu.** A normalização tirava espaço e ponto e não tirava hífen, então
+> "tonelada-quilometro" não casava com a forma que a guarda procurava. Conserto
+> de uma linha, e vale registrar pelo motivo de sempre: **guarda que dá alarme
+> falso é guarda que se aprende a ignorar** — foi por isso que o conserto foi
+> alargar a grafia aceita, e não afrouxar o que ela exige.
+
+**Um defeito meu que teria travado a carga com o fator carregado**
+
+> A carga sondava a existência do fator pedindo a vigência **numa data fixa e
+> antiga**, antes de ler o arquivo. Como o fator vale a partir do ano relatado,
+> a sondagem sempre dizia "ausente": a simulação nunca calcularia emissão e a
+> gravação pararia reclamando de um fator que estava no banco. É a família deste
+> log inteiro — **uma consulta afirmando um arranjo que o dado não tem** —, e
+> apareceu na primeira execução depois do seed, porque o relatório continuou
+> dizendo que o fator não estava carregado.
+>
+> O conserto é melhor que a sondagem: **quem descobre a ausência é a primeira
+> entrega**, na data dela. Com isso a mensagem de erro passa a dizer qual data
+> ficou sem cobertura, que é a falha de verdade — carregar um ano que o fator
+> não alcança. Na simulação a ausência é capturada e a leitura segue sem
+> emissão; na gravação ela sobe e para a carga (§10.8).
+
+**A carga rodou.** Um documento por entrega, escopo de recarga o ano, nada
+removido porque a coleção estava vazia. O `verificar` passou a fechar inteiro,
+incluindo as duas identidades de cobertura deste módulo, que antes falhavam
+justamente por a carga não ter rodado.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (340 testes, 7 novos) e `next build` passam. Nenhum
+  servidor foi subido.
+- **As guardas do seed foram conferidas uma a uma, ligando cada violação:**
+  unidade por quilômetro, unidade vazia, valor zero, valor negativo, vigência
+  fora do formato e arquivo sem a chave que a carga procura. As seis reprovam, e
+  as grafias legítimas da unidade passam. **O ensaio virou teste**, em vez de ser
+  apagado com os outros: foi ele que pegou o alarme falso do hífen, e é ele que
+  pegaria o próximo.
+- **As guardas da cobertura foram conferidas com o banco já carregado**, que é
+  onde elas têm mordida: sem o limiar no ambiente, a conferência falha dizendo
+  que há entregas no banco e nenhuma conferência possível; com o limiar mudado
+  para um valor que faria a origem aceitar as linhas internacionais, ela falha
+  com a diferença exata entre origem e banco.
+- Exercitado contra o Firestore carregado, por ensaio temporário apagado em
+  seguida: a contagem de documentos bate com a da carga, **nenhum identificador
+  colide**, a soma dos doze meses reproduz o total com diferença zero, e **a
+  emissão de cada documento é refeita a partir do próprio documento com
+  diferença zero** — distância, peso e fator carimbado bastam, que é o que a
+  §10.1 pede.
+- Conferido também o que não pode ter entrado: nenhum alerta gravado, nenhum
+  documento fora do envelope do módulo, regime de frete `indefinido` em todos,
+  nível de dado `calculado_tkm` em todos, nenhuma linha acima do limiar no banco
+  e **nenhum código de cliente com forma de nome** — os distintos foram
+  agrupados por forma, sem imprimir valor, e o mais longo tem oito caracteres.
+- As conferências dos outros três módulos continuam fechando, o que é a prova de
+  que nada fora deste módulo se mexeu.
+
+#### 2026-09-19 — A tela de Método sai, e cada tela ganha um botão de resumo
+
+Decisão do Gustavo, na etapa seguinte à Visão geral. A §14 avisava qual era o
+risco, e não era apagar a tela: era **apagar o endereço das declarações**. Uma
+escolha que muda o número e não aparece em lugar nenhum deixa o número sem
+lastro, e nada quebra — o inventário continua somando certo e para de poder ser
+conferido.
+
+**O formato veio do Gustavo, em duas rodadas, e a segunda corrigiu a primeira.**
+Eu havia oferecido rodapé por módulo, aberto ou recolhido, ou mandar parte para o
+terminal. Ele pediu outra coisa — um botão de informações por painel —, e eu
+construí assim: vinte e cinco botões, um em cada cartão e cada painel das quatro
+telas. Vendo no ar, ele pediu o formato final: **um botão fixo por tela**, sempre
+no mesmo canto, com tudo daquela tela **muito resumido**.
+
+> **A segunda versão é melhor, e o motivo é de leitura.** Vinte e cinco botões são
+> vinte e cinco coisas disputando atenção ao lado de vinte e cinco títulos, e quem
+> quer entender o número não sabe qual abrir — o sistema ganhou um enfeite por
+> painel e continuou sem um lugar onde a pergunta é respondida. **Um lugar
+> previsível responde antes de ser procurado.** A primeira versão não chegou a
+> commit; o que sobreviveu dela foram os três defeitos abaixo, que são da
+> mecânica e valem para qualquer formato.
+
+**A telinha é `popover` nativo do HTML, sem uma linha de JavaScript.** `Esc`,
+clique fora, foco e camada de cima são do navegador. É a mesma regra das
+animações (15/09): o que depende de script não pode ser o que sustenta o
+conteúdo. Num navegador sem suporte ela aparece **aberta**, porque quem esconde
+um popover fechado é a folha de estilo que vem junto do suporte — o pior caso é a
+declaração visível demais, nunca inalcançável.
+
+**O que impede a declaração de se perder, e como ele mudou entre as duas versões**
+
+Na primeira versão cada painel listava as **chaves** que mostrava, e uma guarda
+conferia que nenhuma das vinte e cinco tinha ficado órfã. Com o botão único a
+lista deixou de existir: cada tela mostra **todos os parâmetros do próprio
+módulo**, então parâmetro novo aparece sozinho e **não há lista para alguém
+esquecer de atualizar**. É o argumento da §0.1 outra vez — a falha passa de
+guardada a impossível quando não há filtro para esquecer.
+
+A chave ficou, porque é ela que identifica um parâmetro sem depender do rótulo, e
+o que resta é conferido por teste: todo parâmetro tem módulo, todo módulo tem
+tela, cada tela tem um botão e só um, e o botão fica na raiz da tela.
+
+**Três defeitos, e o primeiro derrubava a página inteira**
+
+> **A telinha é um bloco, e bloco não entra em `<p>` nem em título.** A primeira
+> versão passava o botão e o painel como filhos do `<h2>` do painel e do `<p>` do
+> cartão. O analisador de HTML fecha o parágrafo antes do bloco, o DOM deixa de
+> bater com o que o React renderizou e **a hidratação falha** — e hidratação que
+> falha não é um aviso no console: é a página inteira parando de hidratar, com
+> todo botão virando enfeite. É o sintoma de 18/09 outra vez, por outra porta.
+>
+> No formato final o botão e a telinha ficam **na raiz da tela**, fora de painel e
+> de cartão, e isso virou teste — conferido pela indentação, depois de a primeira
+> versão do próprio teste quebrar contando tags: um `>` dentro de um atributo JSX
+> encerra a tag para qualquer expressão regular honesta.
+
+- **O preflight do Tailwind matava a centralização.** O navegador posiciona um
+  popover com `inset: 0` mais `margin: auto`; o preflight zera a margem de tudo,
+  e a telinha nascia colada no canto superior esquerdo da janela — medido em
+  x=0, y=0. Uma linha de `margin: auto` devolve o comportamento.
+- **O alvo de toque era menor que o mínimo**, enquanto o botão era um círculo ao
+  lado do título: 24px no celular, contra os 44px que esta base adotou em 18/09.
+  O formato final resolveu isso por construção — o botão fixo é uma pílula de
+  150×42px, com texto, e é o contrário de pequeno demais.
+
+**O que ficou na tela e o que foi para o resumo**
+
+A divisão é de significado, não de espaço, e está escrita na §11.5:
+
+- **Ressalva que impede leitura errada fica visível.** O ângulo do radar não
+  significar nada, o ponto do mapa de Viagens não ser um aeroporto, a linha do
+  mapa marítimo não ser a derrota do navio, o que não pôde ser desenhado, a
+  proporção da cascata e as três declarações da §11.0. **Quem precisa delas é
+  justamente quem não vai clicar.**
+- **Lastro vai para o resumo.** Fonte, situação da carga, parâmetro, fator com
+  vigência, exceção com motivo e alerta com a regra que o levanta.
+
+O resumo abre em **duas colunas a partir de `sm`, por fluxo e não por grade**: os
+blocos têm alturas muito diferentes — uma fonte de duas linhas ao lado de uma
+lista de dez parâmetros —, e numa grade isso vira linha com buraco. Nenhum bloco
+se parte entre as colunas.
+
+**O enxugamento, medido, dos dois lados**
+
+A prosa que a tela mostra **sem clicar** caiu de 10.982 para 7.160 caracteres, 35%
+a menos, com todo painel em uma linha de descrição. O que sobrou é quase todo
+frase construída a partir do dado — contagem, proporção, o que não coube no
+desenho — e as ressalvas acima. **Cortar mais é cortar declaração**, e isso ficou
+escrito na §14: declaração se move de lugar, não se apaga.
+
+**E o resumo encolheu em duas rodadas, que era o pedido.** As vinte e cinco
+observações de parâmetro caíram de uma média de 236 caracteres para 84 na
+primeira, e depois **a maior parte delas deixou de existir**: sobraram sete, e o
+total de glosa foi de cerca de 5.900 caracteres para 254. O resto é rótulo e
+valor em duas colunas — "21 dias úteis", "econômica, assumida" —, que é o que o
+Gustavo pediu por "apenas o extremamente necessário".
+
+**Duas coisas saíram da tela e continuam no sistema**, e a diferença importa: a
+regra que levanta cada alerta, que agora aparece só pelo código descritivo e
+continua conferida pelo `verificar`; e o ponteiro para a conferência de cobertura
+na fonte do marítimo, cuja afirmação — agente sem detalhe por embarque não está
+no inventário — ficou. **Medido:** o resumo inteiro de uma tela cabe em cerca de
+900 caracteres, sem rolagem, em duas colunas a 1366px.
+
+> **Duas guardas reprovaram no corte, e as duas estavam certas em reprovar.**
+> Elas prendiam a **redação** de uma declaração — a palavra "administrativas"
+> numa, a frase "não inventa o embarque" na outra — e o texto encurtou. O
+> conserto foi prender o **fato**: as duas fontes pelo nome, e a afirmação de que
+> agente sem detalhe não está no inventário. Afrouxar a guarda teria sido o
+> caminho errado pelo mesmo motivo que a §14 aponta: é assim que uma declaração
+> sai da tela sem ninguém decidir que ela saía.
+
+**A consulta do método passou a ser por módulo.** Não é otimização: cada tela pede
+o método do próprio módulo, e sem o recorte abrir o marítimo leria as coleções de
+mobilidade e de viagens para jogar fora. Ler o que não se vai usar é como um
+recorte errado começa a existir. A autorização continua por cima — pedir um
+módulo que o perfil não vê devolve vazio.
+
+**Três peças morreram junto com a tela**, e vale registrar que foram procuradas em
+vez de esquecidas: o bloco de seção sem superfície, que só a Método usava; a
+largura mínima da tabela de sete colunas, que era a de fatores; e o ícone da rota,
+que deixou de ter rota. A tela de entrada mandava para `/metodo` e passou a mandar
+para a raiz. **A casca ganhou rodapé maior**, porque botão fixo que cobre a última
+linha do último painel é botão que esconde dado.
+
+> **Um deslize meu no meio do caminho, e ele é da família deste log.** Uma das
+> edições de texto foi aplicada com uma substituição **sem conferir se tinha
+> pegado**, e não pegou — a indentação do arquivo tinha mudado num passo
+> anterior. O arquivo seguiu com o texto antigo e nada acusou: typecheck passa,
+> teste passa, build passa. Apareceu ao medir a prosa e ver o número não se
+> mexer. As edições seguintes passaram a falhar alto quando o alvo não existe.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (290 testes, 5 novos) e `next build` passam, e a rota
+  `/metodo` não existe mais na lista de rotas. `verificar` fecha inteiro. Nenhum
+  servidor foi subido por mim; usei o que já estava no ar.
+- As guardas do resumo prendem o que a forma não garante: parâmetro sem módulo,
+  módulo sem tela, tela com lista de chaves em vez da lista do módulo, mais de um
+  botão por tela, e botão aninhado dentro de painel — esta última é a forma que
+  resolve o defeito de hidratação.
+- Exercitado contra o Firestore carregado, por ensaio temporário apagado em
+  seguida: cada módulo recebe **só os parâmetros dele**, nenhum pendente; nenhum
+  alerta sem motivo declarado; nenhuma descrição gravada de alerta e nenhum
+  identificador de pessoa na resposta; e **as vinte e cinco chaves do banco têm
+  tela**. O perfil `importacao` recebe o método do marítimo e, nos outros dois
+  módulos, não chega a ler coleção nenhuma.
+- O botão fixo e o popover foram exercitados no navegador, que é o único lugar
+  onde eles existem. A 1366px: pílula de 150×42 no canto, **sem cobrir a última
+  linha do último painel** com a página rolada até o fim, e o resumo abrindo
+  centrado em duas colunas. A 390px: o mesmo botão, resumo em coluna única
+  rolando por dentro, **sem a página rolar de lado**. Medido com rota temporária,
+  no `.gitignore` **antes** de existir e apagada no fim, com dados inventados do
+  zero.
+
+
 #### 2026-09-19 — Visão geral: as sete telas fechadas, e o que a consolidação cobra
 
 A última tela do sistema. Ela não tem número próprio — todo o conteúdo dela sai
 das três consultas de módulo —, e mesmo assim foi a etapa em que mais guarda
-nova precisou existir. O motivo é a §9.3: **somar taxa com evento produz número
+nova precisou existir. O motivo é a §10.3: **somar taxa com evento produz número
 errado sem nenhum sinal de erro**, e todo defeito possível aqui é silencioso —
 nenhum quebra a tela, todos só fazem o total aparecer maior ou menor.
 
@@ -1308,9 +2186,9 @@ foi construído:
 **Passo 1 — a consulta, e o defeito que já estava escrito nela**
 
 `consultarVisaoGeral` existia desde a Fase F, nunca tinha rodado, e **carregava
-dentro de si exatamente o defeito que a §10.0 avisa** — pedia a mobilidade pelo
+dentro de si exatamente o defeito que a §11.0 avisa** — pedia a mobilidade pelo
 ano civil do filtro. A mobilidade é taxa com `anoBase` próprio e `mes` nulo
-(§9.5): filtrada por ano civil, a coleção volta vazia e o painel perde um módulo
+(§10.5): filtrada por ano civil, a coleção volta vazia e o painel perde um módulo
 inteiro **sem erro nenhum**. Foi a primeira guarda a ser escrita e a primeira a
 ser conferida ligando a violação.
 
@@ -1330,10 +2208,10 @@ A consulta saiu para módulo próprio. Três decisões:
 - **Zero e ausência ficaram separados no tipo, não só na tela.** Cada módulo
   carrega quantos documentos entraram e qual recorte produziu o número; recorte
   nulo é ausência. Sem ano-base de pesquisa declarado, a mobilidade não relata
-  nada — um zero ali passaria por medição de emissão que não houve (§9.10).
+  nada — um zero ali passaria por medição de emissão que não houve (§10.10).
 
 **Duas das guardas não são teste: são invariante que estoura**, no molde do
-`conferirTotal` da §9.10. A soma dos doze meses contra o indicador, e as fatias
+`conferirTotal` da §10.10. A soma dos doze meses contra o indicador, e as fatias
 da faixa contra o total. Um documento cujo mês caia fora do ano-base sumiria do
 gráfico e continuaria no total, e a tela desenharia doze colunas somando menos
 que o número grande em cima delas — sem nada estourar.
@@ -1371,7 +2249,7 @@ faixa mora **dentro do painel do indicador**: são a mesma afirmação em duas
 formas, e separá-las em dois painéis faria procurar a relação entre dois números
 que são um.
 
-**As três declarações da §10.0 moram cada uma junto do número que qualifica**, e
+**As três declarações da §11.0 moram cada uma junto do número que qualifica**, e
 nenhuma em rodapé — rodapé é onde a ressalva morre. Ano-base da pesquisa no
 cartão da mobilidade, com etiqueta; agente único no cartão do marítimo, junto da
 frase do recorte; previsão fora do total junto do indicador, que é o total de que
@@ -1428,7 +2306,7 @@ disco, para todos os perfis.
 - `tsc --noEmit`, `npm test` (285 testes, 23 novos) e `next build` passam.
   `verificar` fecha inteiro, incluindo as dez linhas novas da coerência entre
   telas. Nenhum servidor foi subido por mim; usei o que já estava no ar.
-- **As oito guardas da §10.0.1 foram conferidas ligando a violação, uma a uma, e
+- **As oito guardas da §11.0.1 foram conferidas ligando a violação, uma a uma, e
   as duas silenciosas também contra o banco carregado** — a da mobilidade
   reprovando pelo nome do módulo, a do marítimo derrubando o `verificar` com a
   diferença impressa.
@@ -1626,7 +2504,7 @@ levantamento encontrou o módulo **meio construído e não registrado**.
 relatório, a cascata de qualidade, a carga, o cadastro de portos, a leitura da
 lista oficial de códigos de porto e o bloco de cobertura da conferência — foram
 escritos entre 16 e 18/09, ficaram fora de todo commit, **não têm entrada neste
-log** e a §13 continuava afirmando que o módulo não tinha começado. Nunca
+log** e a §14 continuava afirmando que o módulo não tinha começado. Nunca
 rodaram: as duas coleções do módulo estavam vazias.
 
 > **Código sem entrada no log é rascunho, não base.** Ele foi escrito antes de
@@ -1645,7 +2523,7 @@ sem diferença. O que não sobreviveu está nos dois defeitos abaixo e nas decis
 - **Base de data: a partida.** A §8.3 manda escolher entre a base do detalhe e a
   do resumo, e a medição mostrou que **não são duas opções**: a do resumo é
   registro aduaneiro, que existe só na aba agregada — não há coluna por linha, e
-  a §9.1 pede um documento por embarque. A escolha real é entre partida e
+  a §10.1 pede um documento por embarque. A escolha real é entre partida e
   chegada, e aí o número decidiu: **partida prevista e partida efetiva concordam
   no mês em todos os embarques que têm as duas**, enquanto a chegada mudaria de
   mês a maior parte da base e de ano uma fração dela. Fica a partida prevista,
@@ -1661,8 +2539,8 @@ sem diferença. O que não sobreviveu está nos dois defeitos abaixo e nas decis
   fórmula errada em embarque pequeno passaria por baixo.
 - **Previsão fora do total**, e aéreo **fora do indicador por contêiner e dentro
   do total do módulo**.
-- **`containerPortoMes` não é criada**, com o motivo escrito na §9.2 no molde do
-  que foi feito com `municipio`: é contador agregado, que a §9.1.5 proíbe.
+- **`containerPortoMes` não é criada**, com o motivo escrito na §10.2 no molde do
+  que foi feito com `municipio`: é contador agregado, que a §10.1.5 proíbe.
 - **A tabela de contêineres por porto da aba de resumo fica de fora** — outra base
   de data, e o total dela embute a contagem derivada dos agentes sem detalhe.
 - **O módulo não tem ano-base.** Diferente de viagens (§7.0): ele cobre uma série
@@ -2277,10 +3155,10 @@ As outras seis:
   quilômetro o que emite, indo trabalhar ou indo a cliente; um segundo arquivo com
   o mesmo número físico seria um que envelhece sem o outro.
 - **Lista de municípios:** só o arquivo gerado e versionado. A coleção `municipio`
-  da §9.2 **não** foi criada, e o documento diz por quê — duas cópias do mesmo dado
+  da §10.2 **não** foi criada, e o documento diz por quê — duas cópias do mesmo dado
   é uma que diverge da outra em silêncio.
 - **Chave do Google:** segunda chave, só para a aplicação. O código está feito; a
-  configuração no console é operação e está na §13.
+  configuração no console é operação e está na §14.
 
 **Ocupantes: a decisão foi gravar o veículo, e ela precisou de uma segunda metade.**
 Eu havia recomendado gravar a cota da pessoa; o Gustavo escolheu gravar a emissão do
@@ -2303,7 +3181,7 @@ documento guarda o que distância e fator reproduzem; a divisão é da atribuiç
   viagem que passe por ele. Ordenado, não normalizado — ida e volta podem diferir, e
   fingir que não diferem seria inventar simetria.
 - `registrarViagem` na camada de consulta, com o cálculo aéreo e o rodoviário. A
-  regravação usa o mesmo mecanismo da carga (§9.9), com escopo **esta viagem desta
+  regravação usa o mesmo mecanismo da carga (§10.9), com escopo **esta viagem desta
   pessoa** — é também o que impede editar submissão alheia, porque o uid entra no
   filtro e no identificador.
 - `limitesDeFaixa` saiu de dentro da carga do cartão para `src/server/fatores.ts`.
@@ -2486,7 +3364,7 @@ título de painel na tela.
 duas:
 
 - **Pessoa não soma entre corredores.** Quem voou por dois conta uma vez no
-  total da região — somar as linhas contaria duas, que é o erro que a §9.10
+  total da região — somar as linhas contaria duas, que é o erro que a §10.10
   impede na agregação. Por isso a contagem sai da camada, não de uma soma feita
   na tela.
 - **Trecho entre duas regiões conta nas duas.** É o deslocamento que tocou
@@ -2600,7 +3478,7 @@ foram e entre que datas; **nunca quem**. O período vai da primeira à última
 viagem do recorte, em vez de uma data só: num grupo de várias viagens, data única
 não diz qual delas é. Recorte de uma viagem só devolve naturalmente uma data.
 
-A formatação do período fatia a string, sem passar por `Date`: a §9.1 guarda data
+A formatação do período fatia a string, sem passar por `Date`: a §10.1 guarda data
 como texto justamente para não repetir os bugs de fuso, e converter só para
 formatar os traria de volta pela janela — em São Paulo, o dia primeiro vira o
 último do mês anterior. O teste prende o dia exato, que é onde esse erro
@@ -2616,7 +3494,7 @@ nada do quadro principal.
   existe quando o conjunto brasileiro ocupa menos que uma fração da moldura e tem
   mais de uma região. Num recorte só doméstico a moldura **é** o doméstico, e o
   inserto seria o mesmo desenho repetido do lado.
-- **O que é "doméstico" sai da classificação que o cadastro já grava** (§10.3),
+- **O que é "doméstico" sai da classificação que o cadastro já grava** (§11.3),
   não de uma lista nova escrita na tela.
 - Continuam valendo o corredor por região, o ponto no centroide dos aeroportos
   que a empresa de fato usa, o anel para corredor dentro da mesma região e o
@@ -2690,7 +3568,7 @@ plausível carregaria o período errado sem nenhum erro aparecer.
 
 **O escopo de recarga passou a ser fonte E ano.** Sem o ano ali, carregar um período
 apagaria o anterior inteiro — a recarga remove do escopo tudo que não está na carga nova
-(§9.9) —, e um inventário que só guarda um ano de cada vez não é um inventário. Com o ano
+(§10.9) —, e um inventário que só guarda um ano de cada vez não é um inventário. Com o ano
 no escopo, os períodos convivem.
 
 **E convivendo, precisavam de uma trava.** A conferência falha se houver trecho de ano
@@ -2729,7 +3607,7 @@ não há o que escolher.
 
 #### 2026-09-16 — Acabamento da tela de Viagens
 
-Os três defeitos que a §13 listava em aberto. Nenhum era o que parecia, e o
+Os três defeitos que a §14 listava em aberto. Nenhum era o que parecia, e o
 levantamento veio antes de qualquer linha.
 
 **Os cartões zerados não eram da consulta.** A suspeita era que os indicadores
@@ -2739,7 +3617,7 @@ com o total dos cartões em cada um. Era o contador congelado, corrigido na
 entrada anterior.
 
 **O terceiro cartão virou "trechos por viagem".** Ele duplicava o segundo em
-outra unidade. A §10.3 nunca pediu três indicadores — três colunas vieram do
+outra unidade. A §11.3 nunca pediu três indicadores — três colunas vieram do
 protótipo e puxaram conteúdo. O substituto foi escolhido por ser o que **denuncia
 um defeito de dado conhecido**: a planilha do cartão separa viagem por linha em
 branco, e viagem partida em mais de um bloco vira mais de uma viagem, inflando a
@@ -2843,7 +3721,7 @@ inventário, e vinha nulo em todo documento gravado — nenhum documento de
 porque é recarregar o arquivo que precisa sobrescrever; aqui não há arquivo, e a
 origem é quem registrou.
 
-**O envelope da §9.4 foi partido em dois.** O núcleo — modal, escopo, período,
+**O envelope da §10.4 foi partido em dois.** O núcleo — modal, escopo, período,
 fator carimbado, alertas — é comum, porque o cálculo do programa reaproveita os
 mesmos fatores. `modulo`, `periodicidade` e `empresa` ficaram no envelope do
 inventário, que é onde fazem sentido. É a §7.5 no esquema: compartilha-se a
@@ -2899,7 +3777,7 @@ acidental: existia só para sustentar uma junção que não devia acontecer.
 
 A §0.1 passou a abrir o documento, porque é a regra da qual as outras dependem. O §7 foi
 reescrito com duas fontes administrativas e sem corte. O formulário virou §7.5 e está
-declarado como sistema separado. O §10 diz qual tela lê qual coleção.
+declarado como sistema separado. O §11 diz qual tela lê qual coleção.
 
 
 #### 2026-09-14 — Fundação e carga de viagens
@@ -2916,7 +3794,7 @@ Etapa de fundação e dados. Nenhuma tela construída.
 
 **Banco**
 
-- Schema Drizzle com as tabelas da §9 e as migrations `0000_inicial` e
+- Schema Drizzle com as tabelas da §10 e as migrations `0000_inicial` e
   `0001_views`. Geradas, não aplicadas.
 - `0001_views` cria as views de viagens (mensal, destino, rota, resumo, alertas)
   e a de fatores vigentes para a tela de método. Todas agregadas, todas sem
@@ -2949,7 +3827,7 @@ Etapa de fundação e dados. Nenhuma tela construída.
   independente a partir dele e aceita um `conferencia.local.json` na raiz para
   valores vindos de outra fonte. O nome já cai na regra `conferencia*` do
   `.gitignore`.
-- **Duas colunas técnicas fora da §9.** `funcionario.chave_origem` e
+- **Duas colunas técnicas fora da §10.** `funcionario.chave_origem` e
   `viagem.ref_origem` guardam o identificador da pessoa e da reserva no arquivo
   de origem. Sem elas a carga não é idempotente: reprocessar duplicaria
   funcionário e viagem. Nenhuma das duas vai para o cliente.
@@ -3013,8 +3891,8 @@ Etapa de fundação e dados. Nenhuma tela construída.
 
 **Banco**
 
-- `0002_mobilidade_alerta` cria a tabela de alertas do módulo. A §9 não a
-  previu, mas a §6.2 manda sinalizar erro de entrada e a §10.5 manda mostrar —
+- `0002_mobilidade_alerta` cria a tabela de alertas do módulo. A §10 não a
+  previu, mas a §6.2 manda sinalizar erro de entrada e a §11.5 manda mostrar —
   sem ela o alerta não teria onde morar.
 - `0003_views_mobilidade` cria as views do módulo e a função
   `fgv_supressao_minima()`. A supressão de grupos pequenos acontece dentro do
@@ -3036,7 +3914,7 @@ Etapa de fundação e dados. Nenhuma tela construída.
   escolha muda o número do inventário e precisa ser declarada. O provedor de
   rota é o mesmo já previsto para viagens.
 - **A data de referência do fator é a virada do ano-base.** A data da resposta
-  não é coluna da §9, então usá-la deixaria o cálculo impossível de reproduzir
+  não é coluna da §10, então usá-la deixaria o cálculo impossível de reproduzir
   depois — o `verificar` não teria como chegar ao mesmo número.
 - **Exceções.** Entram como exceção, fora da média e listadas no método:
   distância acima de um limite configurável, CEP que não geocodificou, modal não
@@ -3102,13 +3980,13 @@ estão: são registro do que foi feito, não especificação vigente. A especifi
   verificação é o filtro por uid na consulta.
 - §7.5: formulário do colaborador reduzido ao mínimo que calcula emissão. Saiu o
   campo de motivo; ficam os três campos do carro, que entram na conta.
-- §9: reescrita inteira. Coleções, envelope comum, IDs determinísticos, alertas em
+- §10: reescrita inteira. Coleções, envelope comum, IDs determinísticos, alertas em
   dois campos, validação na escrita e camada única de consulta agregada.
-- §10.1: os quatro cortes do painel — período, modal, rota/destino e empresa.
-- §11: segurança reescrita para Firebase, com rules negando tudo por padrão.
-- §12: entram como fora de escopo qualquer campo financeiro, centro de custo,
+- §11.1: os quatro cortes do painel — período, modal, rota/destino e empresa.
+- §12: segurança reescrita para Firebase, com rules negando tudo por padrão.
+- §13: entram como fora de escopo qualquer campo financeiro, centro de custo,
   Storage, contador agregado e fluxo de aprovação do registro de viagem.
-- §13 nova, "Pontos em aberto". O log virou §14 e o ponteiro da §0 foi corrigido —
+- §14 nova, "Pontos em aberto". O log virou §15 e o ponteiro da §0 foi corrigido —
   ele apontava para a seção errada desde o início.
 
 **Decisões de modelagem que entraram**
@@ -3133,7 +4011,7 @@ estão: são registro do que foi feito, não especificação vigente. A especifi
   formam fatia própria e o total bate com a contagem de documentos da coleção.
   Registro que some de agregação é erro que só aparece em auditoria.
 
-**Decisões minhas, tomadas ao escrever a seção 9**
+**Decisões minhas, tomadas ao escrever a seção 10**
 
 - **Três coleções de emissão, não uma.** Mobilidade é taxa mensal; viagem e
   embarque são eventos. Somar os dois num mesmo total dá número errado sem
@@ -3145,7 +4023,7 @@ estão: são registro do que foi feito, não especificação vigente. A especifi
 - **`mes` é nulo na mobilidade.** A pesquisa é anual e o valor vale para todo mês
   do ano-base; na série mensal o mesmo valor se repete, e isso é declarado no
   método.
-- **O que o banco garantia vira validação na escrita**, listada na §9.9: escopo,
+- **O que o banco garantia vira validação na escrita**, listada na §10.9: escopo,
   coerência entre propriedade do veículo e escopo, ocupantes, passageiros,
   distância não negativa, vigência coerente e formato de data. Sem isso no
   código, essas regras deixam de existir.
@@ -3163,8 +4041,8 @@ estão: são registro do que foi feito, não especificação vigente. A especifi
   incluindo a leitura de planilha, a normalização de lugar, a deduplicação e a
   cascata de geocodificação.
 - Perda real: as garantias que o banco dava de graça. Estão convertidas em
-  validação de escrita, ID determinístico e camada única de consulta — §9.9 e
-  §9.10.
+  validação de escrita, ID determinístico e camada única de consulta — §10.9 e
+  §10.10.
 
 **Critério de aceite da migração de código:** o `verificar` precisa fechar no
 mesmo valor de conferência que fechou no modelo relacional.
@@ -3196,7 +4074,7 @@ mesmo valor de conferência que fechou no modelo relacional.
 
 - **`ignoreUndefinedProperties` fica desligado**, que é o padrão. Campo ausente
   precisa ser gravado como `null` explícito: é o que mantém "sem empresa" como
-  categoria visível na agregação (§9.10) em vez de o campo simplesmente não
+  categoria visível na agregação (§10.10) em vez de o campo simplesmente não
   existir no documento.
 - **A configuração pública do SDK web é `NEXT_PUBLIC_`.** Ela não é credencial,
   mas carrega o id do projeto, que a §2.1 trata como identificador de
@@ -3227,13 +4105,13 @@ mesmo valor de conferência que fechou no modelo relacional.
 **Entrou**
 
 - `src/server/documentos/tipos.ts` — formato dos documentos das três coleções de
-  emissão e das de apoio, com o envelope comum da §9.4. `montarAlertas()` monta
+  emissão e das de apoio, com o envelope comum da §10.4. `montarAlertas()` monta
   os dois campos de alerta de uma vez, porque mantê-los em sincronia à mão é o
   tipo de coisa que só aparece quando a consulta por código devolve menos do que
   deveria.
 - `src/server/documentos/ids.ts` — IDs determinísticos por coleção, com limpeza
   do que o Firestore recusa no identificador.
-- `src/server/documentos/validacao.ts` — a §9.9 inteira, em código.
+- `src/server/documentos/validacao.ts` — a §10.9 inteira, em código.
 - `src/server/escrita.ts` — gravação em lote, apagamento por escopo e recarga de
   período.
 - `src/server/documentos/validacao.test.ts` e `npm test` — 19 testes, sem
@@ -3241,7 +4119,7 @@ mesmo valor de conferência que fechou no modelo relacional.
 
 **Decisões da fase**
 
-- **A recarga grava antes de apagar, e a §9.9 foi corrigida para dizer isso.** O
+- **A recarga grava antes de apagar, e a §10.9 foi corrigida para dizer isso.** O
   texto anterior mandava apagar primeiro, que é o que o modelo relacional fazia
   dentro de uma transação. Sem transação do tamanho da carga, apagar primeiro
   abre uma janela com o período vazio, e uma falha no meio da escrita deixa o
@@ -3255,7 +4133,7 @@ mesmo valor de conferência que fechou no modelo relacional.
   sem nenhum erro.
 - **`undefined` é recusado em qualquer profundidade.** O Admin SDK também
   recusaria, mas sem dizer qual campo; e campo ausente precisa ser `null`
-  explícito para continuar visível na agregação (§9.10).
+  explícito para continuar visível na agregação (§10.10).
 - **Fator nulo só passa com emissão zero**, e vice-versa. É o que separa
   "modal que não emite por definição" de "fator que alguém esqueceu de aplicar".
 - **Ano e mês são conferidos contra a data de referência do próprio documento.**
@@ -3275,7 +4153,7 @@ mesmo valor de conferência que fechou no modelo relacional.
 **Validação**
 
 - `tsc --noEmit`, `npm test` (19 testes) e `next build` passam.
-- Os testes exercitam cada regra da §9.9 pelos dois lados: documento válido
+- Os testes exercitam cada regra da §10.9 pelos dois lados: documento válido
   passa, documento inválido é recusado. A recusa exige o erro específico da
   validação, para que um erro acidental do próprio teste não conte como
   aprovação.
@@ -3307,7 +4185,7 @@ mesmo valor de conferência que fechou no modelo relacional.
 - **O multiplicador de classe ganhou campo próprio no trecho.** O cálculo aéreo
   tem dois termos, e o envelope carimba um só. Com o fator por faixa em `fator`
   e a cabine com o multiplicador ao lado, a emissão do trecho volta a ser
-  reproduzível a partir do próprio documento. A §9.6 foi atualizada.
+  reproduzível a partir do próprio documento. A §10.6 foi atualizada.
 - **Três conferências novas**, que substituem o que o banco garantia: trecho sem
   fator carimbado, ordem repetida dentro da mesma reserva e mês diferente do mês
   da data do voo. Na mobilidade entrou também a comparação entre o fator
@@ -3414,12 +4292,12 @@ fatores da mobilidade e a execução das cargas.
   com rótulo em vez de sumirem.
 - **O total bate com a contagem de documentos.** A soma dos grupos é conferida
   contra o que entrou e **estoura erro** se divergir. Era a regra escrita na
-  §9.10; virou invariante executável.
+  §10.10; virou invariante executável.
 
 **Decisões da fase**
 
 - **A mobilidade não entra na série mensal da visão geral.** Ela é taxa mensal
-  do ano-base (§9.3); somada à série de eventos, apareceria como se tivesse
+  do ano-base (§10.3); somada à série de eventos, apareceria como se tivesse
   acontecido doze vezes num mês qualquer. Entra no total anual, com a conversão
   explícita, e a resposta da consulta carrega a observação para a tela declarar.
 - **O identificador de pessoa é lido e morre na camada.** Ele serve para contar
@@ -3510,7 +4388,7 @@ construção; e exceção fica fora da média por desenho, o que impede o regist
 puxar o indicador para baixo como se fosse emissão zero legítima.
 
 **A política ficou assimétrica entre os módulos, de propósito**, e está escrita
-na §9.8: na mobilidade a ausência é erro de uma linha; nas viagens o fator vem do
+na §10.8: na mobilidade a ausência é erro de uma linha; nas viagens o fator vem do
 próprio arquivo da base, então ausência é sinal de seed não rodado ou base
 inconsistente, e continuar subestimaria o inventário em silêncio.
 
@@ -3607,7 +4485,7 @@ arquivo. Tudo isso continua verdadeiro com uma distância errada. Faltava uma
 conferência de **plausibilidade** — a pergunta não é "a conta fecha?", é "o
 insumo faz sentido?".
 
-**O que isso invalida:** a distância média do módulo, o radar da §10.2 (que
+**O que isso invalida:** a distância média do módulo, o radar da §11.2 (que
 desenharia quase todos os pontos no mesmo raio) e a emissão por pessoa, que fica
 idêntica dentro de cada modal. O total do módulo é igualmente sem sentido.
 
@@ -3681,9 +4559,9 @@ Sem código. Quatro pontos fechados no documento:
   decidir, junto do anúncio do programa aos colaboradores.
 - **§7.4: provedor de rota decidido — Google.** Junto com a geocodificação, pelo motivo já
   registrado no log de 15/09. A decisão que estava pendente no texto foi fechada.
-- **§10: a tela de Método ganhou lista mínima** do que precisa declarar. A troca de
+- **§11: a tela de Método ganhou lista mínima** do que precisa declarar. A troca de
   provedor muda o número e não podia continuar existindo só no log.
-- **§11: duas regras novas de credencial** — exposição sem commit ainda exige rotação, e
+- **§12: duas regras novas de credencial** — exposição sem commit ainda exige rotação, e
   chave de provedor pago é restrita por API e por IP ou compensada com teto de faturamento.
 
 #### 2026-09-15 — Troca de provedor e mobilidade válida pela primeira vez
@@ -3764,7 +4642,7 @@ tipo de coisa que sobrevive mais do que devia.
 
 A proposta era fazer a visão geral não quebrar para esse perfil. **Foi recusada, e com
 razão:** uma visão geral que soma um módulo e chama de total é exatamente o erro que a
-§9.10 existe para impedir — total que não bate com o que existe, sem nenhum sinal.
+§10.10 existe para impedir — total que não bate com o que existe, sem nenhum sinal.
 
 A correção certa é de autorização, não de tolerância: `importacao` não recebe a visão
 geral. A `acesso.ts` passou a ter três portas distintas — inventário, módulo e visão
@@ -3774,7 +4652,7 @@ geral —, a navegação não oferece a tela e a consulta recusa quem chegar pel
 **Tela de Método**
 
 - `src/server/consultas/metodo.ts` — o que existia devolvia só a lista de fatores, um
-  sétimo do que a §10 passou a exigir. Agora declara fontes, parâmetros, qualidade do
+  sétimo do que a §11 passou a exigir. Agora declara fontes, parâmetros, qualidade do
   dado, exceções com motivo, alertas por tipo e fatores com vigência, **tudo recortado
   pelo que o perfil pode ver**: para `importacao` a coleção de mobilidade nem chega a ser
   lida, não é filtro depois da leitura.
@@ -3817,7 +4695,7 @@ assinado pelo próprio Firebase. Segredo sem uso é credencial a mais para admin
   consulta exige, e depender da camada que depende dela seria circular. Ela lê o perfil de
   quem está pedindo, e nada mais.
 - **A navegação é derivada do papel, e é promessa, não controle.** O controle está na
-  consulta (§11.3). O menu apenas não oferece o que a consulta vai recusar: menu que
+  consulta (§12.3). O menu apenas não oferece o que a consulta vai recusar: menu que
   mostra porta fechada ensina que existe porta. Tela ainda não construída aparece apagada,
   para o mapa do sistema ficar visível sem prometer link que não abre.
 - **A raiz manda cada perfil para a primeira tela que ele pode abrir.** Mandar alguém
@@ -3853,17 +4731,17 @@ valor de exemplo antigo, o certo é esvaziar a variável: a tela então diz "nã
 que é o estado verdadeiro.
 
 Feito em seguida, a pedido: a variável foi esvaziada no `.env` e a tela passou a declarar
-a data como não definida. A §13 também foi corrigida — ela ainda dizia que nenhuma tela
+a data como não definida. A §14 também foi corrigida — ela ainda dizia que nenhuma tela
 tinha sido construída, o que deixou de ser verdade nesta etapa.
 
 #### 2026-09-15 — Sessão endurecida e tela de Mobilidade
 
 **Quatro perguntas do Gustavo sobre a sessão.** Duas já estavam resolvidas, duas não.
-As quatro respostas viraram §11.9 a §11.12 — eram regra de segurança que só existia no
+As quatro respostas viraram §12.9 a §12.12 — eram regra de segurança que só existia no
 código, e regra que só existe no código é regra que some na próxima refatoração.
 
 - **Atributos do cookie: já estava.** `httpOnly`, `secure` em produção, `sameSite: lax`
-  e `path` na raiz. O `lax` é o que fecha o CSRF do caminho de escrita que a §10.6 vai
+  e `path` na raiz. O `lax` é o que fecha o CSRF do caminho de escrita que a §11.6 vai
   ter, e o `secure` fica desligado em desenvolvimento porque o navegador recusaria um
   cookie `secure` em http e ninguém conseguiria entrar.
 - **Validade: estava em cinco dias, virou doze horas.** O teto do Firebase é quatorze
@@ -3886,7 +4764,7 @@ código, e regra que só existe no código é regra que some na próxima refator
   tiver o perfil apagado no meio da navegação, em vez de devolver erro de servidor:
   quem precisa pedir liberação tem que entender o que houve.
 
-**Fatia 2 — tela de Mobilidade (§10.2)**
+**Fatia 2 — tela de Mobilidade (§11.2)**
 
 Segunda tela. A camada de consulta já entregava tudo; nenhuma linha dela precisou mudar.
 
@@ -3906,11 +4784,11 @@ Segunda tela. A camada de consulta já entregava tudo; nenhuma linha dela precis
 
 **Conflito encontrado na especificação, e como foi resolvido**
 
-A §1 diz que distância é insumo de cálculo e **não aparece na interface**. A §10.2 lista
+A §1 diz que distância é insumo de cálculo e **não aparece na interface**. A §11.2 lista
 "distância média" e "radar de onde o quadro mora" como conteúdo da tela de Mobilidade — e
 o radar é, por construção, distância desenhada.
 
-Segui a §10.2, por ser a mais específica: a regra da §1 mira as métricas de frete — peso,
+Segui a §11.2, por ser a mais específica: a regra da §1 mira as métricas de frete — peso,
 volume, tonelada-quilômetro, intensidade por quilo —, que são o insumo que não pode ser
 confundido com o resultado. **A decisão é do Gustavo**, e se ele quiser a §1 valendo
 também aqui, sai um indicador e o radar precisa de outro desenho.
@@ -4040,11 +4918,11 @@ encontrados, e nenhum foi seguido:
 - **Campo de motivo da viagem no formulário.** A §7.5 pede o mínimo que calcula emissão e
   diz explicitamente para não pedir justificativa; o campo já havia sido retirado na
   migração.
-- **Métricas fora da lista da §10.** O protótipo tem cartões de "viagem mais longa" e
-  "corredor mais pesado", que são registros extremos: além de não estarem na §10.3 nem na
-  §10.4, um extremo isolado é um recorte de uma viagem só, contra a §3.1.
-- **Equivalência em árvores** no indicador principal. Não é corte previsto na §10.1 e
-  dependeria de um fator de conversão sem fonte na coleção de fatores — a §9.8 não admite
+- **Métricas fora da lista da §11.** O protótipo tem cartões de "viagem mais longa" e
+  "corredor mais pesado", que são registros extremos: além de não estarem na §11.3 nem na
+  §11.4, um extremo isolado é um recorte de uma viagem só, contra a §3.1.
+- **Equivalência em árvores** no indicador principal. Não é corte previsto na §11.1 e
+  dependeria de um fator de conversão sem fonte na coleção de fatores — a §10.8 não admite
   fator embutido no código.
 - **Alternância "Todos / Só as minhas"** na tela do programa. Em tela que mostra nome de
   viajante, "todos" só existe para `admin` e `sustentabilidade`; `gestor` não vê nome nem
@@ -4078,7 +4956,7 @@ grades nomeadas, classes de tabela, seletor de período e cabeçalho. A abstraç
 inventada: ela já estava escrita no protótipo, que define um sistema e não decoração por
 tela.
 
-**3. As três telas reaplicadas.** Método manteve o conteúdo, que é o da §10 e não o do
+**3. As três telas reaplicadas.** Método manteve o conteúdo, que é o da §11 e não o do
 protótipo — este é anterior à lista mínima que a especificação passou a exigir.
 
 **4. Gráfico de barras vertical.** Onde o protótipo usa barra, a lista horizontal deu
@@ -4440,7 +5318,7 @@ fato tivesse dois viajantes silenciaria o segundo, e o alerta é o que torna iss
 
 **Limpeza.** Os registros de pessoa criados pela carga anterior desta fonte são varridos
 **depois** da gravação, e só sai o que nenhum trecho aponta — mesma ordem da recarga, pelo
-mesmo motivo (§9.9). Os três criados antes foram removidos.
+mesmo motivo (§10.9). Os três criados antes foram removidos.
 
 **Uma conferência antiga quebrou, e quebrar foi o certo**
 

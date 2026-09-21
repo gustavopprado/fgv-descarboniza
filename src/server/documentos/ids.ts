@@ -85,6 +85,27 @@ export function idViagemRegistrada(
   return montar(criadoPorUid, reservaId, ordem)
 }
 
+/**
+ * Uma entrega do relatório de distribuição rodoviária.
+ *
+ * **A planilha não traz identificador de entrega**, então a identidade é
+ * filial + data + a ordem da linha dentro desse par (§10.11). Duas entregas para
+ * o mesmo cliente no mesmo dia pela mesma filial existem de verdade, e por isso o
+ * cliente não serve de chave: ele juntaria as duas num documento só.
+ *
+ * O preço está declarado no documento: reexportar o relatório com as linhas de um
+ * mesmo dia em outra ordem troca qual entrega tem qual identificador. O conjunto
+ * do dia continua o mesmo, a recarga continua sobrescrevendo, e o total não se
+ * mexe — é a consequência aceita de uma origem sem identificador.
+ */
+export function idEntregaRodoviaria(
+  filial: string,
+  data: string,
+  ordem: number,
+): string {
+  return montar(filial, data, ordem)
+}
+
 export function idEmbarque(agente: string, shipmentId: string): string {
   return montar(agente, shipmentId)
 }

@@ -8,10 +8,12 @@
  * Nada aqui identifica ninguém (§3.1): os recortes por bairro e cidade já vêm
  * com supressão de grupo pequeno, e o radar recebe só distâncias.
  */
+import { CATEGORIA_MOBILIDADE } from '@/lib/calculo/mobilidade'
 import { opcional } from '@/lib/env'
-import { inteiro, plural } from '@/lib/formato'
+import { plural } from '@/lib/formato'
 import { AcessoNegadoError } from '@/server/consultas/acesso'
 import { consultarMobilidade } from '@/server/consultas/inventario'
+import { consultarMetodo } from '@/server/consultas/metodo'
 import { exigirSessao } from '@/server/sessao'
 import { Casca } from '../casca'
 import {
@@ -25,6 +27,14 @@ import {
   Vazio,
 } from '../componentes'
 import { GraficoDeBarras } from '../grafico-de-barras'
+import {
+  Bloco,
+  Fatores,
+  Parametros,
+  Procedencia,
+  Sinalizacoes,
+  SobreATela,
+} from '../informacoes'
 import { Radar } from './radar'
 
 export const dynamic = 'force-dynamic'
@@ -98,8 +108,12 @@ export default async function Page({
   }
 
   let dados
+  let metodo
   try {
-    dados = await consultarMobilidade(ctx, { anoBase })
+    ;[dados, metodo] = await Promise.all([
+      consultarMobilidade(ctx, { anoBase }),
+      consultarMetodo(ctx, { anoBase, modulo: 'mobilidade' }),
+    ])
   } catch (erro) {
     if (erro instanceof AcessoNegadoError) {
       return (
@@ -111,13 +125,11 @@ export default async function Page({
     throw erro
   }
 
-  const excecoes = dados.excecoes.reduce((s, e) => s + e.respostas, 0)
-
   return (
     <Casca ctx={ctx} atual="/mobilidade">
       <Cabecalho
         titulo="Mobilidade casa-trabalho"
-        descricao={`Emissão do deslocamento diário entre a residência e a fábrica, a partir da pesquisa de mobilidade do ano-base ${dados.anoBase}. A pesquisa é anual: o valor é uma taxa mensal, e é a mesma em todos os meses do ano.`}
+        descricao={`Deslocamento diário entre a residência e a fábrica, pela pesquisa de ${dados.anoBase}. O valor é uma taxa mensal.`}
       />
 
       {dados.respondentes === 0 ? (
@@ -130,20 +142,20 @@ export default async function Page({
                 rotulo="Por funcionário, por mês"
                 valor={dados.co2KgMesPorFuncionario}
                 unidade="kg CO₂"
-                nota={`Média de ${plural(dados.respondentes, 'resposta', 'respostas')}, com ${inteiro(dados.diasUteisMes)} dias úteis no mês.`}
+                nota={`Média de ${plural(dados.respondentes, 'resposta', 'respostas')}.`}
               />
               <Cartao
                 rotulo="Total no ano"
                 valor={dados.co2ToneladasAno}
                 casas={2}
                 unidade="t CO₂e"
-                nota="A taxa mensal do quadro, repetida nos doze meses do ano-base."
+                nota="A taxa mensal, repetida nos doze meses."
               />
               <Cartao
                 rotulo="Distância média"
                 valor={dados.distanciaKmMedia}
                 unidade="km"
-                nota="Deslocamento só de ida; cada dia útil conta ida e volta."
+                nota="Só de ida; cada dia útil conta ida e volta."
               />
             </Grade>
           </Revelar>
@@ -152,7 +164,7 @@ export default async function Page({
             <Revelar ordem={1} className={LUGAR.radar}>
               <Painel
                 titulo="Onde o quadro mora"
-                descricao="Cada ponto é uma pessoa, posicionada pela distância até a fábrica."
+                descricao="Cada ponto é uma pessoa, pela distância até a fábrica."
               >
                 <Radar distanciasKm={dados.radarDistanciasKm} />
               </Painel>
@@ -173,47 +185,44 @@ export default async function Page({
                   largura={340}
                   altura={280}
                 />
-                <Nota>
-                  Bicicleta e deslocamento a pé não emitem. O ônibus usa fator por
-                  passageiro-quilômetro, e por isso emite bem menos por pessoa que o
-                  transporte individual.
-                  {dados.porModal.some((g) => g.agrupadoPorSupressao) && (
-                    <>
-                      {' '}
-                      A barra mais clara reúne os modais com poucas pessoas, que não
-                      podem aparecer separados sem identificar quem respondeu.
-                    </>
-                  )}
-                </Nota>
+                {dados.porModal.some((g) => g.agrupadoPorSupressao) && (
+                  <Nota>
+                    A barra mais clara reúne modais com poucas pessoas, que não podem
+                    aparecer separados sem identificar quem respondeu.
+                  </Nota>
+                )}
               </Painel>
             </Revelar>
 
             <Revelar ordem={3} className={LUGAR.cidade}>
-              <Painel titulo="Por cidade">
+              <Painel
+                titulo="Por cidade"
+              >
                 <ListaDeGrupos grupos={dados.porCidade} />
               </Painel>
             </Revelar>
 
             <Revelar ordem={4} className={LUGAR.bairro}>
-              <Painel titulo="Por bairro">
+              <Painel
+                titulo="Por bairro"
+              >
                 <ListaDeGrupos grupos={dados.porBairro} />
               </Painel>
             </Revelar>
           </div>
-
-          <p className="mt-6 max-w-[80ch] text-[12px] text-[var(--color-apoio)]/85">
-            Recorte com poucas pessoas é agrupado em &ldquo;outros&rdquo;: um bairro
-            com um respondente identificaria esse respondente mesmo sem o nome dele.
-            {excecoes > 0 && (
-              <>
-                {' '}
-                {plural(excecoes, 'resposta está', 'respostas estão')} fora da média
-                como exceção, com o motivo listado na tela de Método.
-              </>
-            )}
-          </p>
         </>
       )}
+
+      <SobreATela titulo="Mobilidade casa-trabalho">
+        <Procedencia metodo={metodo} modulo="mobilidade" />
+        <Bloco titulo="Como o número é calculado">
+          <Parametros parametros={metodo.parametros} />
+        </Bloco>
+        <Bloco titulo="Fatores">
+          <Fatores fatores={metodo.fatores} categorias={[CATEGORIA_MOBILIDADE]} />
+        </Bloco>
+        <Sinalizacoes metodo={metodo} modulo="mobilidade" />
+      </SobreATela>
     </Casca>
   )
 }

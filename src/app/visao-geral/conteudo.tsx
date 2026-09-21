@@ -22,6 +22,7 @@ import {
   Vazio,
 } from '../componentes'
 import { Contador } from '../contador'
+import { Bloco, Itens, SobreATela } from '../informacoes'
 import { FaixaDosModulos } from './faixa'
 import { SerieEmpilhada } from './serie-empilhada'
 
@@ -62,18 +63,19 @@ export function ConteudoDaVisaoGeral({ dados }: { dados: VisaoGeral }) {
   const mobilidade = dados.porModulo.find((m) => m.modulo === 'mobilidade')!
   const viagens = dados.porModulo.find((m) => m.modulo === 'viagens')!
   const maritimo = dados.porModulo.find((m) => m.modulo === 'maritimo')!
+  const transportadoras = dados.porModulo.find((m) => m.modulo === 'transportadoras')!
   const vazio = dados.porModulo.every((m) => m.documentos === 0)
 
   return (
     <>
       <Cabecalho
         titulo={`Inventário de emissões de ${dados.ano}`}
-        descricao="Mobilidade casa-trabalho, viagens corporativas e transporte marítimo de importações, somados no ano-base do inventário. Os cortes por período, modal, rota e empresa ficam nas telas de cada módulo."
+        descricao="Mobilidade casa-trabalho, viagens corporativas, transporte marítimo e distribuição rodoviária, somados no ano-base."
       />
 
       {vazio ? (
         <Vazio>
-          Nenhum dos três módulos tem documento carregado para {dados.ano}. Isto é
+          Nenhum dos quatro módulos tem documento carregado para {dados.ano}. Isto é
           ausência de carga, não emissão zero: um inventário sem dado nenhum não é
           um inventário que mediu zero.
         </Vazio>
@@ -94,12 +96,11 @@ export function ConteudoDaVisaoGeral({ dados }: { dados: VisaoGeral }) {
               <FaixaDosModulos modulos={dados.porModulo} />
 
               <Nota>
-                Soma dos três módulos, cada um pelo recorte declarado no cartão
-                dele. Embarque previsto fica de fora:{' '}
+                Soma dos quatro módulos, cada um pelo recorte do cartão dele. Embarque
+                previsto fica de fora
                 {dados.maritimo.previsoes.embarques === 0
-                  ? 'não há nenhum neste recorte, e a regra continua valendo — '
-                  : `há ${plural(dados.maritimo.previsoes.embarques, 'um neste recorte', `${inteiro(dados.maritimo.previsoes.embarques)} neste recorte`)}, e `}
-                o CO₂ já vem lançado pelo agente, mas a viagem ainda não aconteceu.
+                  ? ', e não há nenhum neste recorte.'
+                  : `: há ${inteiro(dados.maritimo.previsoes.embarques)}, com o CO₂ já lançado e a viagem por acontecer.`}
               </Nota>
             </Painel>
           </Revelar>
@@ -129,18 +130,7 @@ export function ConteudoDaVisaoGeral({ dados }: { dados: VisaoGeral }) {
                     valor={mobilidade.toneladas}
                     casas={1}
                     unidade="t CO₂e"
-                    nota={
-                      <>
-                        Escopo 3, categoria 7. A pesquisa é anual e produz uma taxa
-                        mensal, aplicada aos doze meses:{' '}
-                        {plural(
-                          mobilidade.documentos,
-                          'uma resposta na média',
-                          `${inteiro(mobilidade.documentos)} respostas na média`,
-                        )}
-                        . É a única parte deste total que não é medição do período.
-                      </>
-                    }
+                    nota="Escopo 3, categoria 7. É a única parte deste total que não é medição do período."
                     etiqueta={{
                       texto: `Ano-base ${dados.mobilidade.anoBase} aplicado a ${dados.ano}`,
                       tom: 'atencao',
@@ -153,18 +143,7 @@ export function ConteudoDaVisaoGeral({ dados }: { dados: VisaoGeral }) {
                   valor={viagens.toneladas}
                   casas={1}
                   unidade="t CO₂e"
-                  nota={
-                    <>
-                      Escopo 3, categoria 6. Agrupa pela data do voo, nunca pela data
-                      de lançamento da passagem:{' '}
-                      {plural(
-                        viagens.documentos,
-                        'um trecho no total',
-                        `${inteiro(viagens.documentos)} trechos no total`,
-                      )}
-                      .
-                    </>
-                  }
+                  nota="Escopo 3, categoria 6. Agrupa pela data do voo."
                 />
 
                 <Cartao
@@ -175,12 +154,35 @@ export function ConteudoDaVisaoGeral({ dados }: { dados: VisaoGeral }) {
                   nota={
                     <>
                       Escopo 3, categoria 4. Fatia de {dados.ano} de uma série que
-                      começa antes e continua depois — a tela de Marítimo mostra o
-                      período inteiro.{' '}
+                      começa antes — a tela de Marítimo mostra o período inteiro.{' '}
                       {dados.maritimo.agentes === 1
-                        ? 'Cobre um agente de carga: os outros não entregam detalhe por embarque, e a importação do ano é maior que este número.'
-                        : `Cobre ${inteiro(dados.maritimo.agentes)} agentes de carga; agente que não entrega detalhe por embarque não está no inventário, nem como estimativa.`}
+                        ? 'Cobre um agente de carga; a importação do ano é maior que este número.'
+                        : `Cobre ${inteiro(dados.maritimo.agentes)} agentes de carga.`}
                     </>
+                  }
+                />
+
+                {/* **A quarta declaração obrigatória da §10.0 mora aqui, no
+                    cartão, e não em rodapé** — rodapé é onde a ressalva morre.
+                    Se o levantamento de CIF/FOB apontar FOB, a categoria muda
+                    para a 9 e este módulo pode precisar sair do total: é
+                    reclassificação de escopo, não ajuste de tela. */}
+                <Cartao
+                  rotulo="Distribuição rodoviária"
+                  valor={transportadoras.toneladas}
+                  casas={1}
+                  unidade="t CO₂e"
+                  nota={
+                    <>
+                      Escopo 3, categoria 4 <strong className="font-medium">provisória</strong>
+                      . Agrupa pela data da entrega, em{' '}
+                      {plural(dados.transportadoras.entregas, 'entrega', 'entregas')}.
+                    </>
+                  }
+                  etiqueta={
+                    dados.transportadoras.regimeProvisorio
+                      ? { texto: 'Regime de frete indefinido', tom: 'atencao' }
+                      : undefined
                   }
                 />
               </Grade>
@@ -189,25 +191,39 @@ export function ConteudoDaVisaoGeral({ dados }: { dados: VisaoGeral }) {
             <Revelar ordem={2} className={LUGAR.serie}>
               <Painel
                 titulo="Emissão mês a mês"
-                descricao="Empilhada, nunca somada numa linha só: a mobilidade é taxa repetida nos doze meses, e numa curva única de total ela achataria a variação dos outros dois."
+                descricao="Empilhada; a soma das doze colunas é o total do ano."
               >
                 <SerieEmpilhada
                   serie={dados.porMes}
-                  nota={
-                    <>
-                      Cada módulo agrupa por uma data diferente: viagens pela data do
-                      voo, marítimo pela partida prevista do primeiro carregamento, e
-                      a mobilidade por nenhuma — ela é a mesma taxa nos doze meses, e
-                      por isso aparece como banda constante. A soma das doze colunas é
-                      o total de {dados.ano}.
-                    </>
-                  }
+                  nota="Cada módulo agrupa por uma data diferente; a mobilidade é banda constante."
                 />
               </Painel>
             </Revelar>
           </div>
         </>
       )}
+
+      <SobreATela titulo={`Inventário de emissões de ${dados.ano}`}>
+        <Bloco titulo="Quatro recortes, um total">
+          <Itens
+            itens={dados.porModulo.map((m) => ({
+              rotulo: m.rotulo,
+              valor: m.recorte ?? 'sem recorte definido',
+            }))}
+          />
+        </Bloco>
+        <Bloco titulo="Fora do total">
+          Embarque previsto e o programa de viagens.
+        </Bloco>
+        <Bloco titulo="Provisório">
+          {dados.transportadoras.regimeProvisorio
+            ? 'A distribuição rodoviária entra como cat. 4 enquanto o regime de frete não for levantado; se for FOB, a categoria muda e o total é recortado de novo.'
+            : 'O regime de frete das entregas já está levantado.'}
+        </Bloco>
+        <Bloco titulo="Cada módulo">
+          Fonte, fatores e parâmetros ficam no botão da tela dele.
+        </Bloco>
+      </SobreATela>
     </>
   )
 }

@@ -18,6 +18,7 @@
 import { plural } from '@/lib/formato'
 import { AcessoNegadoError } from '@/server/consultas/acesso'
 import { consultarViagens } from '@/server/consultas/inventario'
+import { consultarMetodo } from '@/server/consultas/metodo'
 import { exigirSessao } from '@/server/sessao'
 import { Casca } from '../casca'
 import {
@@ -32,6 +33,15 @@ import {
 } from '../componentes'
 import { MapaDeCorredoresDoInventario, NaoDesenhado } from './mapa-de-rotas'
 import { RegiaoAberta } from './regiao-aberta'
+import {
+  Bloco,
+  Fatores,
+  Itens,
+  Parametros,
+  Procedencia,
+  Sinalizacoes,
+  SobreATela,
+} from '../informacoes'
 import { SerieMensal } from '../serie-mensal'
 import { TabelaDeRecortes } from './tabela-de-recortes'
 
@@ -76,8 +86,12 @@ export default async function Page({
   const ano = anoDe(parametros.ano)
 
   let dados
+  let metodo
   try {
-    dados = await consultarViagens(ctx, ano === undefined ? {} : { ano })
+    ;[dados, metodo] = await Promise.all([
+      consultarViagens(ctx, ano === undefined ? {} : { ano }),
+      consultarMetodo(ctx, { modulo: 'viagens' }),
+    ])
   } catch (erro) {
     if (erro instanceof AcessoNegadoError) {
       return (
@@ -117,7 +131,7 @@ export default async function Page({
     <Casca ctx={ctx} atual="/viagens">
       <Cabecalho
         titulo="Viagens corporativas"
-        descricao="Deslocamento aéreo e rodoviário a serviço. Escopo 3 categoria 6 no aéreo e no veículo de terceiro; Escopo 1 no veículo da frota. Cada trecho conta separado, e escala emite mais que um voo direto equivalente."
+        descricao="Deslocamento aéreo e rodoviário a serviço. Escopo 3 categoria 6, e Escopo 1 no veículo da frota."
         acao={
           anoUnico === null ? (
             <SeletorDeAno
@@ -128,7 +142,7 @@ export default async function Page({
           ) : (
             <span
               className="shrink-0 rounded-[9px] bg-[#E2EADF] px-3.5 py-1.5 text-[13px] font-semibold text-[var(--color-tinta)]"
-              title="O inventário de viagens relata um ano, declarado no ambiente e na tela de Método."
+              title="O inventário de viagens relata um ano."
             >
               Relatório de {anoUnico}
             </span>
@@ -152,7 +166,7 @@ export default async function Page({
                     ? '.'
                     : `. Outro${dados.trechosForaDoTotal === 1 ? '' : 's'} ${dados.trechosForaDoTotal} ` +
                       `${dados.trechosForaDoTotal === 1 ? 'trecho está gravado' : 'trechos estão gravados'} e fora desta conta, ` +
-                      'por serem itinerário duplicado no relatório da agência — a conferência de cobertura conta os dois.')
+                      'por serem itinerário duplicado no relatório da agência.')
                 }
               />
               <Cartao
@@ -162,13 +176,13 @@ export default async function Page({
                 valor={dados.co2Toneladas}
                 casas={2}
                 unidade="t CO₂e"
-                nota="Soma as duas fontes administrativas do módulo. O que os colaboradores registram no programa de viagens não entra aqui."
+                nota="Soma as duas fontes administrativas. O programa de viagens não entra aqui."
               />
               <Cartao
                 rotulo="Trechos por viagem"
                 valor={dados.viagens === 0 ? 0 : dados.trechos / dados.viagens}
                 unidade="trechos"
-                nota="Ida e volta dão dois; escala conta separado e emite mais que um voo direto. Valor abaixo de dois indica viagem partida em mais de um registro na origem, o que infla a contagem de viagens e puxa o indicador ao lado para baixo."
+                nota="Ida e volta dão dois; escala conta separado."
               />
             </Grade>
           </Revelar>
@@ -197,7 +211,7 @@ export default async function Page({
               <Painel
                 id="mapa"
                 titulo="Para onde a empresa voa"
-                descricao="Por corredor entre regiões — unidade mais grossa que a das tabelas abaixo, porque uma linha precisa de dois lugares e o mapa responde para onde se voa, não com que frequência."
+                descricao="Por corredor entre regiões — unidade mais grossa que a das tabelas abaixo."
               >
                 {dados.mapa.corredores.length === 0 ? (
                   <Vazio>
@@ -225,12 +239,12 @@ export default async function Page({
             <Revelar ordem={2} className={LUGAR.destinos}>
               <Painel
                 titulo="Destinos mais frequentes"
-                descricao="Por aeroporto de chegada. Quantas pessoas desembarcaram ali e em que período — nunca quem."
+                descricao="Por aeroporto de chegada. Quantas pessoas e em que período — nunca quem."
               >
                 <TabelaDeRecortes
                   recortes={dados.destinos}
                   cabecalho="Destino"
-                  nota="Cada trecho tem um destino só, então a coluna de trechos fecha com o total dos cartões. Uma pessoa que foi ao mesmo lugar duas vezes conta uma."
+                  nota="Uma pessoa que foi ao mesmo lugar duas vezes conta uma."
                 />
               </Painel>
             </Revelar>
@@ -241,11 +255,11 @@ export default async function Page({
             <Revelar ordem={3} className={LUGAR.pilha}>
               <Painel
                 titulo="Emissão por mês"
-                descricao="Pela data do voo ou da viagem, nunca pela data de lançamento da passagem."
+                descricao="Pela data do voo, nunca pela data de lançamento da passagem."
               >
                 <SerieMensal
                   serie={dados.porMes}
-                  nota="A série cobre as duas fontes administrativas do módulo — o relatório da agência e a planilha do cartão empresarial —, somadas sem distinção, porque as duas cobrem o mesmo tipo de registro. O que os colaboradores registram no programa de viagens não entra aqui."
+                  nota="Ela soma as duas fontes administrativas do módulo."
                 />
               </Painel>
               <Painel titulo="Por modal">
@@ -267,24 +281,38 @@ export default async function Page({
             <Revelar ordem={4} className={LUGAR.rotas}>
               <Painel
                 titulo="Rotas"
-                descricao="Pelo par de aeroportos, com direção: ida e volta são duas linhas aqui, ao contrário do mapa, onde o corredor não tem sentido."
+                descricao="Pelo par de aeroportos, com direção: ida e volta são duas linhas."
               >
                 <TabelaDeRecortes recortes={dados.rotas} cabecalho="Rota" />
               </Painel>
             </Revelar>
           </div>
-
-          <p className="mt-6 max-w-[80ch] text-[12px] text-[var(--color-apoio)]/85">
-            Rota, corredor e destino não são suprimidos por contagem de pessoas: são
-            fato da operação da empresa, e a emissão deles já estava no total —
-            escondê-los omitia de onde ela vinha, não quanto foi. Nenhuma tela do
-            inventário exibe nome, matrícula ou e-mail, e nenhum identificador chega
-            ao navegador. A classe econômica é assumida em todos os trechos do
-            histórico, porque o relatório da agência não informa a cabine — essa e as
-            demais escolhas que mudam o número estão na tela de Método.
-          </p>
         </>
       )}
+
+      <SobreATela titulo="Viagens corporativas">
+        <Procedencia metodo={metodo} modulo="viagens" />
+        <Bloco titulo="Como o número é calculado">
+          <Parametros parametros={metodo.parametros} />
+        </Bloco>
+        <Bloco titulo="Fatores">
+          <Fatores fatores={metodo.fatores} categorias={['viagem_aerea']} />
+        </Bloco>
+        <Bloco titulo="Mapa">
+          Ponto = média dos aeroportos da região. Só trecho aéreo.
+        </Bloco>
+        {metodo.regioesInferidas.length > 0 && (
+          <Bloco titulo="Região deduzida da coordenada, não do estado">
+            <Itens
+              itens={metodo.regioesInferidas.map((r) => ({
+                rotulo: r.iata,
+                valor: r.regiao,
+              }))}
+            />
+          </Bloco>
+        )}
+        <Sinalizacoes metodo={metodo} modulo="viagens" />
+      </SobreATela>
     </Casca>
   )
 }

@@ -45,6 +45,11 @@ const PRECISAM_VIR_VAZIAS = [
   // E a amostra mínima decide quando um corredor vira referência: um número
   // aqui mudaria em silêncio o que a cascata estima e o que ela deixa passar.
   'MARITIMO_AMOSTRA_MINIMA_CORREDOR',
+  // O limiar das transportadoras decide o que **não é importado** (§9.3). Um
+  // número plausível aqui ou descartaria entrega doméstica verdadeira ou
+  // importaria uma importação como se fosse caminhão, e nos dois casos o total
+  // muda sem ninguém rever. Ele também se escolhe medindo a base.
+  'TRANSPORTADORAS_DISTANCIA_MAXIMA_KM',
 ]
 
 /**

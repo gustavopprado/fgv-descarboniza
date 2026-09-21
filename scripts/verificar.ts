@@ -50,11 +50,15 @@ import {
   maritimoAmostraMinimaCorredor,
   maritimoLimiarAtipico,
   maritimoLimiarImpossivel,
+  transportadorasDistanciaMaximaKm,
 } from '../src/lib/env'
 import { chaveNormalizada } from '../src/lib/texto'
+import { ehFilial, FILIAIS } from '../src/lib/transportadoras'
+import { idEntregaRodoviaria } from '../src/server/documentos/ids'
 import { anoDe } from '../src/server/documentos/tipos'
 import type {
   DocEmbarque,
+  DocEntregaRodoviaria,
   DocMobilidade,
   DocPorto,
   DocViagemTrecho,
@@ -63,6 +67,7 @@ import type { ContextoDeAcesso } from '../src/server/consultas/acesso'
 import {
   consultarMaritimo,
   consultarMobilidade,
+  consultarTransportadoras,
   consultarViagens,
 } from '../src/server/consultas/inventario'
 import { MOTIVO_DO_ALERTA } from '../src/server/consultas/metodo'
@@ -75,6 +80,8 @@ import {
   montarEmbarques,
   type Parametros,
 } from './ingest-maritimo'
+import { montarEntregas } from './ingest-transportadoras'
+import { lerPacoteXlsx } from './_xlsx'
 import {
   caminhoDaBase,
   conectarFirestore,
@@ -917,6 +924,225 @@ async function conferirMotivosDosAlertas(
   })
 }
 
+/* ------------------------------------------------------- transportadoras */
+
+type EntregaConferida = Pick<
+  DocEntregaRodoviaria,
+  'filial' | 'data' | 'ordem' | 'ano' | 'mes' | 'regimeFrete' | 'nivelDado' | 'fator'
+>
+
+/**
+ * Conferência de **cobertura do módulo de transportadoras** — a §8.4 aplicada a
+ * uma fonte nova.
+ *
+ * **Ela entra na mesma leva do script de ingestão, nunca depois.** A pergunta é
+ * *"chegou tudo?"*, que coerência e plausibilidade não fazem — e é a única que
+ * pega uma fonte inteira ficando de fora. Custou duas vezes neste projeto, e na
+ * segunda só apareceu porque alguém notou por acaso (§14).
+ *
+ * São duas identidades, e cada uma responde a uma coisa diferente:
+ *
+ *  - **por ano:** documentos no banco = entregas aceitas na origem. O ano é o
+ *    escopo de recarga, então é nele que uma carga parcial apareceria;
+ *  - **no arquivo inteiro:** linhas com cliente = aceitas + internacionais +
+ *    recusadas com motivo. Sem este segundo termo, um descarte silencioso
+ *    passaria por cobertura correta.
+ *
+ * Linha sem cliente fica fora das duas de propósito: ela é formato de exportação
+ * — linha em branco e rodapé de filtros —, e é contada à parte para o relatório
+ * poder fechar a conta com o total de linhas do arquivo (§9.3).
+ */
+async function conferirTransportadoras(db: Firestore): Promise<number> {
+  const inteiro = { tolerancia: 0, casas: 0 }
+  const conferencias: Conferencia[] = []
+  let falhas = 0
+
+  tituloDaEtapa('Conferência — cobertura das transportadoras')
+
+  const noBanco = (
+    await db
+      .collection(COLECAO.entregaRodoviaria)
+      .select('filial', 'data', 'ordem', 'ano', 'mes', 'regimeFrete', 'nivelDado', 'fator')
+      .get()
+  ).docs.map((d) => ({ id: d.id, dados: d.data() as EntregaConferida }))
+
+  const caminho = caminhoDaBase(
+    undefined,
+    'BASE_TRANSPORTADORAS_PATH',
+    'dados/transportadoras.xlsx',
+  )
+  if (!existsSync(caminho)) {
+    console.log(
+      `  arquivo de origem não encontrado; ${noBanco.length} entrega(s) no banco não ` +
+        'puderam ser conferidas.',
+    )
+    return conferirIntegridadeRodoviaria(noBanco, falhas)
+  }
+
+  let distanciaMaximaKm: number
+  try {
+    distanciaMaximaKm = transportadorasDistanciaMaximaKm()
+  } catch (erro) {
+    // Sem o limiar não dá para reproduzir quais linhas foram recusadas por
+    // distância, e sem isso a identidade não fecha. Com o banco vazio é uma
+    // nota; com entregas dentro, é o ponto cego que esta conferência existe
+    // para não ter.
+    const motivo = erro instanceof Error ? erro.message : String(erro)
+    console.log(`  parâmetro do módulo ausente: ${motivo}`)
+    if (noBanco.length > 0) {
+      console.log(
+        `  FALHA ${noBanco.length} entrega(s) no banco e nenhuma conferência possível.`,
+      )
+      return falhas + 1
+    }
+    return falhas
+  }
+
+  // O fator não é necessário para contar: a cobertura pergunta quantas linhas
+  // chegaram, não quanto elas emitem. Sem ele a montagem não produz documento, e
+  // é a leitura que está sendo conferida aqui.
+  const montagem = montarEntregas(lerPacoteXlsx(caminho), { distanciaMaximaKm }, null)
+  const r = montagem.relatorio
+
+  console.log(
+    `  Aba "${r.aba}", ${r.entregas.length} entrega(s) aceita(s) na origem; limiar ` +
+      `de ${n(distanciaMaximaKm, 0)} km (§9.3).`,
+  )
+
+  const anosDaOrigem = new Set(montagem.anos)
+  for (const ano of montagem.anos) {
+    conferencias.push({
+      item: `entregas de ${ano}`,
+      esperado: r.entregas.filter((e) => anoDe(e.data) === ano).length,
+      obtido: noBanco.filter((d) => d.dados.ano === ano).length,
+      origem: 'origem × banco',
+      ...inteiro,
+    })
+  }
+
+  // Ano gravado no banco que o arquivo não contém mais é o mesmo ponto cego do
+  // outro lado: dado que entrou e não tem quem o confronte com a origem.
+  for (const ano of new Set(noBanco.map((d) => d.dados.ano))) {
+    if (!anosDaOrigem.has(ano)) {
+      console.log(
+        `  ATENÇÃO: há entregas de ${ano} no banco, e o arquivo de origem não as ` +
+          'contém — o escopo de recarga é o ano, então elas vieram de outro export.',
+      )
+    }
+  }
+
+  console.log(
+    `  Descartes declarados: ${r.internacionais.linhas} internacional(is) e ` +
+      `${r.descartadas.length} com motivo; ${r.semCliente} linha(s) sem cliente, que são ` +
+      'formato de exportação (§9.3).',
+  )
+  for (const d of r.descartadas.slice(0, 5)) {
+    console.log(`    linha ${d.linha} recusada: ${d.motivo}`)
+  }
+
+  for (const c of conferencias) {
+    if (Math.abs(c.obtido - c.esperado) > c.tolerancia) falhas++
+    console.log(linhaDeConferencia(c))
+  }
+
+  return conferirIntegridadeRodoviaria(noBanco, falhas)
+}
+
+/**
+ * Integridade do que está no banco, independente da origem.
+ *
+ * Vale para **todas as entregas, de qualquer ano** — integridade conferida em
+ * parte da coleção não é integridade (§14). E o ID recalculado é o que denuncia
+ * documento gravado por uma regra de identidade que não é a de hoje: ele
+ * continuaria somando e deixaria de ser sobrescrito pela recarga.
+ */
+function conferirIntegridadeRodoviaria(
+  noBanco: { id: string; dados: EntregaConferida }[],
+  falhas: number,
+): number {
+  if (noBanco.length === 0) {
+    console.log('  Coleção vazia: a carga do módulo ainda não rodou.')
+    return falhas
+  }
+
+  let semFator = 0
+  let periodoErrado = 0
+  let filialDesconhecida = 0
+  let nivelInesperado = 0
+  let idForaDaRegra = 0
+  const porRegime = new Map<string, number>()
+
+  for (const { id, dados } of noBanco) {
+    if (dados.fator === null) semFator++
+    if (dados.ano !== anoDe(dados.data) || dados.mes !== dados.data.slice(0, 7)) {
+      periodoErrado++
+    }
+    if (!ehFilial(dados.filial)) filialDesconhecida++
+    if (dados.nivelDado !== 'calculado_tkm') nivelInesperado++
+    if (idEntregaRodoviaria(dados.filial, dados.data, dados.ordem) !== id) idForaDaRegra++
+    porRegime.set(dados.regimeFrete, (porRegime.get(dados.regimeFrete) ?? 0) + 1)
+  }
+
+  const inteiro = { tolerancia: 0, casas: 0 }
+  const conferencias: Conferencia[] = [
+    {
+      item: 'entregas sem fator carimbado',
+      esperado: 0,
+      obtido: semFator,
+      origem: 'integridade',
+      ...inteiro,
+    },
+    {
+      item: 'ano ou mês diferente da data da entrega',
+      esperado: 0,
+      obtido: periodoErrado,
+      origem: 'integridade',
+      ...inteiro,
+    },
+    {
+      item: `filial fora de ${FILIAIS.join(', ')}`,
+      esperado: 0,
+      obtido: filialDesconhecida,
+      origem: 'integridade',
+      ...inteiro,
+    },
+    {
+      item: 'nível de dado diferente de calculado_tkm',
+      esperado: 0,
+      obtido: nivelInesperado,
+      origem: 'integridade',
+      ...inteiro,
+    },
+    {
+      item: 'ID diferente do que a regra de identidade produz hoje',
+      esperado: 0,
+      obtido: idForaDaRegra,
+      origem: 'integridade',
+      ...inteiro,
+    },
+  ]
+
+  for (const c of conferencias) {
+    if (Math.abs(c.obtido - c.esperado) > c.tolerancia) falhas++
+    console.log(linhaDeConferencia(c))
+  }
+
+  /**
+   * O regime de frete é **contado, não reprovado**: hoje é `indefinido` em toda
+   * entrega, e a decisão de CIF/FOB é levantamento em aberto (§9.1, §14).
+   * Reprovar aqui seria reprovar o que ninguém pode consertar por código — o
+   * alerta que se aprende a ignorar.
+   */
+  console.log(
+    `  Regime de frete no banco: ${[...porRegime].map(([k, v]) => `${k} ${v}`).join(', ')}` +
+      (porRegime.get('indefinido') === noBanco.length
+        ? ' — provisório até o levantamento de CIF/FOB fechar (§9.1).'
+        : ''),
+  )
+
+  return falhas
+}
+
 /* ------------------------------------------ coerência entre telas (§10.0) */
 
 /**
@@ -961,6 +1187,9 @@ async function conferirCoerenciaDoConsolidado(db: Firestore): Promise<number> {
   const embarques = (await db.collection(COLECAO.embarque).get()).docs.map(
     (d) => d.data() as DocEmbarque,
   )
+  const entregas = (
+    await db.collection(COLECAO.entregaRodoviaria).select('ano', 'co2Kg').get()
+  ).docs.map((d) => d.data() as Pick<DocEntregaRodoviaria, 'ano' | 'co2Kg'>)
 
   // O ano-base da pesquisa é o mais recente que a coleção tem. Derivado do dado,
   // e não do ambiente, de propósito: é isto que denuncia a variável apontando
@@ -977,6 +1206,11 @@ async function conferirCoerenciaDoConsolidado(db: Firestore): Promise<number> {
   const maritimoT =
     somaDe(
       embarques.filter((e) => e.ano === ano && !e.previsao),
+      (e) => e.co2Kg,
+    ) / 1000
+  const transportadorasT =
+    somaDe(
+      entregas.filter((e) => e.ano === ano),
       (e) => e.co2Kg,
     ) / 1000
 
@@ -1006,6 +1240,7 @@ async function conferirCoerenciaDoConsolidado(db: Firestore): Promise<number> {
   const consolidado = await consultarVisaoGeral(ctx, db)
   const telaDeViagens = await consultarViagens(ctx, { ano }, db)
   const telaDoMaritimo = await consultarMaritimo(ctx, { ano }, db)
+  const telaDasTransportadoras = await consultarTransportadoras(ctx, { ano }, db)
   const telaDaMobilidade =
     consolidado.mobilidade.anoBase === null
       ? null
@@ -1062,6 +1297,21 @@ async function conferirCoerenciaDoConsolidado(db: Firestore): Promise<number> {
     item: 'marítimo: consolidado × tela',
     esperado: telaDoMaritimo.co2Toneladas,
     obtido: noConsolidado('maritimo'),
+    origem: 'coerência',
+    ...tol,
+  })
+
+  conferencias.push({
+    item: 'transportadoras: recontagem × consolidado',
+    esperado: transportadorasT,
+    obtido: noConsolidado('transportadoras'),
+    origem: 'coerência',
+    ...tol,
+  })
+  conferencias.push({
+    item: 'transportadoras: consolidado × tela',
+    esperado: telaDasTransportadoras.co2Toneladas,
+    obtido: noConsolidado('transportadoras'),
     origem: 'coerência',
     ...tol,
   })
@@ -1358,6 +1608,10 @@ async function principal(): Promise<void> {
     /* --------------------------------------------------------- marítimo */
 
     falhas += await conferirMaritimo(db)
+
+    /* -------------------------------------------------- transportadoras */
+
+    falhas += await conferirTransportadoras(db)
 
     /* ---------------------------------- consolidado: coerência entre telas */
 

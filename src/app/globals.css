@@ -328,3 +328,37 @@ h3 {
     min-width: var(--minimo, 0);
   }
 }
+
+/* A telinha de informações — CLAUDE.md §10.
+
+   Substituiu a tela de Método: cada tela tem um botão fixo que abre o resumo de
+   tudo que produz os números dela. É `popover` nativo, sem uma linha de
+   JavaScript — o navegador cuida da camada de cima, do foco, do `Esc` e do
+   clique fora.
+
+   **Num navegador sem suporte, o conteúdo aparece aberto**, porque quem esconde
+   um `[popover]` fechado é a folha de estilo que vem junto do suporte. O pior
+   caso é a declaração visível demais, nunca inalcançável. */
+[popover].telinha {
+  /* **Larga o bastante para duas colunas, e não mais.** O resumo tem seis
+     blocos de alturas muito diferentes; numa coluna só ele vira rolagem, e
+     acima disso a linha passa da medida de leitura. */
+  width: min(82ch, 92vw);
+  /* **A margem automática é o que centra a telinha, e o Tailwind a apaga.**
+     A folha do navegador posiciona um popover com `inset: 0` mais
+     `margin: auto`; o preflight zera a margem de tudo, e o resultado é a
+     telinha colada no canto superior esquerdo da janela. Medido: x=0, y=0. */
+  margin: auto;
+  max-height: 80svh;
+  overflow-y: auto;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--color-linha);
+  border-radius: var(--radius-painel);
+  background: var(--color-superficie);
+  color: var(--color-tinta);
+  box-shadow: 0 18px 50px rgba(34, 51, 31, 0.18);
+}
+
+[popover].telinha::backdrop {
+  background: rgba(28, 42, 30, 0.34);
+}

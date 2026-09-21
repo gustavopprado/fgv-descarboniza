@@ -197,18 +197,9 @@ export function QualidadeDoDado({ dados }: { dados: ResumoDeMaritimo }) {
       <strong className="font-medium text-[var(--color-tinta)]">
         {proporcao(medido)} deste número vem de dado do agente
       </strong>
-      {medido >= 1 ? (
-        <>
-          , e o restante seria estimativa por média — não há nenhuma neste recorte. O
-          valor informado pelo agente é o dado primário e não é recalculado, nem por
-          tonelada-quilômetro, nem por peso, nem por contêiner.
-        </>
-      ) : (
-        <>
-          ; o restante é estimativa por média de contêiner, do corredor ou geral, e
-          cada documento carrega a média usada e o tamanho da amostra.
-        </>
-      )}
+      {medido >= 1
+        ? ', e não há estimativa neste recorte.'
+        : '; o restante é estimativa por média de contêiner.'}
     </Nota>
   )
 }

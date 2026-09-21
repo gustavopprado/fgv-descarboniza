@@ -95,14 +95,12 @@ export function MapaDeCorredoresMaritimos({
           A linha não é a derrota do navio
         </strong>{' '}
         — é a geometria entre os dois portos, e o ponto que a percorre mostra só o
-        sentido da carga, do embarque ao desembarque. Todos levam o mesmo tempo:
-        duração de travessia não está desenhada aqui.
+        sentido da carga.
       </>
     ),
     ressalva: (
       <>
-        Espessura pela emissão do corredor. Portos pela lista UN/LOCODE, contorno pelo
-        Natural Earth. {ressalva} <NaoDesenhado mapa={mapa} />
+        Espessura pela emissão do corredor. {ressalva} <NaoDesenhado mapa={mapa} />
       </>
     ),
   }

@@ -13,6 +13,7 @@ import { test } from 'node:test'
 
 import { recarregarEscopo } from '../escrita'
 import {
+  idEntregaRodoviaria,
   idFatorEmissao,
   idFuncionario,
   idMobilidade,
@@ -23,6 +24,7 @@ import {
 import { montarAlertas } from './tipos'
 import type {
   DocEmbarque,
+  DocEntregaRodoviaria,
   DocFatorEmissao,
   DocMobilidade,
   DocPorto,
@@ -33,6 +35,7 @@ import {
   DocumentoInvalidoError,
   ehDataIso,
   validarEmbarque,
+  validarEntregaRodoviaria,
   validarFatorEmissao,
   validarMobilidade,
   validarPorto,
@@ -534,6 +537,111 @@ function fatorDaMedia(): DocEmbarque['fator'] {
 }
 
 /* ------------------------------------------------------------------ portos */
+
+/* ------------------------------------------------------- transportadoras */
+
+function fatorDoFrete(): DocEntregaRodoviaria['fator'] {
+  return {
+    categoria: 'frete_rodoviario_tkm',
+    chave: 'geral',
+    versao: 'FICT-2031',
+    valor: 0.5,
+    unidade: 'kg CO2e/t.km',
+    vigenciaInicio: '2031-01-01',
+  }
+}
+
+function entrega(): DocEntregaRodoviaria {
+  return {
+    modulo: 'transportadoras',
+    modal: 'rodoviario',
+    escopo: 3,
+    periodicidade: 'evento',
+    ano: 2031,
+    mes: '2031-05',
+    empresa: null,
+    fator: fatorDoFrete(),
+    ...montarAlertas([]),
+    atualizadoEm: '2031-06-01',
+    filial: '02',
+    data: '2031-05-04',
+    ordem: 1,
+    clienteCodigo: '99999 01',
+    distanciaKm: 120.5,
+    pesoKg: 800,
+    co2Kg: 48.2,
+    regimeFrete: 'indefinido',
+    nivelDado: 'calculado_tkm',
+  }
+}
+
+test('entrega rodoviária válida passa, e o ID sai de filial, data e ordem', () => {
+  validarEntregaRodoviaria('02_2031-05-04_1', entrega())
+  assert.equal(idEntregaRodoviaria('02', '2031-05-04', 1), '02_2031-05-04_1')
+})
+
+/**
+ * Filial nova não é linha a aceitar: é a §9.4 desatualizada, e um quarto código
+ * gravado apareceria no agregado como uma filial que a tela não sabe desenhar.
+ */
+test('filial fora das três conhecidas é recusada', () => {
+  recusa(() => validarEntregaRodoviaria('x', { ...entrega(), filial: '04' as '01' }))
+  recusa(() => validarEntregaRodoviaria('x', { ...entrega(), filial: '' as '01' }))
+})
+
+/**
+ * É `regimeFrete` que a tela lê para declarar o escopo como provisório (§9.1).
+ * Texto livre aqui apagaria a ressalva sem apagar o número.
+ */
+test('regime de frete só admite cif, fob e indefinido', () => {
+  validarEntregaRodoviaria('x', { ...entrega(), regimeFrete: 'cif' })
+  validarEntregaRodoviaria('x', { ...entrega(), regimeFrete: 'fob' })
+  recusa(() =>
+    validarEntregaRodoviaria('x', { ...entrega(), regimeFrete: 'talvez' as 'cif' }),
+  )
+})
+
+/**
+ * No envelope, fator nulo se sustenta onde a emissão é zero por definição. Aqui
+ * não existe entrega que não emita por definição: o zero vem de peso zero, e a
+ * conta continua sendo fator × atividade — sem o carimbo, a linha não se
+ * reproduz a partir do documento (§9.2).
+ */
+test('entrega sem fator carimbado é recusada, mesmo com emissão zero', () => {
+  recusa(() => validarEntregaRodoviaria('x', { ...entrega(), fator: null }))
+  recusa(() =>
+    validarEntregaRodoviaria('x', { ...entrega(), fator: null, co2Kg: 0, pesoKg: 0 }),
+  )
+  validarEntregaRodoviaria('x', { ...entrega(), co2Kg: 0, pesoKg: 0 })
+})
+
+test('frete de terceiro é Escopo 3, e o modal é rodoviário', () => {
+  recusa(() => validarEntregaRodoviaria('x', { ...entrega(), escopo: 1 }))
+  recusa(() =>
+    validarEntregaRodoviaria('x', { ...entrega(), modal: 'terrestre' as 'rodoviario' }),
+  )
+  recusa(() =>
+    validarEntregaRodoviaria('x', {
+      ...entrega(),
+      periodicidade: 'mensal' as 'evento',
+    }),
+  )
+})
+
+test('ano e mês da entrega batem com a data dela', () => {
+  recusa(() => validarEntregaRodoviaria('x', { ...entrega(), mes: '2031-06' }))
+  recusa(() => validarEntregaRodoviaria('x', { ...entrega(), ano: 2030 }))
+  recusa(() => validarEntregaRodoviaria('x', { ...entrega(), data: '2031-05-32' }))
+})
+
+test('entrega recusa medida negativa e ordem fora de sequência', () => {
+  recusa(() => validarEntregaRodoviaria('x', { ...entrega(), distanciaKm: -1 }))
+  recusa(() => validarEntregaRodoviaria('x', { ...entrega(), pesoKg: -1 }))
+  recusa(() => validarEntregaRodoviaria('x', { ...entrega(), ordem: 0 }))
+  recusa(() => validarEntregaRodoviaria('x', { ...entrega(), ordem: 1.5 }))
+  // Código de cliente ausente é nulo explícito, e passa: o agregado é por filial.
+  validarEntregaRodoviaria('x', { ...entrega(), clienteCodigo: null })
+})
 
 function porto(): DocPorto {
   return {

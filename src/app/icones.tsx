@@ -57,15 +57,6 @@ function Navio({ className }: Props) {
   )
 }
 
-function Metodo({ className }: Props) {
-  return (
-    <svg {...COMUM} className={className}>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 16v-4M12 8.5h.01" />
-    </svg>
-  )
-}
-
 function Mais({ className }: Props) {
   return (
     <svg {...COMUM} className={className}>
@@ -88,7 +79,6 @@ const POR_ROTA: Record<string, (props: Props) => React.ReactElement> = {
   '/mobilidade': Mobilidade,
   '/viagens': Aviao,
   '/maritimo': Navio,
-  '/metodo': Metodo,
   '/programa/registrar': Mais,
   '/programa/emissoes': Lista,
   '/programa/minhas-viagens': Lista,

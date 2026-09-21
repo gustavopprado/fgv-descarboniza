@@ -61,6 +61,7 @@ export type MesEmpilhado = {
   mobilidade: number
   viagens: number
   maritimo: number
+  transportadoras: number
   total: number
 }
 

@@ -80,7 +80,9 @@ test('as peças compartilhadas de prosa declaram medida', () => {
     return componentes.slice(inicio, fim === -1 ? undefined : fim)
   }
 
-  for (const nome of ['Nota', 'Vazio', 'Painel', 'Secao', 'Cabecalho']) {
+  // `Secao` saiu junto com a tela de Método, que era quem organizava conteúdo
+  // longo em blocos sem superfície.
+  for (const nome of ['Nota', 'Vazio', 'Painel', 'Cabecalho']) {
     assert.ok(
       /max-w-\[\d+ch\]/.test(corpoDe(nome)),
       `A peça ${nome} perdeu a medida de leitura do texto dela.`,
@@ -152,6 +154,7 @@ test('nenhuma grade pode ser alargada por dentro', () => {
 test('os desenhos que ampliam em vez de refluir têm teto e piso', () => {
   const pontas: [string, string, string | null][] = [
     ['mapa-de-rotas.tsx', 'LARGURA_MAXIMA', 'LARGURA_MINIMA'],
+    ['transportadoras/mapa.tsx', 'LARGURA_MAXIMA', 'LARGURA_MINIMA'],
     ['grafico-de-barras.tsx', 'AMPLIACAO_MAXIMA', 'REDUCAO_MAXIMA'],
     ['visao-geral/serie-empilhada.tsx', 'AMPLIACAO_MAXIMA', 'REDUCAO_MAXIMA'],
     // O radar não tem piso de propósito: são quatro rótulos, e a legenda
