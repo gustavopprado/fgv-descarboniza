@@ -1483,6 +1483,44 @@ documento.
 
 ### Histórico
 
+#### 2026-09-21 — Varredura da §2 antes do commit: massa de teste que não era fictícia
+
+O módulo inteiro foi para o primeiro commit — o quarto módulo e a saída da tela
+de Método, juntos, porque a tela nova nasceu já no formato do botão fixo e o
+estado intermediário não typecheca separado.
+
+**A varredura achou três coisas, e as três são da mesma família: número real
+disfarçado de massa de teste.** Nenhuma apareceria em typecheck, em teste nem
+no gancho de pré-commit, que procura credencial e não dado.
+
+- **Três distâncias do teste do leitor eram as medidas da base** — a maior
+  doméstica, a menor internacional e a maior internacional, recortadas numa
+  casa decimal. O cabeçalho do arquivo afirmava que toda massa era inventada do
+  zero, e essas três não eram: eram exatamente os valores de conferência que a
+  §2.1 proíbe versionar, no lugar que a §2.2 nomeia como o que ninguém revisa.
+  **O que o teste precisa é do vão, não dos números que o mediram** — um valor
+  abaixo do limiar, um acima e um bem acima provam a mesma coisa com massa
+  inventada.
+- **O rodapé de uma aba era a linha de rodapé do relatório real**, copiada para
+  o teste do descarte. É linha da base, e a §2.2 diz que não se recorta nem "só
+  uma para testar": o que o teste confere é que a linha não tem cliente, e isso
+  qualquer texto prova.
+- **O volume da coleção estava escrito por extenso em três comentários**, como
+  argumento de custo — e volume real é volume real escrito em algarismo ou em
+  palavra. O argumento não depende dele: "a coleção inteira duas vezes" diz a
+  mesma coisa e não publica quantas entregas a empresa faz por ano.
+
+Nenhum outro achado: o valor do fator não está em lugar nenhum do repositório,
+o `.gitignore` cobre a base, o arquivo de fatores e a pasta de ensaio, e o
+commit não levou nenhum dos três.
+
+> **A lição, e ela é nova neste log:** o que protege o repositório público é
+> varredura, não intenção. Os arquivos de teste deste módulo declaram no
+> cabeçalho que a massa é fictícia — **e a declaração não torna a massa
+> fictícia**. Massa que sai de uma medição da base entra como plausível e passa
+> por inventada justamente porque é plausível; quem a escreveu acabou de olhar
+> o número real.
+
 #### 2026-09-21 — Transportadoras, passo 1: o leitor que o projeto não tinha, e o modelo do quarto módulo
 
 Começo do módulo da §9. O passo é leitura, modelo de dados, simulação e
