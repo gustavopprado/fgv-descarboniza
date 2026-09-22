@@ -343,6 +343,34 @@ Esconder item de menu não é controle de acesso.
 **Não existe tela de upload de arquivo.** A carga das bases é feita por script, rodado pelo
 Gustavo fora da aplicação.
 
+### 5.2 Quem é do domínio e não tem perfil recebe `gestor`
+
+**Decisão do Gustavo em 22/09: todos do domínio corporativo veem tudo.** Conta autenticada
+sem documento em `usuarioPerfil` recebe o papel padrão `gestor` — as sete telas, todos os
+números, e o direito de registrar a própria viagem.
+
+**Quem tem documento usa o que está nele, para cima e para baixo.** O padrão não atropela
+concessão explícita: `admin`, `sustentabilidade` e `importacao` continuam sendo dados à
+mão, e `colaborador` continua existindo como perfil **mais restrito** que o padrão, para
+quem deva registrar viagem sem ver o inventário.
+
+**Por que `gestor` e não `admin`.** O pedido foi "ver tudo", e no inventário isso não
+custa privacidade nenhuma: ele não tem pessoa dentro (§3.1) — nenhum papel, nem `admin`,
+vê nome em tela de inventário. A única coisa deste sistema que identifica pessoa é **quem
+registrou cada viagem do programa** (§3.2), e é exatamente isso que `gestor` não vê. Um
+padrão `admin` entregaria esse nome à empresa inteira sem ninguém ter decidido isso —
+seria conceder dado pessoal de carona num pedido sobre números.
+
+**O padrão é constante no código, nunca variável de ambiente.** Um valor plausível num
+`.env` viraria papel concedido sem decisão, e o que vaza aí é acesso, não número. Mudar o
+padrão é editar uma linha que aparece em revisão.
+
+> **Isto substitui a regra anterior**, que não dava papel nenhum a quem não tivesse
+> documento. O argumento dela — *perfil implícito é privilégio concedido por descuido* —
+> continua valendo e é o que fixa o padrão em `gestor`: o que se concede por descuido aqui
+> é **ver o inventário**, e foi decidido que isso não é problema. O que continua não sendo
+> concedido por descuido é nome de pessoa.
+
 ---
 
 ## 6. Módulo Mobilidade
@@ -1440,11 +1468,17 @@ O sistema fica público na Vercel. Regras não negociáveis:
     vem do token**: ele é lido de `usuarioPerfil/{uid}` a cada requisição, junto
     da verificação de revogação. Token não carrega papel de propósito — token
     velho continuaria valendo depois de o acesso ter sido tirado. Rebaixar um
-    perfil tem efeito imediato sem deslogar ninguém; remover o perfil derruba
-    também a sessão aberta, e quem estava dentro é mandado para a tela de
-    entrada, que explica o que houve em vez de devolver erro de servidor.
+    perfil tem efeito imediato sem deslogar ninguém.
     Conceder e revogar acontecem **fora da aplicação**, por script, como as
     cargas — não existe tela que dê acesso a alguém.
+
+    **Remover o documento devolve a pessoa ao padrão do domínio, não a lugar
+    nenhum** (§5.2). Antes ela caía fora do sistema; desde 22/09 ela volta a ser
+    `gestor`, porque é do domínio. **Para restringir alguém, o caminho é gravar
+    um perfil mais restrito — `colaborador` —, nunca apagar o que existe.**
+    Apagar afrouxa, e apagar achando que aperta é o erro que esta linha existe
+    para evitar. Tirar alguém do sistema inteiro é assunto do Workspace: fora do
+    domínio, nem o login acontece.
 
 **Verificar o sistema antigo:** na versão estática, as bases iam para o build. Se o JSON de
 viagens (com nome de passageiro) ou a base de mobilidade (com CEP e logradouro) estiverem
@@ -1582,6 +1616,61 @@ documento.
 **Sem dado real nas entradas** — descreva o que mudou, não os números que apareceram.
 
 ### Histórico
+
+#### 2026-09-22 — Todos do domínio veem tudo, e o que continua não sendo concedido
+
+Decisão do Gustavo, logo depois de o sistema subir. O estado era: **um perfil
+cadastrado no banco inteiro**, o dele. Ou seja, ninguém mais conseguia usar nada
+— e o programa de viagens, que depende de adesão (§7.5), tinha adesão
+estruturalmente impossível.
+
+**O pedido conflitava com o §12.12, e isso foi levantado antes de escrever
+código.** Aquela seção dizia, com todas as letras, que conta sem documento de
+perfil não recebe papel nenhum, e por quê: *perfil implícito é privilégio
+concedido por descuido*. O pedido era exatamente um perfil implícito. Não é
+motivo para recusar — é motivo para a mudança ser decidida e escrita, em vez de
+deslizada para dentro do código.
+
+**O padrão é `gestor`, e a escolha do papel é a decisão inteira.** "Ver tudo"
+foi lido como as sete telas e todos os números, e isso não custa privacidade
+nenhuma: **o inventário não tem pessoa dentro** (§3.1) — nenhum papel, nem
+`admin`, vê nome em tela de inventário. A única coisa deste sistema que
+identifica pessoa é quem registrou cada viagem do programa (§3.2), e é
+precisamente isso que `gestor` não vê.
+
+> **Um padrão `admin` teria entregado esse nome à empresa inteira**, de carona
+> num pedido que era sobre números. O argumento do §12.12 não foi descartado: ele
+> é o que fixa o padrão em `gestor`. O que se concede por descuido aqui é ver o
+> inventário, e foi decidido que isso não é problema; o que continua não sendo
+> concedido por descuido é nome de pessoa.
+
+**Antes de escolher, foi conferido que o papel padrão consegue registrar
+viagem.** Se não conseguisse, "todos veem tudo" teria quebrado o programa —
+todo mundo veria os painéis e ninguém conseguiria lançar a própria viagem, que
+era o problema original. `exigirProgramaDeViagens` aceita `gestor`, e há teste
+prendendo isso.
+
+**`remover` mudou de significado, e é a armadilha desta mudança.** Antes, apagar
+o documento tirava a pessoa do sistema. Agora ela **volta ao padrão** — sendo do
+domínio, continua vendo tudo. **Para restringir alguém, o caminho é gravar
+`colaborador`**, que passou a ser o único papel mais restrito que o padrão.
+Apagar afrouxa, e apagar achando que aperta é o erro que o aviso impresso pelo
+script existe para evitar.
+
+**O padrão é constante no código, nunca variável de ambiente**, pelo mesmo
+raciocínio do placeholder plausível: um valor de exemplo num `.env` viraria papel
+concedido sem ninguém decidir, e aqui o que vaza é acesso, não número.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (380 testes, 5 novos) e `next build` passam.
+- **A guarda foi conferida ligando a violação:** com o padrão em `admin`,
+  exatamente duas reprovam — a que exige que o padrão não veja quem registrou, e
+  a que nomeia os dois papéis proibidos como padrão. As outras três continuam
+  passando, e isso é informação: elas prendem *ver tudo*, que `admin` também faz.
+  Guarda que reprovasse as cinco estaria prendendo a coisa errada.
+- O estado do banco foi lido por ensaio temporário apagado em seguida, **só em
+  contagem por papel** — nenhum e-mail, nenhum uid.
 
 #### 2026-09-22 — O sistema no ar, e três diagnósticos para uma causa
 

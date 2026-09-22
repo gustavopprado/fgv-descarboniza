@@ -1,10 +1,16 @@
 /**
  * Concede e revoga perfil de acesso — CLAUDE.md §5 e §11.12.
  *
- * Conta autenticada sem documento em `usuarioPerfil` não recebe papel nenhum
- * (não há padrão, não há "colaborador por enquanto"): quem entra sem perfil vê
- * um aviso e não vê dado. Este script é o único caminho para conceder ou tirar
- * acesso, e roda fora da aplicação, como as cargas.
+ * **Conta do domínio sem documento em `usuarioPerfil` recebe `gestor`** (§5.2):
+ * vê as sete telas e registra a própria viagem. Este script existe para o que o
+ * padrão não dá — `admin`, `sustentabilidade` e `importacao` — e para o que ele
+ * dá demais: `colaborador`, que é **mais restrito** que o padrão.
+ *
+ * **`remover` devolve a pessoa ao padrão, não a tira do sistema.** Para
+ * restringir alguém, grave `colaborador`; apagar o documento afrouxa. Tirar do
+ * sistema inteiro é assunto do Workspace — fora do domínio não há login.
+ *
+ * Roda fora da aplicação, como as cargas.
  *
  * A pessoa precisa ter entrado ao menos uma vez, para existir no Firebase Auth.
  *
@@ -114,9 +120,15 @@ async function principal(): Promise<void> {
       await documento.delete()
       // O papel é lido do perfil a cada requisição, então a remoção já valeria
       // na próxima. Revogar o token derruba junto a sessão que estiver aberta,
-      // em vez de deixá-la viva numa tela que não mostra mais nada.
+      // para a pessoa reentrar já com o papel novo em vez de seguir com o antigo
+      // até o cookie expirar.
       await authAdmin().revokeRefreshTokens(usuario.uid)
-      console.log(`Perfil de ${comando.email} removido e sessão encerrada.`)
+      console.log(
+        `Perfil de ${comando.email} removido e sessão encerrada.\n` +
+          'ATENÇÃO: remover NÃO tira o acesso. Sendo do domínio, a pessoa volta\n' +
+          'ao papel padrão (§5.2) e continua vendo tudo. Para restringir, grave\n' +
+          '"colaborador", que é mais restrito que o padrão.',
+      )
       return
     }
 

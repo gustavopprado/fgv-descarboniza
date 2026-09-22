@@ -10,17 +10,24 @@
  * requisição. Token não carrega papel de propósito — token velho continuaria
  * valendo depois de o acesso ter sido revogado.
  *
- * Conta autenticada sem documento de perfil **não recebe papel nenhum**. Não há
- * padrão, não há "colaborador por enquanto": quem entra sem perfil vê uma tela
- * dizendo que precisa ser liberado. Perfil implícito é privilégio concedido por
- * descuido.
+ * **Conta do domínio corporativo sem documento de perfil recebe o papel padrão**
+ * (§5.2), que é `gestor`. Quem tem documento usa o que está nele — o documento
+ * manda, para cima e para baixo.
+ *
+ * A versão anterior desta regra não dava papel nenhum, e o motivo escrito era
+ * que perfil implícito é privilégio concedido por descuido. O argumento vale, e
+ * é por isso que o padrão é `gestor` e não `admin`: o que se concede aqui é
+ * **ver**, e o que fica de fora é a única coisa deste sistema que é dado
+ * pessoal — quem registrou cada viagem do programa (§3.2). Conceder por
+ * descuido o direito de ler o inventário é outra ordem de problema, e foi
+ * decidido que ele não é problema: o inventário não tem pessoa dentro (§3.1).
  */
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 import { dominioWorkspace } from '@/lib/env'
 import type { ContextoDeAcesso } from './consultas/acesso'
-import type { DocUsuarioPerfil } from './documentos/tipos'
+import type { DocUsuarioPerfil, Papel } from './documentos/tipos'
 import { COLECAO, authAdmin, firestore } from './firestore'
 
 export const COOKIE_SESSAO = 'fgv_sessao'
@@ -59,6 +66,23 @@ export class PerfilAusenteError extends Error {
 function dominioDe(email: string): string {
   return email.slice(email.lastIndexOf('@') + 1).toLowerCase()
 }
+
+/**
+ * **Papel de quem é do domínio corporativo e não tem perfil cadastrado** (§5.2).
+ *
+ * `gestor` vê as sete telas, todos os números e registra a própria viagem. O que
+ * ele **não** vê é quem registrou cada viagem do programa (§3.2) — a única coisa
+ * deste sistema que identifica pessoa. É por isso que o padrão é este e não
+ * `admin` ou `sustentabilidade`: o pedido foi que todos vejam tudo, e "tudo"
+ * aqui é o inventário inteiro, que não tem pessoa dentro (§3.1).
+ *
+ * **É constante, e não variável de ambiente, de propósito.** Um valor de exemplo
+ * plausível num `.env` viraria papel concedido sem ninguém decidir — é a mesma
+ * família do placeholder plausível que o `.env.example` vigia, com a diferença
+ * de que aqui o que vaza é acesso e não número. Mudar o padrão passa por editar
+ * esta linha, que aparece em revisão.
+ */
+export const PAPEL_PADRAO_DO_DOMINIO: Papel = 'gestor'
 
 /**
  * Verifica o ID token recém-emitido e devolve o cookie de sessão.
@@ -111,7 +135,25 @@ export async function sessaoAtual(): Promise<ContextoDeAcesso | null> {
   }
 
   const perfil = await firestore().collection(COLECAO.usuarioPerfil).doc(uid).get()
-  if (!perfil.exists) throw new PerfilAusenteError(email)
+  if (!perfil.exists) {
+    // Fora do domínio não há padrão que valha: a conta não é da empresa. Isto
+    // não deveria acontecer, porque o domínio é conferido antes de o cookie ser
+    // emitido — mas o cookie dura doze horas, e uma política pode mudar dentro
+    // delas. Conferir aqui custa uma comparação de string.
+    if (dominioDe(email) !== dominioWorkspace().toLowerCase()) {
+      throw new PerfilAusenteError(email)
+    }
+    return {
+      uid,
+      email,
+      papel: PAPEL_PADRAO_DO_DOMINIO,
+      // Sem documento não há empresa nem vínculo com o cadastro. `empresa` só
+      // recorta o perfil `importacao`, que nunca é o padrão; `funcionarioId`
+      // nulo é o mesmo estado de quem ainda não foi vinculado.
+      empresa: null,
+      funcionarioId: null,
+    }
+  }
 
   const dados = perfil.data() as DocUsuarioPerfil
   return {
