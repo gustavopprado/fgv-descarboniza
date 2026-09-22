@@ -69,38 +69,33 @@ export function NaoDesenhado({ mapa }: { mapa: MapaMaritimo }) {
   return (
     <>
       {inteiro(mapa.semGeografia)}{' '}
-      {mapa.semGeografia === 1 ? 'embarque ficou' : 'embarques ficaram'} fora do desenho
-      por falta de código de porto ou de coordenada
-      ({proporcao(total === 0 ? 0 : mapa.co2KgSemGeografia / total)} da emissão
-      marítima), que continua somando nos totais.
+      {mapa.semGeografia === 1 ? 'embarque não aparece' : 'embarques não aparecem'} no
+      desenho por falta de código de porto ou de coordenada —{' '}
+      {proporcao(total === 0 ? 0 : mapa.co2KgSemGeografia / total)} da emissão marítima,
+      que continua somando no total.
     </>
   )
 }
 
-export function MapaDeCorredoresMaritimos({
-  mapa,
-  ressalva,
-}: {
-  mapa: MapaMaritimo
-  /** O que a tela precisa declarar junto, como o frete aéreo fora do desenho. */
-  ressalva?: React.ReactNode
-}) {
+export function MapaDeCorredoresMaritimos({ mapa }: { mapa: MapaMaritimo }) {
   const textos: TextosDoMapa = {
     unidade: 'corredor marítimo',
     aviso: (
       <>
         <strong className="font-medium text-[var(--color-tinta)]">
-          A linha não é a derrota do navio
+          A linha não é a rota do navio
         </strong>{' '}
-        — é a geometria entre os dois portos; o ponto mostra o sentido da carga.
+        — é a ligação entre os dois portos; o ponto mostra o sentido da carga.
       </>
     ),
-    /* **Encurtado, não apagado** (§11.5, §14). As duas coisas que ficam são as
-       que impedem ler o mapa errado: o que ele não desenha, e o que soma no
-       total sem caber nele. O porquê de cada uma é lastro, e mora no resumo. */
+    /* **Encurtado, não apagado** (§11.5, §14). Fica o que impede ler o mapa
+       errado: o que ele não desenha, e quanto isso pesa. O frete aéreo saiu
+       daqui e continua declarado sob as duas tabelas, que é onde o recorte por
+       contêiner de fato importa — na legenda ele era a quarta cópia da mesma
+       frase na mesma tela. */
     ressalva: (
       <>
-        Espessura pela emissão. {ressalva} <NaoDesenhado mapa={mapa} />
+        Espessura pela emissão. <NaoDesenhado mapa={mapa} />
       </>
     ),
   }

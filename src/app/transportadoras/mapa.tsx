@@ -132,7 +132,7 @@ export function MapaDasFiliais({
         <strong className="font-medium">O destino das entregas não é desenhado</strong>
         : o relatório traz a distância até o cliente, não a localização dele.
         <span className="mt-1 block text-[11.5px]">
-          Ponto no centroide do município (IBGE).
+          Ponto no centro do município (IBGE).
           {semNome > 0 && ` ${semNome} nome não coube no desenho.`}
           {semPonto > 0 &&
             ` ${semPonto} filial ficou sem ponto por falta de coordenada, e continua nos totais.`}

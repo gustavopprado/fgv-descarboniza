@@ -296,7 +296,7 @@ export default async function Page({
             <Fatores fatores={metodo.fatores} categorias={CATEGORIAS} />
           </Bloco>
           <Bloco titulo="Mapa">
-            Ponto = filial de origem, no centroide do município. O destino não é
+            Ponto = filial de origem, no centro do município. O destino não é
             desenhado: a origem traz a distância, não a localização do cliente.
           </Bloco>
         </Recolhido>

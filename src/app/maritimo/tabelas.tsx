@@ -6,7 +6,7 @@
  * destino dele é um aeroporto ou um ponto interior — numa tabela cuja unidade é
  * contêiner por porto, quatro linhas sem contêiner nenhum não são um corredor
  * pequeno, são outra coisa. Quem declara isso é `ForaDoIndicador`, e está numa
- * peça só porque aparece em três lugares desta tela.
+ * peça só porque aparece sob as duas tabelas.
  *
  * **Não há supressão aqui** (§3.1.3). Embarque não tem pessoa: um limite mediria
  * número de embarques fingindo medir privacidade, e esconderia corredor pouco
@@ -22,16 +22,14 @@ import { MINIMO, Nota, Rolavel, TABELA, Vazio } from '../componentes'
 /**
  * O que está no total do módulo e fora de tudo que é por contêiner.
  *
- * Texto único, usado na nota do indicador, na legenda do mapa e sob as duas
- * tabelas. Duplicá-lo seria garantir que uma das cópias envelhecesse — foi a
- * lição registrada quando a frase do mapa de Viagens virou componente.
+ * Texto único, sob as duas tabelas. Duplicá-lo seria garantir que uma das cópias
+ * envelhecesse — foi a lição registrada quando a frase do mapa de Viagens virou
+ * componente.
  *
- * **É o fato, sem o porquê.** Ele aparece quatro vezes na mesma tela, e quatro
- * cópias de um parágrafo afogam o dado que elas qualificam. O que precisa estar
- * visível é o recorte — estes embarques somam no total e não entram em nada que
- * seja por contêiner —, porque sem ele o mapa soma menos que o número e é lido
- * como falha de carga. **O motivo é lastro e mora no resumo da tela** (§11.5),
- * uma vez só.
+ * **É o fato, sem o porquê.** Ele já apareceu quatro vezes na mesma tela, e
+ * quatro cópias de um parágrafo afogam o dado que elas qualificam; ficou onde a
+ * unidade é de fato o contêiner, que é onde o recorte muda a leitura. **O motivo
+ * é lastro e mora no resumo da tela** (§11.5), uma vez só.
  */
 export function ForaDoIndicador({ dados }: { dados: ResumoDeMaritimo }) {
   if (dados.embarquesAereos === 0) return null
@@ -183,43 +181,5 @@ export function TabelaDePortos({
       </Rolavel>
       {nota !== undefined && <Nota>{nota}</Nota>}
     </>
-  )
-}
-
-/* ------------------------------------------------------- qualidade do dado */
-
-/**
- * O rodapé que a §8.2 exige, em uma linha.
- *
- * Ele responde "quanto deste número veio do agente" — e, quando tudo veio, diz
- * isso em vez de sumir: rodapé ausente se lê como pergunta não respondida.
- *
- * **Desde que os contêineres sem detalhe de agente entraram, ele carrega também
- * a contagem**, e essa é a ressalva que impede a leitura errada (§11.5): a
- * proporção sozinha diz que parte do número é estimada, e não diz que a maior
- * parte da operação nunca teve linha de relatório nenhuma. Quem precisa dessa
- * frase é justamente quem não vai abrir o resumo.
- */
-export function QualidadeDoDado({ dados }: { dados: ResumoDeMaritimo }) {
-  const medido = dados.qualidade.find((q) => q.nivel === 'medido')?.proporcao ?? 0
-  const semDetalhe = dados.residuo.containers
-
-  return (
-    <Nota>
-      <strong className="font-medium text-[var(--color-tinta)]">
-        {proporcao(medido)} deste número vem de dado do agente
-      </strong>
-      {medido >= 1 ? (
-        ', e não há estimativa neste recorte.'
-      ) : semDetalhe === 0 ? (
-        '; o restante é estimativa por média de contêiner.'
-      ) : (
-        <>
-          ; o restante são {semDetalhe} de {dados.containers} contêineres que nenhum agente
-          detalhou linha a linha, com a emissão estimada pela média medida no porto de
-          desembarque. A contagem deles vem do registro de DI, e não da partida.
-        </>
-      )}
-    </Nota>
   )
 }

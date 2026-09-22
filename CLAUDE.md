@@ -705,8 +705,22 @@ genérico:
 4. `estimado_media` — contêineres reais × média geral de CO₂/contêiner
 5. `estimado_peso` — último recurso, só se nem a contagem de contêiner existir
 
-Gravar `nivelDado` em todo documento. No rodapé do módulo, uma linha de texto:
-*"X% deste número vem de dado do agente, o restante é estimativa por média."*
+Gravar `nivelDado` em todo documento.
+
+**A proporção estimada é declarada no resumo da tela, não no rodapé dela.** Até 22/09 ela
+era uma linha de texto sob os painéis — *"X% deste número vem de dado do agente, o restante
+é estimativa por média."* —, e saiu por decisão do Gustavo, junto de outros cortes da mesma
+tela. **Ela não foi apagada:** o resumo do módulo traz a cascata degrau a degrau, com a
+proporção da emissão e a contagem de documentos de cada degrau, e a linha de fonte diz
+quantos contêineres do período não têm detalhe de agente.
+
+> **Esta é a divisão da §11.5 aplicada a um caso de fronteira, e vale registrar de que lado
+> ela caiu.** A proporção estimada tem cara de ressalva que impede leitura errada — quem lê
+> o total sem ela pode tomá-lo por medido. O que a põe do lado do lastro é que **o número
+> não muda com ela**: ela qualifica o total, não o corrige, e quem quiser conferir encontra
+> a cascata inteira a um clique. Se um dia a parcela estimada for tão grande que ler o total
+> sem essa frase leve à conclusão errada, ela volta para a tela — e a §14 continua valendo:
+> declaração se move de lugar, não se apaga.
 
 **O degrau do porto existe por causa do resíduo, abaixo.** Dos contêineres que nenhum
 agente detalhou sabe-se o porto de desembarque e o mês, nunca o porto de origem — e sem
@@ -1522,6 +1536,15 @@ tornava dispensável é que **essa mesma divisão já é declarada em todo lugar
 precisa dela, porque o aéreo fica fora de tudo que é por contêiner. Um painel que repete
 pela quinta vez o que quatro notas já disseram não acrescenta recorte, acrescenta ruído.
 
+**O painel por empresa saiu do marítimo em 22/09**, e este é o terceiro motivo diferente
+para a mesma forma de corte. Aqui o recorte tem categorias de verdade e o dado existe — mas
+a maior parte da emissão cai em "Sem empresa", porque a contagem por porto não diz de quem é
+a carga (§8.2.1) e um dos blocos do relatório não traz a coluna de consignatário. Um painel
+cuja maior fatia é a ausência do próprio recorte não responde "como se divide", responde
+"não dá para dividir" — e isso a linha de fonte do resumo já diz, com número. **O agregado
+continua na camada de consulta**, e o painel volta no dia em que a origem informar a empresa
+em todos os blocos.
+
 Em qualquer agrupamento vale a regra da §10.10: **nulo é categoria visível.** Agrupar
 por empresa mostra "Sem empresa" como fatia própria, e o total geral bate com a
 contagem de documentos da coleção.
@@ -1882,6 +1905,65 @@ não tem é pior que declaração ausente, porque parece conferir.
 sobe de forma expressiva e o marítimo passa a ser o maior módulo do inventário. O
 número é maior porque cobre mais operação, não porque a operação emitiu mais — e é
 exatamente isso que as declarações de tela precisam continuar dizendo.
+
+#### 2026-09-22 — Enxugamento da tela de Marítimo, pedido pelo Gustavo
+
+Seis cortes na mesma leva, com a tela na frente dele. Nenhum número mudou: o que
+mudou foi quanto texto a tela mostra sem clicar.
+
+**O que saiu:** a contagem de contêineres sem detalhe do primeiro cartão, a nota
+inteira do segundo, o painel por empresa, o rodapé de qualidade, e o frete aéreo
+de dentro da legenda do mapa. Ficou no primeiro cartão só a contagem de
+contêineres.
+
+**Nada disso foi apagado do sistema**, e a distinção é a da §14: declaração se
+move de lugar. A proporção estimada continua no resumo, degrau a degrau da
+cascata; a contagem sem detalhe de agente continua na linha de fonte; o frete
+aéreo continua sob as duas tabelas, que é onde a unidade é de fato o contêiner.
+
+> **A §8.2 precisou ser reescrita por causa disso**, e é o ponto que vale
+> registrar. Ela mandava, com todas as letras, pôr a proporção estimada no
+> **rodapé do módulo** — e o rodapé saiu. Manter a frase seria a especificação
+> descrevendo um arranjo que a tela não tem, que é o defeito que este log vem
+> catalogando desde setembro. A seção passou a dizer onde a declaração mora
+> agora, e por que este caso cai do lado do lastro: **a proporção qualifica o
+> total, não o corrige.**
+
+**O painel por empresa é o terceiro motivo diferente para tirar um painel de
+corte**, e a §11.1 ganhou o parágrafo. Em Viagens os dois saíram por terem uma
+categoria só; no marítimo o de modal saiu por repetir o que quatro notas já
+diziam; aqui o corte tem categorias de verdade e mesmo assim não recorta —
+**a maior fatia é a ausência do próprio recorte**, porque a contagem por porto não
+diz de quem é a carga e um dos blocos não traz a coluna de consignatário.
+
+**Uma correção de português que não era erro, e foi feita mesmo assim.** A legenda
+do mapa dizia que a linha não é a *derrota* do navio — e "derrota" é o termo náutico
+correto para a rota que uma embarcação segue, não um engano por "rota". Trocado
+para "rota" porque **o teste de um rótulo é ser entendido**: quem lê a tela leu como
+erro, e um termo técnico que faz o leitor parar custa mais do que ganha. Mesma
+troca em Transportadoras, onde "centroide do município" virou "centro do
+município" — ali o termo continua no comentário do código, onde ele é preciso e
+distingue centroide de polígono de média de vértices (§7.4).
+
+**Três comentários de código e um do cabeçalho da tela ficaram velhos junto**, e
+foram corrigidos na mesma leva: a peça do frete aéreo dizia aparecer em três
+lugares e agora aparece em dois; a tela declarava cobrir "um agente só", o que
+deixou de ser verdade na etapa anterior.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (402 testes, nenhum novo) e `next build` passam.
+  Nenhum servidor foi subido por mim.
+- **Nenhum teste precisou mudar, e isso é informação:** as guardas do resumo
+  prendem que a tela peça o método do próprio módulo e mostre todos os parâmetros
+  dele, e as do marítimo prendem o que soma em cada total. Tirar painel e nota não
+  mexe em nenhuma das duas — que é exatamente a diferença entre enxugar e apagar
+  declaração.
+- As peças que ficaram órfãs foram removidas em vez de deixadas exportadas: o
+  componente do rodapé de qualidade e a prop de ressalva do mapa, que ninguém mais
+  passa. Código exportado que ninguém lê é armadilha esperando alguém encontrar (§7).
+- `npm run lint` não roda neste projeto, e não é regressão desta etapa: o script
+  chama `next lint`, que a versão instalada do Next não aceita mais.
 
 #### 2026-09-22 — Todos do domínio veem tudo, e o que continua não sendo concedido
 

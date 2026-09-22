@@ -16,8 +16,9 @@
  *
  *  - **previsão fica fora dos totais**, contada à parte;
  *  - **frete aéreo fica no total e fora do que é por contêiner**;
- *  - **o módulo cobre um agente só**, porque os outros não entregam detalhe
- *    linha a linha e os totais da aba de resumo são conta circular (§8.1).
+ *  - **os contêineres que nenhum agente detalhou entram por estimativa**, sobre a
+ *    contagem por porto do período — o CO₂ e o peso da aba de resumo continuam
+ *    fora, porque a conta de lá é circular (§8.1, §8.2.1).
  *
  * **A tela relata o ano-base do inventário, e só ele.** A coleção é contínua e
  * atravessa três anos civis, dois deles parciais (§8.4) — e ponta parcial lida
@@ -38,7 +39,6 @@ import {
   Cabecalho,
   Cartao,
   Grade,
-  ListaDeGrupos,
   Painel,
   Revelar,
   Vazio,
@@ -53,7 +53,7 @@ import {
 } from '../informacoes'
 import { SerieMensal } from '../serie-mensal'
 import { MapaDeCorredoresMaritimos, NaoDesenhado } from './mapa'
-import { ForaDoIndicador, QualidadeDoDado, TabelaDeCorredores, TabelaDePortos } from './tabelas'
+import { ForaDoIndicador, TabelaDeCorredores, TabelaDePortos } from './tabelas'
 
 export const dynamic = 'force-dynamic'
 
@@ -91,7 +91,6 @@ export default async function Page() {
     throw erro
   }
 
-  const empresaConhecida = dados.porEmpresa.some((g) => !g.rotulo.startsWith('Sem '))
 
   return (
     <Casca ctx={ctx} atual="/maritimo">
@@ -128,19 +127,7 @@ export default async function Page() {
                 rotulo="Por contêiner"
                 valor={dados.co2KgPorContainer}
                 unidade="kg CO₂"
-                nota={
-                  <>
-                    {plural(dados.containers, 'contêiner marítimo', 'contêineres marítimos')}
-                    {dados.residuo.containers > 0 ? (
-                      <>
-                        , dos quais {dados.residuo.containers} sem detalhe de agente
-                      </>
-                    ) : (
-                      <> em {plural(dados.embarques, 'embarque', 'embarques')}</>
-                    )}
-                    . <ForaDoIndicador dados={dados} />
-                  </>
-                }
+                nota={`${plural(dados.containers, 'contêiner marítimo', 'contêineres marítimos')}.`}
               />
               <Cartao
                 rotulo={`Total de ${ano}`}
@@ -149,7 +136,7 @@ export default async function Page() {
                 unidade="t CO₂e"
                 nota={
                   dados.previsoes.embarques === 0
-                    ? 'O que o agente informou não é recalculado; o resto é estimativa.'
+                    ? undefined
                     : `Soma o realizado; ${plural(dados.previsoes.embarques, 'um embarque previsto está', 'embarques previstos estão')} fora desta conta.`
                 }
               />
@@ -183,10 +170,7 @@ export default async function Page() {
                     Nenhum corredor pôde ser desenhado. <NaoDesenhado mapa={dados.mapa} />
                   </Vazio>
                 ) : (
-                  <MapaDeCorredoresMaritimos
-                    mapa={dados.mapa}
-                    ressalva={<ForaDoIndicador dados={dados} />}
-                  />
+                  <MapaDeCorredoresMaritimos mapa={dados.mapa} />
                 )}
               </Painel>
             </Revelar>
@@ -213,17 +197,6 @@ export default async function Page() {
                   nota="Embarque previsto não entra; o frete aéreo de fornecedor entra."
                 />
               </Painel>
-              <Painel titulo="Por empresa">
-                {empresaConhecida ? (
-                  <ListaDeGrupos grupos={dados.porEmpresa} mostrarPessoas={false} />
-                ) : (
-                  <Vazio>
-                    Este recorte não tem empresa por embarque: a coluna não vem em todos
-                    os blocos do relatório. O campo existe desde já para não exigir
-                    migração quando a origem passar a informá-lo.
-                  </Vazio>
-                )}
-              </Painel>
             </Revelar>
 
             <Revelar ordem={4} className={LUGAR.corredores}>
@@ -238,10 +211,6 @@ export default async function Page() {
               </Painel>
             </Revelar>
           </div>
-
-          <Revelar ordem={5}>
-            <QualidadeDoDado dados={dados} />
-          </Revelar>
         </>
       )}
 
