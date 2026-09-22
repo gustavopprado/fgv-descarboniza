@@ -215,6 +215,30 @@ h3 {
   }
 }
 
+/* Faixa clicável do radar — CLAUDE.md §3.1.1.
+
+   O alvo é o anel inteiro, desenhado como o traço de um círculo: `pointer-events:
+   stroke` faz a área do traço receber o clique mesmo quando ela está
+   transparente, sem precisar de um caminho em forma de rosca.
+
+   **O que se clica é a faixa, nunca o ponto.** Os pontos ficam por cima e não
+   recebem clique nenhum — é o `pointer-events: none` deles que deixa o clique
+   atravessar até o anel embaixo. */
+.faixa-do-radar {
+  cursor: pointer;
+  pointer-events: stroke;
+  stroke: transparent;
+  transition: stroke 0.15s var(--ease-suave);
+}
+
+.faixa-do-radar:hover {
+  stroke: rgba(123, 194, 88, 0.1);
+}
+
+.faixa-do-radar[data-aberta='sim'] {
+  stroke: rgba(123, 194, 88, 0.17);
+}
+
 .varrer {
   /* A cunha é desenhada a partir da própria origem, dentro de um grupo já
      centralizado no radar — então o eixo de rotação é o ponto zero dela.

@@ -64,10 +64,10 @@ import {
 /**
  * Frete pago pela empresa e operado por terceiro: Escopo 3.
  *
- * A **categoria** é que está em aberto — cat. 4 se o frete é CIF, cat. 9 se é FOB
- * (§9.1, §14) —, e categoria não é escopo. Enquanto o levantamento não fechar,
- * todo documento grava `regimeFrete: 'indefinido'` e a tela declara o escopo do
- * módulo como provisório.
+ * **A categoria é que se reparte, e o escopo não** — cat. 4 no que é CIF, cat. 9
+ * no que é FOB (§9.1). A operação usa os dois e o relatório não traz a
+ * modalidade por linha, então todo documento grava `regimeFrete: 'indefinido'`,
+ * no sentido de "não separável nesta fonte".
  */
 const ESCOPO_FRETE = 3
 
@@ -173,7 +173,7 @@ function montarDocumento(
     distanciaKm: entrega.distanciaKm,
     pesoKg: entrega.pesoKg,
     co2Kg,
-    // Pendente até o levantamento de CIF/FOB fechar (§9.1, §14).
+    // A origem mistura CIF e FOB sem separá-los por linha (§9.1).
     regimeFrete: 'indefinido',
     nivelDado: 'calculado_tkm',
   }
@@ -366,8 +366,8 @@ function relatar(m: Montagem, parametros: Parametros): void {
   )
   console.log(`  ${m.documentos.length} entrega(s), ${n(total / 1000, 1)} t CO₂e.`)
   console.log(
-    '  Regime de frete: indefinido em todos os documentos, até o levantamento de ' +
-      'CIF/FOB fechar (§9.1).',
+    '  Regime de frete: indefinido em todos os documentos — a origem mistura CIF e ' +
+      'FOB e não traz a modalidade por linha (§9.1).',
   )
 }
 

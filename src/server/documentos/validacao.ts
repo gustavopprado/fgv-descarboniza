@@ -413,9 +413,9 @@ export function validarEmbarque(id: string, doc: DocEmbarque): void {
  *    aceitar: é a lista de filiais desatualizada, e um quarto código gravado
  *    apareceria no agregado como uma filial que a tela não sabe desenhar;
  *  - **o regime de frete só admite os três valores**, e hoje ele é `indefinido`
- *    em todo documento. É ele que a tela lê para declarar o escopo como
- *    provisório (§9.1) — texto livre aqui apagaria a ressalva sem apagar o
- *    número;
+ *    em todo documento, porque a origem mistura CIF e FOB sem separá-los
+ *    (§9.1). Texto livre aqui deixaria a modalidade impossível de agrupar no
+ *    dia em que ela vier por linha;
  *  - **o fator é obrigatório, mesmo com emissão zero.** No envelope, fator nulo
  *    se sustenta onde a emissão é zero por definição — bicicleta, a pé. Aqui não
  *    existe entrega que não emita por definição: o zero vem de peso zero, e a

@@ -10,7 +10,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { montarRadar } from './radar'
+import { ANEIS_DO_RADAR, faixasDeDistancia, montarRadar } from './radar'
 
 const RAIO = 100
 
@@ -102,3 +102,73 @@ test('a escala de raiz espalha o que a linear empilharia', () => {
   assert.ok(raios[0] < raios[1] && raios[1] < raios[2] && raios[2] < raios[3])
 })
 
+
+/* ------------------------------------------------ as faixas que se clicam */
+
+/**
+ * A faixa é o recorte que a tela abre (§3.1.1), e ela precisa cobrir a régua
+ * inteira: quem cair num vão entre dois anéis some da contagem sem nada
+ * quebrar — o radar continua desenhando o ponto e o agregado deixa de somá-lo.
+ */
+test('as faixas se encaixam, sem vão e sem sobreposição', () => {
+  for (const maior of [37, 8, 60, 12, 9, 1.5, 214]) {
+    const faixas = faixasDeDistancia(maior, ANEIS_DO_RADAR)
+
+    assert.ok(faixas.length > 0, `nenhuma faixa com maior = ${maior}`)
+    assert.equal(faixas[0].deKm, 0, 'a primeira faixa não começa na fábrica')
+    assert.ok(
+      faixas[faixas.length - 1].ateKm >= maior,
+      `a última faixa fecha antes de quem mora mais longe (maior = ${maior})`,
+    )
+    for (let i = 1; i < faixas.length; i++) {
+      assert.equal(
+        faixas[i].deKm,
+        faixas[i - 1].ateKm,
+        `vão ou sobreposição entre faixas com maior = ${maior}`,
+      )
+    }
+  }
+})
+
+test('toda distância cai em exatamente uma faixa', () => {
+  const distancias = [0, 0.4, 2, 5.5, 12, 26.9, 37]
+  const faixas = faixasDeDistancia(Math.max(...distancias), ANEIS_DO_RADAR)
+
+  for (const d of distancias) {
+    const quantas = faixas.filter(
+      (f, i) => (d > f.deKm || i === 0) && d <= f.ateKm,
+    ).length
+    assert.equal(quantas, 1, `a distância ${d} caiu em ${quantas} faixas`)
+  }
+})
+
+/**
+ * **O que se clica tem de ser o que se vê.** A faixa `i` é desenhada até o anel
+ * `i`; se as duas listas tiverem tamanhos diferentes, a tela oferece um alvo
+ * onde não há anel, ou deixa um anel sem alvo — e o número que abre é de outra
+ * faixa, que é o pior dos dois.
+ */
+test('há uma faixa por anel, e ela termina onde o anel é desenhado', () => {
+  for (const distancias of [[2, 9, 37], [1, 3, 8], [4, 60], [12]]) {
+    const maior = Math.max(...distancias)
+    const { aneis } = montarRadar(distancias, { raio: 100, aneis: ANEIS_DO_RADAR })
+    const faixas = faixasDeDistancia(maior, ANEIS_DO_RADAR)
+
+    assert.equal(
+      faixas.length,
+      aneis.length,
+      `faixas e anéis discordam com ${distancias.join(', ')}`,
+    )
+    faixas.forEach((faixa, i) => {
+      const esperado =
+        i === faixas.length - 1
+          ? Math.max(aneis[i].distanciaKm, maior)
+          : aneis[i].distanciaKm
+      assert.equal(faixa.ateKm, esperado)
+    })
+  }
+})
+
+test('sem ninguém não há faixa a clicar', () => {
+  assert.deepEqual(faixasDeDistancia(0, ANEIS_DO_RADAR), [])
+})

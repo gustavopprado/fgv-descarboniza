@@ -36,10 +36,10 @@ nada mais.** Quem confundir os dois vai produzir número errado, e já produziu.
 | | **Inventário** | **Programa de viagens** |
 |---|---|---|
 | O que é | Relatório de emissões da empresa | Registro voluntário de viagem pelo colaborador |
-| Telas | Visão geral, Mobilidade, Viagens, Marítimo | Registrar viagem, Emissões registradas |
+| Telas | Visão geral, Mobilidade, Viagens, Marítimo, Transportadoras | Registrar viagem, Emissões registradas |
 | Origem do dado | Planilha, carga controlada, fora da aplicação | Formulário, escrita pela aplicação |
 | Completude | Fonte administrativa completa do período | Adesão parcial e voluntária |
-| Coleções | `trecho`, `embarque`, `respostaMobilidade` | `viagemRegistrada` |
+| Coleções | `mobilidade`, `viagemTrecho`, `embarque`, `entregaRodoviaria` | `viagemRegistrada` |
 
 **Os dados do programa nunca entram no inventário.** Não somam, não aparecem em
 série do inventário, não entram em indicador de inventário, não são comparados
@@ -71,7 +71,7 @@ Um inventário de emissões com quatro módulos e um painel consolidado.
 | Mobilidade casa-trabalho | Escopo 3, cat. 7 | kg CO₂ por funcionário por mês |
 | Viagens corporativas | Escopo 3 cat. 6 / Escopo 1 | kg CO₂ por viagem |
 | Transporte marítimo de importações | Escopo 3, cat. 4 | kg CO₂ por contêiner |
-| Distribuição rodoviária às filiais | Escopo 3, cat. 4 — **provisório, ver §14** | kg CO₂ por filial |
+| Distribuição rodoviária às filiais | Escopo 3, cat. 4 e cat. 9 — ver §9.1 | kg CO₂ por filial |
 | Painel consolidado | — | toneladas de CO₂e no ano-base do inventário (§11.0) |
 
 **Regra de exibição:** peso, volume, distância, tonelada-quilômetro e intensidade por quilo
@@ -186,9 +186,7 @@ muita emissão. Apagar a origem desse peso é apagar a conclusão.
 operacional da empresa, não são de conhecimento geral e não foram escolhidos por ninguém a
 serviço. É essa a distinção que separa os dois módulos, e é por ela que a regra difere.
 
-#### 3.1.1 Mobilidade — suprime, e fica exatamente como está
-
-**Este módulo não muda.** Está funcionando e não se toca.
+#### 3.1.1 Mobilidade — suprime
 
 - **Supressão de grupos pequenos:** não exibir recorte com menos de **5 pessoas**. Um bairro
   com um respondente identifica esse respondente mesmo sem o nome dele. O que ficar abaixo
@@ -196,6 +194,18 @@ serviço. É essa a distinção que separa os dois módulos, e é por ela que a 
 - A contagem da supressão é de **pessoas distintas**, nunca de registros.
 - No radar, cada ponto é um funcionário **sem nenhum dado associado**. Sem tooltip, sem
   clique, sem nada que permita isolar um indivíduo.
+- **O que se clica no radar é a faixa entre dois anéis, nunca o ponto** — e a distinção é a
+  regra inteira, não um detalhe de implementação. Clicar num ponto mostraria o modal e a
+  distância de uma pessoa: com as distâncias quase todas distintas depois da troca de
+  provedor (§15), esse par identifica tão bem quanto um nome, e é literalmente "isolar um
+  indivíduo". A faixa responde à mesma pergunta — **quem mora a esta distância vai de
+  quê?** — em agregado, com a supressão por cima: modal com pouca gente dentro da faixa cai
+  no balde, e numa faixa pequena cai tudo. A contagem de pessoas da própria faixa não é
+  informação nova, porque o radar já desenha um ponto por pessoa e contá-los é olhar o
+  desenho; o que a supressão protege é o **atributo**.
+- **A faixa sai dos mesmos limites que desenham os anéis**, de uma função só. Com um número
+  em cada ponta, a tela ofereceria um recorte que o agregado não mediu — e o erro sairia
+  como número plausível, nunca como falha.
 - **O ângulo do radar não tem significado, e isso é decisão de privacidade, não preguiça de
   implementação.** O protótipo posiciona cada ponto por distância *e direção* em relação à
   fábrica. Raio e direção reais, juntos, formam um localizador quase único: apontam para uma
@@ -707,12 +717,29 @@ separa a emissão **por filial**, não por transportadora individual, mesmo o no
 se referindo à origem terceirizada da emissão (frete que a empresa não opera, mesma lógica
 do marítimo em §8).
 
-**Escopo GHG: provisório.** O marítimo e as viagens entraram como Escopo 3, cat. 4 — frete
-pago pela empresa. Se a entrega aqui for CIF (frete pago pela FGV), a mesma leitura vale; se
-for FOB (frete pago pelo cliente), a categoria correta é a 9, e o módulo pode nem pertencer a
-este inventário. **O Gustavo está levantando o regime de frete das entregas; enquanto isso
-não fechar, todo documento grava `regimeFrete: 'indefinido'`** e a tela declara o escopo como
-provisório, no mesmo lugar em que o marítimo declara `nivelDado` (§8.2). Ver §14.
+**Escopo GHG: Escopo 3, em duas categorias.** O levantamento do regime de frete fechou em
+21/09/2026, e a resposta foi **os dois**: parte das entregas é CIF, frete pago pela FGV, que
+é cat. 4 como no marítimo e nas viagens; parte é FOB, frete pago pelo cliente, que é cat. 9.
+**Nenhuma das duas sai deste inventário** — as duas são Escopo 3, e a hipótese de o módulo
+precisar sair do consolidado morreu com a resposta.
+
+**O que não se resolveu é a separação, e a razão é de dado, não de método.** O relatório de
+entregas tem seis colunas — data, filial, código do cliente, cliente, distância e peso — e
+**nenhuma delas é a modalidade do frete**. Sem a coluna não há como dizer qual linha é cat. 4
+e qual é cat. 9, então todo documento grava `regimeFrete: 'indefinido'`, **e esse valor quer
+dizer "não separável nesta fonte", nunca "ninguém olhou"**. `cif` e `fob` continuam na união
+(§10.11) para o dia em que a coluna vier: a modalidade é campo da nota fiscal, então o
+sistema de faturamento a tem — o que falta é pedi-la no export, que é operação e não código.
+
+**A mistura não é ressalva sobre o número, e por isso não aparece como aviso na tela.** Ela
+não muda valor nenhum: total, filial e mês são os mesmos em CIF ou FOB. Onde ela decide
+alguma coisa é na montagem do relatório final, que separa as categorias — e por isso ela é
+**lastro, declarada no resumo do módulo** (§11.5), ao lado da fonte e do fator.
+
+> **Não estimar a separação.** Mapear a modalidade por cliente é tentador, porque a emissão
+> se concentra em poucos deles, e seria inventar dado: **um mesmo cliente pode ter as duas
+> modalidades ao longo do ano**, e o mapa entraria no inventário como fato. Vale aqui o que
+> vale para o agente sem detalhe no marítimo (§14): **a saída é pedir o dado à origem.**
 
 ### 9.2 Como o CO₂ é calculado
 
@@ -777,8 +804,9 @@ e distância são insumo de cálculo e não aparecem soltos na interface (regra 
 §1). **Sem coordenada exata de cliente, não há mapa de rota** como em Viagens ou Marítimo:
 **um mapa com as três filiais marcadas** (Curitiba, Itajaí, Cabo de Santo Agostinho), e ao
 clicar em cada uma, os números daquela filial — total, número de entregas, peso
-movimentado. O método do módulo (§11.5) declara o regime de frete provisório (§9.1) e a
-fonte do fator (§9.2).
+movimentado. O método do módulo (§11.5) declara a mistura de CIF e FOB (§9.1) e a
+fonte do fator (§9.2). **Nenhuma das duas é aviso sobre o número** — as duas são lastro, e
+nenhuma muda o que a tela desenha.
 
 ---
 
@@ -1065,9 +1093,14 @@ co2Kg, regimeFrete, nivelDado
 faturamento, nunca o nome do cliente — nome real de cliente não se versiona (§2.1) e não
 aparece em nenhuma tela do módulo, só o agregado por filial (§9.4).
 
-`regimeFrete` (`cif` | `fob` | `indefinido`) fica pendente enquanto o levantamento do
-Gustavo sobre CIF/FOB não fechar (§14): hoje toda entrega grava `indefinido`, e a tela
-declara o escopo do módulo como provisório.
+`regimeFrete` (`cif` | `fob` | `indefinido`) grava `indefinido` em toda entrega **porque a
+origem mistura CIF e FOB e não traz a modalidade por linha** (§9.1) — é ausência de coluna,
+não pendência de decisão. Os outros dois valores existem para o dia em que a coluna vier,
+e nesse dia eles chegam pela carga, sem migração.
+
+**O agregado da tela não lê este campo.** Com um valor só em toda a coleção ele não recorta
+nada e agruparia tudo num balde; quem o conta documento a documento é o `verificar`, que é
+onde a chegada da modalidade apareceria sozinha.
 
 O documento carrega o mesmo núcleo de emissão dos outros módulos do inventário — fator
 carimbado com versão, alertas, `atualizadoEm` — pela mesma razão da §9.2: sem saber o
@@ -1087,14 +1120,17 @@ sobrescreve pelo ID determinístico em vez de duplicar.
 1. **Visão geral** — o inventário consolidado do ano-base. Definida inteira na §11.0,
    porque o que essa tela soma não é óbvio a partir dos módulos.
 2. **Mobilidade** — kg CO₂ por funcionário/mês, total no ano, distância média, radar de onde
-   o quadro mora, emissão por modal.
+   o quadro mora, emissão por modal. Clicar numa faixa do radar abre os números dela — a
+   faixa, nunca o ponto (§3.1.1).
 3. **Viagens** — kg CO₂ por viagem, total, mapa de rotas, destinos mais frequentes, emissão
    por mês.
 4. **Marítimo** — kg CO₂ por contêiner, total, mapa de rotas com navios em movimento, emissão
-   por mês, contêineres por porto, tabela de corredores.
+   por mês, contêineres por porto, tabela de corredores. **Relata o ano-base do inventário
+   (§11.0), e só ele**: a coleção atravessa três anos civis, dois deles parciais, e não há
+   seletor de período — ver §8.4.
 5. **Transportadoras** — kg CO₂ por filial, total, mapa com as três filiais e os números de
-   cada uma ao clicar, emissão por mês. Regime de frete provisório (§9.1) declarado no botão
-   de método.
+   cada uma ao clicar, emissão por mês. A mistura de CIF e FOB (§9.1) é declarada no botão
+   de método, como lastro — não como ressalva sobre o número.
 
 **Programa de viagens** — sistema separado (§0.1, §7.5). Estas duas telas leem
 `viagemRegistrada` e **nenhuma coleção do inventário**; as cinco de cima leem o inventário
@@ -1144,6 +1180,16 @@ procurado.
 onde o valor não carrega a consequência — "21 dias úteis" e "econômica, assumida" já dizem
 tudo, e uma frase abaixo de cada linha transforma o resumo na tela que ele substituiu. Sete
 dos vinte e cinco parâmetros têm glosa; os outros são uma linha de duas colunas.
+
+**O resumo pode recolher o lastro, e só ele.** Uma tela cuja pergunta cabe em duas linhas —
+de onde vem o dado e como a conta é feita — abre com essas duas e guarda parâmetro, fator,
+exceção e alerta atrás de um bloco que se abre num clique, em `<details>` nativo. **Recolher
+não é remover**: a lista continua sendo a do módulo inteiro, parâmetro novo continua
+aparecendo sozinho, e o que muda o número continua na página. O que sai da primeira olhada é
+disputa de atenção, não declaração — e é a §14 outra vez, declaração se move de lugar e não
+se apaga. **As quatro telas de módulo usam isso**; a Visão geral não, porque o resumo
+dela já é curto — ela não tem módulo, e o que declara são as três frases da §11.0, que
+moram na própria tela.
 
 **O alerta aparece pelo próprio código, sem a regra ao lado.** Os códigos são descritivos —
 `geocodificacao_falhou`, `embarque_previsto`, `fator_ausente` —, e o sublinhado vira espaço
@@ -1199,9 +1245,10 @@ e pelo método do módulo, nunca do ambiente, pelo mesmo motivo que a base de da
 marítimo passou a ser constante em 19/09: a escolha que mais move o número não pode
 mudar por variável esquecida numa máquina.
 
-**O total soma os quatro módulos.** Mobilidade, Viagens, Marítimo e Transportadoras —
-esta última somada com `regimeFrete` ainda `indefinido` (§9.1, §14): é a leitura provisória,
-não a definitiva.
+**O total soma os quatro módulos.** Mobilidade, Viagens, Marítimo e Transportadoras. A
+última entra **inteira**: o frete dela é CIF em parte e FOB em parte (§9.1), as duas são
+Escopo 3, e a origem não separa as categorias — nenhuma parcela fica de fora por causa
+disso.
 
 #### A mobilidade entra por decisão declarada, não por coincidência de data
 
@@ -1228,8 +1275,9 @@ deslocamento de 2025 e 2026 são comparáveis; quem assina o relatório assina i
   somam o indicador principal; se não somarem, é defeito, não arredondamento.
 - **Quatro cartões de indicador** — um por módulo, com o total do ano em tCO₂e. O cartão
   da mobilidade carrega a etiqueta de ano-base 2026 aplicado a 2025 **no próprio
-  cartão**. O de Transportadoras carrega a etiqueta de regime de frete provisório
-  (§9.1). Não em rodapé: rodapé é onde a ressalva morre.
+  cartão**. Não em rodapé: rodapé é onde a ressalva morre. O de Transportadoras nomeia as
+  duas categorias do módulo e nada mais — a mistura de CIF e FOB não muda o número dele
+  (§9.1), então ela é lastro e não etiqueta.
 - **Emissão mês a mês — empilhada, nunca somada numa linha só.** A mobilidade é taxa
   repetida nos doze meses e aparece como banda constante; empilhada, a banda plana se
   declara sozinha. Numa linha única o mesmo dado viraria curva achatada e a variação de
@@ -1243,7 +1291,7 @@ módulo no marítimo, data da entrega em transportadoras, e taxa mensal na mobil
 **Sem filtros.** Os quatro cortes da §11.1 ficam nas telas de módulo. A Visão geral é
 uma leitura só, e é a tela que alguém abre para ver o número do ano.
 
-#### Quatro declarações obrigatórias, curtas, na própria tela
+#### Três declarações obrigatórias, curtas, na própria tela
 
 1. **A mobilidade é ano-base 2026 aplicada a 2025** — no cartão dela.
 2. **O marítimo de 2025 é o inventário de um agente.** Dois dos três não entregam
@@ -1251,8 +1299,12 @@ uma leitura só, e é a tela que alguém abre para ver o número do ano.
    ano.
 3. **Previsão está fora do total** — regra do módulo marítimo, que continua valendo no
    consolidado.
-4. **Transportadoras entra com regime de frete provisório** — `indefinido` até o
-   levantamento de CIF/FOB fechar (§9.1, §14); o total pode ser recortado de novo depois.
+
+**Eram quatro até 21/09**, e a quarta era o regime de frete provisório de Transportadoras.
+Ela saiu quando o levantamento fechou: a mistura de CIF e FOB não impede leitura errada de
+número nenhum desta tela, e o que ela de fato decide — a separação por categoria no
+relatório — é lastro, declarado no resumo do módulo (§9.1, §11.5). **Declaração que muda o
+número não sai; esta não mudava.**
 
 #### 11.0.1 O que a consulta desta tela tem de diferente de todas as outras
 
@@ -1263,8 +1315,13 @@ explícita, e cada uma destas é guarda com teste que **liga a violação**:
 - **Mobilidade pelo ano-base da pesquisa; viagens, marítimo e transportadoras pelo ano
   civil de 2025.** Quatro recortes, um total. Filtro único para os quatro é o defeito,
   não a simplificação.
-- **O marítimo entra recortado em 2025.** A série do módulo é contínua e começa em
-  novembro de 2024 (§8.4). Documento fora de 2025 não move o indicador desta tela.
+- **O marítimo entra recortado em 2025.** A **coleção** do módulo é contínua e começa em
+  novembro de 2024 (§8.4). Documento fora de 2025 não move o indicador desta tela — e,
+  desde 21/09, também não move o da tela do módulo, que passou a relatar o mesmo ano-base
+  pela mesma constante. **As duas telas mostram o mesmo número**, e é assim que deve ser:
+  enquanto elas diferiam, quem abrisse as duas lado a lado ia procurar qual das duas
+  cargas estava errada. O que sobra da série contínua é o que a conferência de cobertura
+  (§8.4) vê, e ela continua olhando a coleção inteira, por agente e bloco.
 - **Previsão fora do total, aéreo dentro do total.** Mesma regra do módulo, e pelo mesmo
   motivo: o aéreo é emissão do escopo e só não tem contêiner.
 - **Nenhum identificador de pessoa sai na resposta** (§3.1), e a mobilidade não é
@@ -1285,7 +1342,21 @@ São quatro, e só esses:
 
 Não há corte por centro de custo, por valor ou por qualquer dimensão financeira.
 
-Em qualquer agrupamento vale a regra da 9.10: **nulo é categoria visível.** Agrupar
+**A lista é o que o painel pode oferecer, não o que toda tela precisa mostrar.** Um corte
+que, no módulo, tem uma categoria só não recorta nada: ele ocupa um painel para exibir uma
+linha, ou a explicação de estar vazio. Em Viagens é o caso dos dois — as duas fontes
+administrativas só trazem aéreo, e nenhuma informa a empresa por trecho —, e por isso os
+dois painéis saíram da tela em 21/09. **Os cortes continuam na camada de consulta**, prontos
+para voltar no dia em que a origem informar a empresa ou em que entrar trecho rodoviário:
+o que saiu foi o painel, não o agregado.
+
+**No marítimo o painel por modal saiu por outro motivo, e a diferença importa**: lá o corte
+tem duas categorias de verdade — frete marítimo e frete aéreo de fornecedor —, e o que o
+tornava dispensável é que **essa mesma divisão já é declarada em todo lugar da tela** que
+precisa dela, porque o aéreo fica fora de tudo que é por contêiner. Um painel que repete
+pela quinta vez o que quatro notas já disseram não acrescenta recorte, acrescenta ruído.
+
+Em qualquer agrupamento vale a regra da §10.10: **nulo é categoria visível.** Agrupar
 por empresa mostra "Sem empresa" como fatia própria, e o total geral bate com a
 contagem de documentos da coleção.
 
@@ -1423,7 +1494,7 @@ Coisas que provavelmente vão acontecer, mas não agora.
   método declara a configuração **atual** do ambiente, e não necessariamente a que produziu
   a carga que está no banco. Enquanto a carga for manual e rara, a diferença é teórica;
   quando deixar de ser, o caminho é carimbar o provedor junto do fator.
-- **São oito telas.** A Visão geral fechou a lista do inventário em 19/09 e a de
+- **São sete telas.** A Visão geral fechou a lista do inventário em 19/09 e a de
   Transportadoras entrou em 21/09. Visão geral, Mobilidade, Viagens, Marítimo e
   Transportadoras (§9) compõem o inventário; Registrar viagem e Emissões registradas
   compõem o programa — esta última com a versão do próprio viajante, "Minhas viagens",
@@ -1434,19 +1505,18 @@ Coisas que provavelmente vão acontecer, mas não agora.
   única consulta que atravessa os módulos**, e as guardas da §11.0.1 são o que a segura.
   Módulo novo, ano-base novo ou mudança de recorte em qualquer um deles passa por lá antes
   de passar pela tela.
-- **Regime de frete das entregas rodoviárias (§9.1).** Está sob levantamento do Gustavo —
-  CIF, FOB ou os dois. Enquanto não fechar, todo documento de `entregaRodoviaria` grava
-  `regimeFrete: 'indefinido'` e o módulo Transportadoras entra na Visão geral como cat. 4
-  provisória. **Se o levantamento apontar FOB, a classificação muda para cat. 9 e o módulo
-  pode precisar sair do total consolidado** — reclassificação de escopo, não ajuste de
-  tela, mesma natureza de decisão da §0.1.
+- ~~**Regime de frete das entregas rodoviárias (§9.1).**~~ Fechado em 21/09/2026, e a
+  resposta foi **os dois**: a operação usa CIF e FOB. Com isso **o módulo não sai do
+  consolidado** — as duas modalidades são Escopo 3 —, e o que sobra é repartir o total
+  entre cat. 4 e cat. 9.
 
-  Desde 21/09 isto deixou de ser hipótese e passou a ser o maior número do
-  inventário: **o módulo entrou no consolidado e responde pela maior parte do
-  total do ano.** A decisão sobre o regime não muda mais só um rótulo — ela
-  decide se o total publicado é este ou uma fração dele. A ressalva sai do
-  documento, e não de texto na tela: o dia em que o levantamento fechar, ela some
-  sozinha.
+  **O que fica em aberto é a coluna, e é operação.** O export de entregas não traz a
+  modalidade por linha, e ela existe na nota fiscal: pedir a coluna à origem é o caminho, no
+  mesmo molde do detalhe por embarque que falta no marítimo. Do lado do código não falta
+  nada — `regimeFrete` já admite `cif` e `fob`, a validação já os aceita e a carga grava o
+  que vier. Enquanto a coluna não vem, `indefinido` significa **não separável nesta fonte**,
+  e a §9.1 diz por que a alternativa — deduzir a modalidade por cliente — seria inventar
+  dado.
 - ~~**Fator de frete rodoviário de carga ainda não tem fonte fixada (§9.2).**~~ Fechado em
   21/09/2026: a fonte é a ferramenta do GHG Protocol Brasil, na linha de média da frota de
   carga, com a derivação da própria ferramenta e em CO₂e não biogênico (§9.2). **O valor
@@ -1482,6 +1552,419 @@ documento.
 **Sem dado real nas entradas** — descreva o que mudou, não os números que apareceram.
 
 ### Histórico
+
+#### 2026-09-22 — Transportadoras: o resumo no formato novo, e dois acertos de leitura
+
+Quarta e última tela da leva. Três mudanças pequenas, e duas delas estavam
+escondidas à vista — um ícone que não existia e uma linha de rótulos que se
+sobrepunha.
+
+**O resumo abre com fonte, o que entrou e uma frase de cálculo**, como as outras
+três. Parâmetros, fator e mapa ficam recolhidos.
+
+> **A mistura de CIF e FOB foi para dentro do recolhido, e é o lugar certo
+> dela.** A §9.1 já dizia que ela é lastro e não ressalva — **não muda valor
+> nenhum desta tela**, decide a repartição por categoria no relatório final —, e
+> recolher não é remover: o parâmetro continua na página, nomeando as duas
+> modalidades e as duas categorias. **A guarda de 21/09 continua passando pelo
+> motivo certo**, porque ela prende o parâmetro, não o lugar dele na tela; foi
+> escrita assim de propósito, para quem reescrevesse a frase continuar passando e
+> quem apagasse a informação, não.
+
+**O ícone do menu: a rota não tinha um, e caía no genérico.** O mapa de ícones
+nasceu com as quatro telas que existiam, e a quinta entrou depois — sem entrada
+no mapa, ela usava o traço de reserva, o mesmo das telas do programa. **Duas
+coisas diferentes com o mesmo desenho no mesmo menu**, e nada acusava: não é erro
+de código, é uma tabela que alguém precisa lembrar de completar. Um caminhão
+entrou no lugar.
+
+> **Ícone se escolhe olhando, no tamanho em que ele vive.** No menu ele tem 16px,
+> e a diferença entre três desenhos que são iguais em 56px é enorme ali: a
+> variante em que a roda fica **dentro** da caixa da carroceria vira borrão, e a
+> que deixa a linha da base passar por cima das rodas as abre em dois ganchos. A
+> escolhida apoia as rodas fora da caixa. Medido lado a lado, nos dois tamanhos,
+> dentro de um item de menu de verdade.
+
+**A série mensal: o ano saiu de doze rótulos e foi para um.**
+
+Reportado pelo Gustavo, com a tela na frente: a linha de meses se lia como uma
+palavra só. **Medido com a casca antes de mexer**, na coluna em que esta série
+vive: o passo é de pouco mais de trinta e seis pixels e `jan/25` ocupa trinta e
+quatro — a folga entre vizinhos ficava entre 0,1 e 3,5px, **e um par se
+sobrepunha**. Não era impressão.
+
+> **O que saiu é repetição, não declaração** (§13). O ano estava escrito doze
+> vezes na mesma linha para dizer uma coisa só, e passou a estar escrito uma vez,
+> na nota do gráfico. **E ele volta sozinho quando informa**: série que atravessa
+> a virada do ano continua com o ano em cada rótulo, porque ali é ele que separa
+> dois janeiros. Quem decide é o dado — a peça olha os meses que recebeu —, não
+> quem chama.
+
+**O vão entre as colunas virou número declarado.** Ele estava escrito duas vezes,
+solto, na barra simples e na empilhada; virou constante única, e desceu de 0,62
+para 0,56 de ocupação. **O que o olho usa para contar colunas é o vão, não a
+barra.**
+
+Medido depois, nas larguras em que alguém abre a tela: a menor folga entre dois
+meses passou de −0,5px para 16,2px a 1440, 13,4px a 1280 e 19px a 1024, onde a
+coluna é inteira. Sem rolagem lateral em nenhuma delas nem a 390.
+
+> **O valor no topo da barra também não cabia, e a saída foi mudar a unidade.**
+> Ele tem quase quarenta e nove pixels de largura contra trinta e seis de passo —
+> **vizinhos se sobrepõem em cerca de doze pixels** —, e só não colidiam na tela
+> porque as barras têm alturas diferentes e os números acompanham. Dois meses
+> parecidos os encostam, e a série tem pares assim.
+>
+> **Não há tamanho de fonte que resolva**: abaixo de nove pixels o texto vira
+> sujeira (18/09), e mesmo ali ele continua estourando. Então as duas saídas eram
+> **deixar de escrever o valor** em série longa ou **escrevê-lo em outra
+> unidade** — e a decisão do Gustavo foi preservar o número na tela. O topo passou
+> a ser tonelada, que cabe em três glifos.
+>
+> **A escala sai do maior mês da própria série, nunca de constante**, porque a
+> mesma peça desenha módulos de ordens de grandeza diferentes: casas decimais
+> conforme a grandeza, e **abaixo de uma tonelada a unidade continua sendo o
+> quilo** — ali é a tonelada que escreveria zero, e um mês de trezentos quilos
+> vale "300" e não "0,30". A unidade é declarada na nota do gráfico, e **o valor
+> exato, em quilo, continua no `title` de cada barra**: o que encolheu foi o
+> rótulo, nunca o dado.
+>
+> Medido depois, com vizinhos de mesma altura de propósito, que é onde a
+> sobreposição aparece: a folga entre dois valores passou de **−12,4px para
+> 14,5px a 1440**, 11,8 a 1280 e 16,6 a 1024. Numa série uma ordem de grandeza
+> menor — quatro glifos, com duas casas — ela fica em 8,7 e 6,9px, apertada e
+> positiva.
+
+**Uma frase da §11.5 tinha envelhecido**: ela dizia que só a Mobilidade recolhia o
+lastro, e com esta tela são as quatro de módulo. Corrigida — especificação que
+descreve um arranjo que o código não tem é o defeito que este log vem catalogando,
+e ele não muda de natureza quando é só uma frase.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (363 testes, nenhum novo) e `next build` passam.
+  Nenhum servidor foi subido por mim; usei o que já estava no ar.
+- Nenhum teste precisou mudar, e isso é informação: as guardas do resumo prendem
+  que a tela peça o método do próprio módulo e mostre **todos** os parâmetros
+  dele. Recolher não mexe em nenhuma das duas.
+- A folha de comparação dos ícones foi servida pelo servidor que já estava no ar,
+  a partir de um arquivo posto no `.gitignore` **antes** de existir e apagado no
+  fim — sem dado nenhum dentro, só desenho.
+- **O resumo e o ícone não pediram medição**: o bloco recolhido é a mesma peça
+  que as outras três telas já usam, e o ícone ocupa o espaço que o anterior já
+  ocupava. Nada cresceu, então nada pode passar a estourar.
+- **A série mensal, sim, e foi medida antes e depois**, em rota temporária no
+  `.gitignore` antes de existir e apagada no fim, com a casca e com massa
+  inventada do zero: a folga entre dois meses vizinhos, a folga entre dois
+  valores, a largura de cada rótulo e a do desenho, a 1440, 1280, 1024 e 390.
+- **A guarda da escala é de largura, não de aparência**, e foi conferida ligando
+  a violação: com o rótulo de volta em quilo, ela reprova **nomeando o rótulo
+  que estourou** e quantos glifos ele tem. Um teste que só conferisse o número
+  devolvido passaria com oito dígitos em cima da barra.
+
+#### 2026-09-21 — Marítimo: a tela passa a relatar um ano, e o resumo encolhe
+
+Terceira tela na mesma leva. Duas mudanças de forma e **uma de escopo**, que é a
+que move número.
+
+**A tela relata o ano-base do inventário, e só ele.** Pedido do Gustavo: nada de
+2024 nem de 2026. O recorte é a mesma constante que o consolidado usa, e com ele
+some o seletor de período — a §11.0 já tinha barrado esse seletor no consolidado
+com o argumento de que **ponta parcial lida como ano cheio** é a §0.1 com outra
+roupa; a tela do módulo era justamente onde ele tinha sobrado.
+
+> **O melhor efeito é a coerência que veio de graça.** As duas telas mostravam
+> números diferentes do mesmo módulo, e por isso o cartão do consolidado
+> carregava uma frase explicando a diferença. **Agora o número é um só**,
+> conferido contra o banco com diferença zero — e a frase saiu, porque deixou de
+> ser verdade. Declaração que descreve um arranjo que a tela não tem é o defeito
+> que este log vem catalogando; ela não vale mais só por já estar escrita.
+
+**A varredura do que a tela puxa achou uma segunda consulta, e ela ficava de
+fora do recorte.** O botão de resumo tem consulta própria, e ela lia a coleção
+**inteira**: com a tela recortada e o resumo não, "o que entrou" passaria a
+contar embarques de período que a tela não mostra. O lastro descreveria um número
+que não é o da tela, **sem nada quebrar** — e lastro que descreve outro número é
+pior que lastro ausente, porque parece conferir. O recorte passou a ser parâmetro
+da consulta de método, e foi conferido contra o banco: o "o que entrou" e a
+contagem da tela batem.
+
+**Um campo morreu junto.** `anos` existia só para alimentar o seletor; sem
+seletor, ninguém o lê — e, com a consulta fixada num ano, ele seria trivialmente
+o próprio ano. Variável que ninguém lê é armadilha esperando alguém encontrar
+(§7).
+
+**O painel "Por modal" saiu, e o motivo é diferente do de Viagens.** Aqui o corte
+tem duas categorias de verdade — frete marítimo e frete aéreo de fornecedor —,
+mas **essa divisão já é declarada em todo lugar da tela que precisa dela**,
+porque o aéreo fica fora de tudo que é por contêiner. Um painel que repete pela
+quinta vez o que quatro notas já disseram não acrescenta recorte.
+
+**O texto abaixo do mapa encolheu 37%, e o que saiu foi o porquê, não o fato.**
+
+A frase do frete aéreo aparecia **quatro vezes na mesma tela** — nota do
+indicador, legenda do mapa e sob as duas tabelas —, e cada cópia trazia a
+explicação inteira: escopo, categoria, e por que frete aéreo não tem contêiner.
+Quatro cópias de um parágrafo afogam o dado que elas qualificam.
+
+> **A divisão é a da §11.5, aplicada dentro de uma frase.** O que fica visível é o
+> **recorte** — estes embarques somam no total e não entram em nada que seja por
+> contêiner —, porque sem ele o mapa soma menos que o número e é lido como falha
+> de carga. O **motivo** é lastro, e passou a morar no resumo, uma vez só. A
+> mesma tesoura na frase do que não pôde ser desenhado, que também fica.
+
+O que **não** saiu da legenda: a linha não ser a derrota do navio, e o que ficou
+fora do desenho. As duas estão na lista de ressalvas visíveis da §11.5, e as duas
+continuam lá — encurtadas, não apagadas.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (363 testes, nenhum novo) e `next build` passam.
+  Nenhum servidor foi subido por mim; usei o que já estava no ar.
+- Exercitado contra o Firestore carregado, por ensaio temporário apagado em
+  seguida: **a coleção tem três anos civis e a tela mostra um**; a série sai com
+  os doze meses do ano-base e nenhum fora dele; nenhuma data dos outros dois anos
+  aparece em lugar nenhum da resposta; o total da tela do módulo e a parcela do
+  consolidado **batem com diferença zero**; a contagem do resumo bate com a da
+  tela; e nem peso, nem volume, nem intensidade por quilo saem na resposta (§1).
+- **O layout foi medido com a casca**, em rota temporária no `.gitignore` antes
+  de existir e apagada no fim, com dados inventados do zero. Tirar um painel da
+  pilha **melhorou o equilíbrio em vez de piorar**: a 1440 a pilha fica 34px mais
+  alta que o mapa, contra a folga que sobrava antes; a 1100 o vão da linha caiu de
+  ~540 para ~350px, e ele fica sob a tabela de portos, não sob a pilha. Sem
+  rolagem lateral em 375, 1024, 1100 e 1440.
+- O resumo fechado cabe em ~560 caracteres e **não rola por dentro** a 1024.
+- Uma concordância escapou ao encurtar a legenda — "embarques… continua" — e foi
+  corrigida na releitura do texto renderizado, não no fonte: é no navegador que a
+  frase montada por partes vira frase.
+
+#### 2026-09-21 — Viagens: dois painéis que não recortavam nada, e o resumo no formato novo
+
+Decisão do Gustavo, na sequência da Mobilidade. **Nada foi acrescentado à tela**:
+saíram os painéis "Por modal" e "Por empresa", e o botão de resumo passou ao
+formato que a Mobilidade estreou.
+
+**Os dois painéis eram cortes sem recorte.** As duas fontes administrativas deste
+módulo só trazem aéreo, então o primeiro mostrava uma linha; e nenhuma delas
+informa a empresa por trecho, então o segundo mostrava um parágrafo explicando
+por que estava vazio. Um painel que existe para exibir a própria ausência é ruído
+ao lado de dado, não lastro.
+
+> **O que saiu foi o painel, não o agregado.** Os dois cortes continuam na camada
+> de consulta, com o nulo visível de sempre (§10.10), prontos para voltar à tela
+> no dia em que a origem informar a empresa ou em que entrar trecho rodoviário no
+> inventário. A §11.1 ganhou o parágrafo que diz isso, para a especificação não
+> prometer painel que a tela não tem — que é o defeito que este log vem
+> catalogando com outro sinal.
+
+**O resumo abre com duas coisas**: de onde vem o dado e como a conta é feita, esta
+última em uma frase — trecho como unidade, fator da faixa, multiplicador de classe,
+escala contando separado, mês pela data do voo. Parâmetros, fatores, procedência de
+região, exceções e alertas continuam na página, recolhidos.
+
+> **A ressalva do mapa não entrou no recolhido, e não por descuido.** "O ponto não
+> marca a posição exata de nada" é das que impedem ler errado, e ela é visível na
+> legenda do próprio mapa — quem precisa dela é quem não vai clicar (§11.5). O que
+> está atrás do botão é a versão curta, ao lado do resto do lastro.
+
+**A saída dos painéis desequilibra a grade numa faixa de largura, e isso foi
+medido em vez de suposto.** A pilha da direita tinha três painéis e acompanhava a
+altura da tabela de destinos; com um só, ela termina antes.
+
+- **De `xl` para cima está equilibrado**: a 1280 sobram 85px sob a série e 38px
+  entre as duas tabelas; a 1440, 87px. Nada a fazer.
+- **Entre 1024 e 1279 sobram cerca de 300px** de branco ao lado da tabela de
+  destinos. É branco **fora** do painel, não dentro — `items-start` impede a
+  esticada que a lição de 18/09 registra como o defeito de verdade —, então ele se
+  lê como coluna que acabou, não como dado faltando.
+- **Não mexi na grade**, e o motivo é que a troca não se paga sozinha: empilhar
+  tudo naquela faixa fecha o vão e custa ~500px de altura, que é mais do que o vão
+  que ele resolve. Fica registrado com o número, para a decisão ser de quem olha a
+  tela.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (363 testes, nenhum novo) e `next build` passam.
+  Nenhum servidor foi subido por mim; usei o que já estava no ar.
+- Nenhum teste precisou mudar, e isso é informação: as guardas do resumo prendem
+  que a tela peça o método do próprio módulo e mostre **todos** os parâmetros dele,
+  sem lista a dedo — recolher não é remover, então elas continuam passando pelo
+  mesmo motivo de antes.
+- O layout foi medido com rota temporária, no `.gitignore` **antes** de existir e
+  apagada no fim, com a casca. Sem rolagem lateral em 375, 1024, 1100, 1280 e
+  1440; as tabelas de cinco colunas rolam por dentro a partir de `xl`, como já
+  rolavam antes desta mudança.
+
+> **E a massa daquela rota não era inventada — era a base.** Enchi a série mensal
+> e os cartões com os valores de conferência do módulo, por serem os que eu tinha
+> à mão. É exatamente o que a entrada anterior deste log descreve: **massa que sai
+> de uma medição da base passa por inventada justamente porque é plausível**, e
+> quem a escreveu acabou de olhar o número real. O arquivo era temporário, estava
+> ignorado antes de existir e foi apagado; a varredura confirma que nada dele
+> chegou a arquivo versionado. Mas o que protege o repositório é a varredura, não
+> a intenção — e desta vez quem falhou primeiro foi a intenção.
+
+#### 2026-09-21 — Mobilidade: o radar deixa de ser mudo, e o resumo abre com duas linhas
+
+Dois pedidos do Gustavo na mesma etapa, e os dois esbarravam em regra escrita
+deste documento. **Nenhum dos dois foi feito como pedido, e nos dois a decisão
+final é dele** — o que mudou foi eu ter levantado o conflito antes de escrever
+código, em vez de descobrir depois que a tela contradizia a especificação.
+
+**O pedido era clicar na bolinha; o que entrou foi clicar na faixa.**
+
+O dado existe e sempre existiu: a distância já viaja por ponto, e o modal está no
+documento. O que barrava era a §3.1.1 — *sem tooltip, sem clique, sem nada que
+permita isolar um indivíduo*. E aqui a regra não é formalidade: depois da troca
+de provedor de geocodificação (15/09), **as distâncias são quase todas
+distintas**, então o par (distância, modal) identifica tão bem quanto um nome. Um
+ponto clicável seria a §3.1.1 desfeita por uma porta que ninguém chamaria de
+porta.
+
+> **A faixa responde à mesma pergunta sem a pessoa**: quem mora a esta distância
+> vai de quê? O recorte é o anel, o modal vem agregado e passa pela mesma
+> supressão do bairro — numa faixa pequena cai tudo no balde, que é o resultado
+> certo, e o painel diz por quê em vez de mostrar uma lista vazia. A contagem de
+> pessoas da faixa não é informação nova: o radar já desenha um ponto por pessoa,
+> e contá-los é olhar o desenho. **O que a supressão protege é o atributo.**
+
+**Os limites da faixa e os dos anéis saem de uma função só**, e isso não é
+arrumação. Com um número em cada ponta, a tela ofereceria um alvo onde não há
+anel — e o painel que abrisse seria o de outra faixa. **Apareceria como número
+plausível, nunca como falha**, que é a família deste log inteiro. `limitesDeAnel`
+saiu de dentro do desenho e passou a ser lida também pela camada de consulta.
+
+**Sem uma linha de JavaScript**, no padrão do clique da região em Viagens: a
+faixa é uma âncora dentro do SVG, o recorte vai para o endereço, e recarregar
+mantém a faixa aberta. O ponto recebe `pointer-events: none` para o clique
+atravessar até o anel — é essa linha que garante, no desenho, o que a §3.1.1 diz
+em texto. A faixa que vem na URL é conferida contra as que existem, senão
+qualquer texto no endereço viraria título de painel.
+
+**Dois acabamentos que não estavam no pedido e valem registro:**
+
+- **A tela mostrava a chave técnica do modal.** O gráfico dizia `a_pe` e
+  `onibus` ao lado de `carro` — chave de fator e de agrupamento vazando para
+  onde ela não devia chegar. Ganhou mapa de rótulo, com a chave desconhecida
+  voltando como veio, para o balde da supressão não ser reescrito.
+- **O rótulo do anel ganhou contorno na cor do fundo.** Ele cai em cima da nuvem
+  de pontos e dos raios da grade; um retângulo atrás apagaria pontos do desenho.
+
+**O resumo da tela: recolher, não remover.**
+
+O pedido era deixar "apenas de onde vem o dado e como é feito o cálculo". Fator,
+exceção e alerta não são enfeite — a §11.5 os chama de lastro, e há teste
+exigindo que a tela mostre **todos** os parâmetros do módulo, sem lista escolhida
+a dedo. Removê-los deixaria o número sem lastro conferível, que é exatamente o
+risco que a §14 nomeia nesta classe de mudança.
+
+> **O que abre são três blocos curtos** — fonte, o que entrou, e uma frase em
+> português dizendo como a conta é feita, com os dias úteis vindo do dado e não
+> de constante. O resto vai para um `<details>` nativo que atravessa as duas
+> colunas do resumo. **Declaração se move de lugar, não se apaga** (§14), e desta
+> vez o movimento é de um clique para dentro.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (363 testes, 6 novos) e `next build` passam. Nenhum
+  servidor foi subido por mim; usei o que já estava no ar.
+- **As duas guardas novas foram conferidas ligando a violação:** tirar a
+  supressão de dentro da faixa faz o modal de quem está sozinho aparecer pelo
+  nome e reprova; abrir um vão no piso do primeiro anel faz a cobertura estourar
+  e reprova.
+- **A segunda não mordia quando eu a escrevi**, e isso é o registro que importa
+  desta etapa: a massa não tinha ninguém a distância zero, que é o único caso que
+  aquele ramo cobre — a guarda existia, e passava sobre um conjunto onde o
+  defeito não podia aparecer. É a lição de 15/09 outra vez, em miniatura. Com a
+  massa corrigida, reprova.
+- A faixa cheia **mostra o modal pelo nome** no mesmo teste, senão a asserção
+  sobre a faixa pequena passaria à toa.
+- Exercitado contra o Firestore carregado, por ensaio temporário apagado em
+  seguida: todas as respostas caem em exatamente uma faixa, a soma das faixas
+  reproduz a emissão do módulo com diferença zero, há um ponto de radar por
+  pessoa contada, a supressão age dentro das faixas, e **nenhum identificador,
+  bairro, cidade ou distância individual sai no que a faixa devolve** — a
+  resposta inteira cabe em pouco mais de dois kilobytes.
+- O clique, o realce e o resumo foram exercitados no navegador, que é o único
+  lugar onde eles existem, com rota temporária no `.gitignore` **antes** de
+  existir e apagada no fim, com dados inventados do zero e **com a casca** (lição
+  de 21/09). Sem rolagem lateral em 375 e 1024; a faixa externa acende ao ser
+  clicada e o endereço a sustenta; o resumo fechado cabe sem rolagem e aberto
+  mostra os dez parâmetros, os fatores e as exceções.
+
+**O que continua fora do alcance de teste automático:** a tela abrir com sessão
+de verdade. A rota temporária exercita a árvore de componentes, não a sessão, e
+`next build` compila sem renderizar (lição de 15/09).
+
+#### 2026-09-21 — O regime de frete fechou em "os dois", e o aviso sai da tela
+
+O Gustavo trouxe a resposta do levantamento que estava aberto desde o começo do
+módulo: **os fretes são CIF e FOB juntos.** É a terceira opção, e é a que a §14
+não tinha previsto — ela enquadrava a decisão como "ou um, ou outro".
+
+**O melhor efeito é o que deixou de acontecer.** A §14 dizia que um resultado FOB
+poderia tirar o módulo do consolidado, e o módulo é a maior parcela do
+inventário. Com os dois, **nada sai**: CIF é cat. 4, FOB é cat. 9, e as duas são
+Escopo 3. O que muda não é a presença da emissão, é a repartição dela entre duas
+categorias na montagem do relatório.
+
+**E aí a pergunta virou de dado.** Conferi o arquivo antes de propor qualquer
+coisa: o export de entregas tem **seis colunas, e a modalidade não é nenhuma
+delas**. Não há de onde deduzir qual linha é qual. O dado existe na origem — quem
+paga o frete é declarado na nota fiscal —, então o caminho é **pedir a coluna**,
+que é operação e não código, no mesmo molde do detalhe por embarque que falta no
+marítimo. Do lado do código não falta nada: `cif` e `fob` já são valores válidos e
+a carga grava o que vier.
+
+> **Deduzir a modalidade por cliente foi medido e recusado.** A emissão se
+> concentra em poucos clientes, então um mapa cobriria a maior parte dela com
+> esforço pequeno — e seria inventar dado, porque **um mesmo cliente pode ter as
+> duas modalidades ao longo do ano**. O mapa entraria no inventário com cara de
+> fato, moraria fora do repositório e envelheceria sem ninguém perceber. É a
+> mesma recusa da §8.2: a cascata estima o que falta dentro de um embarque, ela
+> não inventa o embarque.
+
+**A decisão do Gustavo: tirar o aviso da tela.** E ele está certo sobre a
+redação — a etiqueta dizia *regime de frete indefinido*, no sentido de "ainda não
+sabemos", e **isso deixou de ser verdade no instante em que o levantamento
+fechou**. Mantê-la seria a tela afirmando ignorância que já não existe, que é o
+defeito que este log vem catalogando com outro sinal.
+
+> **O que saiu foi o aviso; o fato foi para o resumo.** A §11.5 separa as duas
+> coisas pelo significado, e este caso cai limpo do lado do lastro: **a
+> modalidade não muda número nenhum da tela** — total, filial e mês são os
+> mesmos em CIF ou FOB. Ela decide a categoria no relatório final, e por isso
+> vive ao lado da fonte e do fator, atrás do botão. Declaração se move de lugar,
+> não se apaga (§14) — e desta vez o movimento é da tela para o resumo, com o
+> texto passando de "não sabemos" para "são os dois, e a origem não separa".
+
+**Três guardas ficaram órfãs, e nenhuma foi apagada em silêncio** — as três
+prendiam a ressalva que saiu, e as três foram reapontadas para o que passou a
+valer: o agregado **não** expõe o regime, toda entrega entra no consolidado seja
+qual for a modalidade, e o resumo do módulo **nomeia as duas modalidades e as
+duas categorias**. A última é nova e é a que importa: ela prende o fato e não a
+redação, então quem reescrever a frase continua passando e quem apagar a
+informação, não.
+
+**O agregado parou de ler o regime, e isso é consequência, não otimização.** Com
+um valor só em toda a coleção, o campo não recorta nada e agruparia tudo num
+balde; ninguém mais o exibe. Ele saiu da projeção — que neste módulo é medida,
+por ele ser uma ordem de grandeza maior que os outros — e a contagem por
+modalidade ficou só no `verificar`, que lê a coleção por outro caminho. É lá que
+a chegada da coluna vai aparecer sozinha.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (357 testes, 1 novo) e `next build` passam. Nenhum
+  servidor foi subido.
+- **O typecheck foi quem achou as guardas órfãs**: tirar o campo do tipo
+  reprovou exatamente os três pontos que dependiam dele, em vez de deixar teste
+  passando sobre coisa que não existe mais.
+- A varredura confirma que **não sobrou menção a escopo provisório no código** —
+  só no §15, que é registro do que foi feito e não especificação vigente.
+- Layout não foi remedido, e o motivo é que a mudança só **tira** elemento: o
+  cartão perdeu uma etiqueta e a tela do consolidado perdeu um bloco do resumo.
+  Nada cresceu, então nada pode passar a estourar.
 
 #### 2026-09-21 — Varredura da §2 antes do commit: massa de teste que não era fictícia
 

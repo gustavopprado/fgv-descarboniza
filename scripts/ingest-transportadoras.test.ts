@@ -73,8 +73,8 @@ test('a entrega vira documento com envelope, identidade e fator carimbado', () =
 
 /**
  * As duas declarações do módulo viajam no documento, e não numa constante da
- * tela: é delas que sai a ressalva de escopo provisório (§9.1) e a de que o
- * número é calculado, não medido (§9.2).
+ * tela: `regimeFrete` registra que a origem não separa CIF de FOB (§9.1), e
+ * `nivelDado` que o número é calculado, não medido (§9.2).
  */
 test('todo documento declara regime de frete e nível de dado', () => {
   const m = montarEntregas(

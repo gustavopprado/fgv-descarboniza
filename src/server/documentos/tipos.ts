@@ -76,11 +76,16 @@ export type NivelDadoRodoviario = 'calculado_tkm'
  * Quem paga o frete da entrega — e é isso que decide a categoria do Escopo 3
  * (§9.1).
  *
- * `indefinido` é o estado de hoje, e é **declarado, não presumido**: o
- * levantamento de CIF/FOB está em aberto (§14), e enquanto não fechar o módulo
- * entra na Visão geral como cat. 4 provisória. Se apontar FOB, a classificação
- * muda para cat. 9 e o módulo pode precisar sair do total — reclassificação de
- * escopo, não ajuste de tela.
+ * **A operação usa os dois, e o relatório de origem não diz qual é qual.** O
+ * levantamento fechou assim: parte das entregas é CIF — frete pago pela empresa,
+ * cat. 4 — e parte é FOB — frete pago pelo cliente, cat. 9. As duas são Escopo
+ * 3, então nenhuma parcela sai do inventário; o que falta é a coluna que separa
+ * uma da outra, e ela existe na nota fiscal, não neste export.
+ *
+ * Por isso `indefinido` continua sendo o valor gravado, **e ele não quer dizer
+ * "ninguém olhou"**: quer dizer "não separável nesta fonte". `cif` e `fob`
+ * existem para o dia em que a modalidade vier por linha — e nesse dia o valor
+ * chega pela carga, sem migração.
  */
 export type RegimeFrete = 'cif' | 'fob' | 'indefinido'
 
@@ -362,9 +367,9 @@ export type DocEmbarque = EnvelopeEmissao & {
  *
  * O que o módulo não sabe está declarado em dois campos:
  *
- *  - `regimeFrete` é `indefinido` enquanto o levantamento de CIF/FOB não fechar
- *    (§9.1, §14). A tela declara o escopo como provisório, e a decisão pode
- *    reclassificar o módulo de cat. 4 para cat. 9 — ou tirá-lo do consolidado;
+ *  - `regimeFrete` é `indefinido` porque a origem mistura CIF e FOB sem
+ *    separá-los (§9.1). Não é pendência de levantamento: é ausência de coluna,
+ *    e é o que impede repartir este total entre cat. 4 e cat. 9;
  *  - `nivelDado` diz que o número é calculado por tonelada-quilômetro, não
  *    medido. É o mesmo lugar em que o marítimo declara a qualidade do dado
  *    (§8.2), com uma união própria e o motivo escrito em `NivelDadoRodoviario`.

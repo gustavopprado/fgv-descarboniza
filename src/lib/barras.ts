@@ -31,6 +31,20 @@ export type Barras = {
 /** Folga acima da maior barra, para o número no topo não encostar na borda. */
 const FOLGA = 1.18
 
+/**
+ * Quanto do passo a barra ocupa — o resto é o vão entre duas colunas.
+ *
+ * **Um número só para as duas geometrias**, porque barra simples e barra
+ * empilhada aparecem na mesma tela e um vão diferente em cada uma se lê como
+ * densidade diferente de dado.
+ *
+ * Era 0,62, e desceu depois de medir a série mensal com a casca: com doze meses
+ * numa coluna de painel, o vão ficava com pouco mais de um terço da largura da
+ * barra e as colunas se liam como um bloco só. O ganho não é de espaço — é de
+ * separação: o que o olho usa para contar colunas é o vão, não a barra.
+ */
+const OCUPACAO_DA_BARRA = 0.56
+
 export function montarBarras(
   valores: ValorDaBarra[],
   opcoes: { largura: number; altura: number; recuo?: number },
@@ -46,7 +60,7 @@ export function montarBarras(
   const maior = valores.reduce((m, v) => Math.max(m, v.valor), 0)
   const teto = maior * FOLGA
   const passo = (opcoes.largura - recuo) / n
-  const espessura = passo * 0.62
+  const espessura = passo * OCUPACAO_DA_BARRA
   const alturaUtil = base - 16
 
   const barras = valores.map((v, i) => {
@@ -135,7 +149,7 @@ export function montarBarrasEmpilhadas(
   const maior = totais.reduce((m, t) => Math.max(m, t), 0)
   const teto = maior * FOLGA
   const passo = (opcoes.largura - recuo) / n
-  const espessura = passo * 0.62
+  const espessura = passo * OCUPACAO_DA_BARRA
   const alturaUtil = base - 16
 
   const barras = valores.map((v, i) => {

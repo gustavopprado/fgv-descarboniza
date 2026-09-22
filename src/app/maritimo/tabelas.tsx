@@ -22,9 +22,16 @@ import { MINIMO, Nota, Rolavel, TABELA, Vazio } from '../componentes'
 /**
  * O que está no total do módulo e fora de tudo que é por contêiner.
  *
- * Texto único, usado na nota do indicador, na legenda do mapa e sob a tabela de
- * corredores. Duplicá-lo seria garantir que uma das cópias envelhecesse — foi a
+ * Texto único, usado na nota do indicador, na legenda do mapa e sob as duas
+ * tabelas. Duplicá-lo seria garantir que uma das cópias envelhecesse — foi a
  * lição registrada quando a frase do mapa de Viagens virou componente.
+ *
+ * **É o fato, sem o porquê.** Ele aparece quatro vezes na mesma tela, e quatro
+ * cópias de um parágrafo afogam o dado que elas qualificam. O que precisa estar
+ * visível é o recorte — estes embarques somam no total e não entram em nada que
+ * seja por contêiner —, porque sem ele o mapa soma menos que o número e é lido
+ * como falha de carga. **O motivo é lastro e mora no resumo da tela** (§11.5),
+ * uma vez só.
  */
 export function ForaDoIndicador({ dados }: { dados: ResumoDeMaritimo }) {
   if (dados.embarquesAereos === 0) return null
@@ -33,11 +40,9 @@ export function ForaDoIndicador({ dados }: { dados: ResumoDeMaritimo }) {
   return (
     <>
       {inteiro(dados.embarquesAereos)}{' '}
-      {dados.embarquesAereos === 1 ? 'embarque é frete' : 'embarques são frete'} aéreo de
-      fornecedor, com {proporcao(proporcaoAerea)} da emissão do módulo. Continua no
-      total — é Escopo 3 categoria 4, frete upstream, emissão da empresa — e fica de
-      fora de tudo que é por contêiner: frete aéreo não tem contêiner, e o destino
-      dele não é porto.
+      {dados.embarquesAereos === 1 ? 'embarque é frete' : 'embarques são frete'} aéreo
+      ({proporcao(proporcaoAerea)} da emissão): soma no total e fica fora de tudo que
+      é por contêiner.
     </>
   )
 }

@@ -21,6 +21,7 @@ import type { Firestore, Query } from 'firebase-admin/firestore'
 import { supressaoMinima } from '@/lib/env'
 import { coordenadaValida } from '@/lib/mapa'
 import { municipioPorCodigo } from '@/lib/municipios'
+import { ANEIS_DO_RADAR, faixasDeDistancia } from '@/lib/radar'
 import { corredor } from '@/lib/regiao'
 import { FILIAIS_DO_MODULO } from '@/lib/transportadoras'
 import type {
@@ -73,6 +74,35 @@ function aplicarEmpresa(consulta: Query, empresa: string | null): Query {
 
 /* ------------------------------------------------------------- mobilidade */
 
+/**
+ * Uma faixa de distância do radar — CLAUDE.md §3.1.1.
+ *
+ * **O recorte é a faixa, nunca o ponto.** O radar continua sendo uma nuvem de
+ * pontos mudos: nenhum deles carrega modal, bairro ou identificador, e clicar
+ * num ponto não existe. O que se clica é o anel, e o que abre é o mesmo tipo de
+ * agregado que a lista de bairros já mostra — quantas pessoas, quanto emitem e
+ * como se dividem entre os modais.
+ *
+ * **A divisão por modal passa pela supressão**, com a contagem em pessoas
+ * distintas: modal com pouca gente dentro da faixa vira "outros modais". Numa
+ * faixa pequena isso joga tudo no balde, que é o resultado certo — ali o modal
+ * apontaria para quem mora naquele anel.
+ *
+ * A contagem de pessoas da faixa em si não é informação nova: o radar já desenha
+ * um ponto por pessoa, e contá-los é olhar o desenho. O que a supressão protege
+ * é o **atributo** — e é ele que fica atrás do limite.
+ */
+export type FaixaDoRadar = {
+  /** Posição do anel, do centro para fora. É o que viaja no endereço. */
+  indice: number
+  deKm: number
+  ateKm: number
+  pessoas: number
+  co2Kg: number
+  distanciaKmMedia: number
+  porModal: Grupo[]
+}
+
 export type ResumoDeMobilidade = {
   anoBase: number
   respondentes: number
@@ -86,6 +116,8 @@ export type ResumoDeMobilidade = {
   porCidade: Grupo[]
   /** Um ponto por funcionário, só com a distância. Sem nada associado (§3.1). */
   radarDistanciasKm: number[]
+  /** Os anéis do radar, já agregados. Ver `FaixaDoRadar`. */
+  faixas: FaixaDoRadar[]
   excecoes: { motivo: string; respostas: number }[]
   alertas: { tipo: string; ocorrencias: number }[]
 }
@@ -126,6 +158,48 @@ export async function consultarMobilidade(
     }
   }
 
+  // As faixas do radar saem dos mesmos limites que desenham os anéis (§3.1.1).
+  // Com um literal em cada ponta, a tela ofereceria uma faixa que o agregado
+  // não mediu — e isso apareceria como número torto, nunca como falha.
+  const maiorKm = registros.reduce((m, r) => Math.max(m, r.distanciaKm), 0)
+  let nasFaixas = 0
+  const faixas = faixasDeDistancia(maiorKm, ANEIS_DO_RADAR).map((faixa, indice) => {
+    // O piso é aberto, para ninguém cair em duas faixas — menos no primeiro
+    // anel, que precisa recolher quem mora a zero quilômetro da fábrica.
+    const dentro = registros.filter(
+      (r) =>
+        (r.distanciaKm > faixa.deKm || indice === 0) &&
+        r.distanciaKm <= faixa.ateKm,
+    )
+    nasFaixas += dentro.length
+    return {
+      indice,
+      deKm: faixa.deKm,
+      ateKm: faixa.ateKm,
+      pessoas: new Set(dentro.map(pessoa)).size,
+      co2Kg: somar(dentro, valor),
+      distanciaKmMedia: media(dentro, (r) => r.distanciaKm),
+      porModal: agrupar(dentro, {
+        chave: (r) => r.transporte,
+        valor,
+        pessoa,
+        rotuloNulo: 'Sem modal',
+        limite,
+        rotuloOutros: 'outros modais',
+      }),
+    }
+  })
+
+  // **Toda resposta cai em exatamente uma faixa, e isso é invariante** (§9.10):
+  // um vão entre dois anéis não quebra nada — some da contagem e o radar passa a
+  // mostrar mais pontos do que as faixas somam, sem nenhum sinal de erro.
+  if (nasFaixas !== registros.length) {
+    throw new Error(
+      `As faixas do radar cobrem ${nasFaixas} respostas de ${registros.length}: ` +
+        'alguém ficou fora de todos os anéis.',
+    )
+  }
+
   return {
     anoBase: filtros.anoBase,
     respondentes: registros.length,
@@ -159,6 +233,7 @@ export async function consultarMobilidade(
       rotuloOutros: 'outras cidades',
     }),
     radarDistanciasKm: registros.map((r) => r.distanciaKm).sort((a, b) => a - b),
+    faixas,
     excecoes: [...excecoes.entries()]
       .map(([motivo, respostas]) => ({ motivo, respostas }))
       .sort((a, b) => b.respostas - a.respostas),
@@ -639,8 +714,6 @@ export type ResumoDeMaritimo = {
    * marítimo não cobre toda a importação do período (§10.0).
    */
   agentes: number
-  /** Anos com dado no módulo, para o seletor de período. */
-  anos: number[]
 }
 
 /** O embarque entra nos totais do período? Previsão não entra (§8.3). */
@@ -752,7 +825,6 @@ export async function consultarMaritimo(
       .sort((a, b) => b.co2Kg - a.co2Kg),
     previsoes: { embarques: previstos.length, co2Kg: somar(previstos, valor) },
     agentes: new Set(embarques.map((e) => e.agente)).size,
-    anos: [...new Set(todos.map((e) => e.ano))].sort(),
   }
 }
 
@@ -916,15 +988,6 @@ export type ResumoDeTransportadoras = {
   pesoKg: number
   porFilial: FilialDoModulo[]
   porMes: { mes: string; co2Kg: number; documentos: number }[]
-  /**
-   * Quantas entregas em cada regime de frete.
-   *
-   * Hoje é uma linha só, `indefinido`, e é ela que sustenta a declaração de
-   * escopo provisório na tela (§9.1). Sai da consulta, e não de uma constante na
-   * tela, para que o dia em que o levantamento fechar apareça no número em vez
-   * de depender de alguém lembrar de trocar um texto.
-   */
-  regimes: { regime: string; entregas: number; co2Kg: number }[]
   anos: number[]
 }
 
@@ -956,15 +1019,13 @@ export type ResumoDeTransportadoras = {
  * A lista é a fonte do tipo logo abaixo, então usar um campo que não está aqui
  * **não compila** — em vez de chegar `undefined` e virar `NaN` num total que
  * ninguém confere.
+ *
+ * **`regimeFrete` ficou de fora de propósito.** O relatório de origem não traz a
+ * modalidade por entrega (§9.1), então o campo é o mesmo em toda a coleção: ele
+ * não recorta nada nesta tela e agruparia tudo num balde só. Quem o confere
+ * documento a documento é o `verificar`, que lê a coleção por outro caminho.
  */
-const CAMPOS_DO_AGREGADO = [
-  'filial',
-  'ano',
-  'mes',
-  'co2Kg',
-  'pesoKg',
-  'regimeFrete',
-] as const
+const CAMPOS_DO_AGREGADO = ['filial', 'ano', 'mes', 'co2Kg', 'pesoKg'] as const
 
 type EntregaAgregada = Pick<DocEntregaRodoviaria, (typeof CAMPOS_DO_AGREGADO)[number]>
 
@@ -984,18 +1045,12 @@ export async function consultarTransportadoras(
   const valor = (e: EntregaAgregada) => e.co2Kg
 
   const acumulado = new Map<string, { entregas: number; co2Kg: number; pesoKg: number }>()
-  const porRegime = new Map<string, { entregas: number; co2Kg: number }>()
   for (const e of entregas) {
     const atual = acumulado.get(e.filial) ?? { entregas: 0, co2Kg: 0, pesoKg: 0 }
     atual.entregas += 1
     atual.co2Kg += e.co2Kg
     atual.pesoKg += e.pesoKg
     acumulado.set(e.filial, atual)
-
-    const regime = porRegime.get(e.regimeFrete) ?? { entregas: 0, co2Kg: 0 }
-    regime.entregas += 1
-    regime.co2Kg += e.co2Kg
-    porRegime.set(e.regimeFrete, regime)
   }
 
   /**
@@ -1048,9 +1103,6 @@ export async function consultarTransportadoras(
     pesoKg: somar(entregas, (e) => e.pesoKg),
     porFilial,
     porMes: serieMensal(entregas, (e) => e.mes, valor),
-    regimes: [...porRegime.entries()]
-      .map(([regime, v]) => ({ regime, ...v }))
-      .sort((a, b) => b.entregas - a.entregas),
     anos: [...new Set(entregas.map((e) => e.ano))].sort(),
   }
 }

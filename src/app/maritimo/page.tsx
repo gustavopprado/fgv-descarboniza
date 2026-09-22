@@ -18,7 +18,16 @@
  *  - **frete aéreo fica no total e fora do que é por contêiner**;
  *  - **o módulo cobre um agente só**, porque os outros não entregam detalhe
  *    linha a linha e os totais da aba de resumo são conta circular (§8.1).
+ *
+ * **A tela relata o ano-base do inventário, e só ele.** A coleção é contínua e
+ * atravessa três anos civis, dois deles parciais (§8.4) — e ponta parcial lida
+ * como ano cheio é o erro que a §11.0 já tinha barrado no consolidado, com um
+ * seletor de ano que convidava exatamente a isso. O recorte é a mesma constante
+ * que o consolidado usa, então **as duas telas passam a mostrar o mesmo
+ * número**: enquanto elas diferiam, quem abrisse as duas lado a lado ia procurar
+ * qual das duas cargas estava errada.
  */
+import { ANO_BASE_INVENTARIO } from '@/lib/env'
 import { plural } from '@/lib/formato'
 import { AcessoNegadoError } from '@/server/consultas/acesso'
 import { consultarMaritimo } from '@/server/consultas/inventario'
@@ -32,13 +41,13 @@ import {
   ListaDeGrupos,
   Painel,
   Revelar,
-  SeletorDeAno,
   Vazio,
 } from '../componentes'
 import {
   Bloco,
   Parametros,
   Procedencia,
+  Recolhido,
   Sinalizacoes,
   SobreATela,
 } from '../informacoes'
@@ -58,27 +67,18 @@ const LUGAR = {
   corredores: 'lg:col-span-2 xl:col-span-1 xl:col-start-2 xl:row-start-2',
 } as const
 
-function anoDe(parametro: string | undefined): number | undefined {
-  if (parametro === undefined) return undefined
-  const ano = Number(parametro)
-  return Number.isInteger(ano) && ano > 2000 && ano < 2100 ? ano : undefined
-}
-
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: Promise<{ ano?: string }>
-}) {
+export default async function Page() {
   const ctx = await exigirSessao()
-  const parametros = await searchParams
-  const ano = anoDe(parametros.ano)
+  // **O ano não vem do endereço.** Não há seletor e não há parâmetro: a tela
+  // relata o ano-base do inventário, e é a mesma constante do consolidado.
+  const ano = ANO_BASE_INVENTARIO
 
   let dados
   let metodo
   try {
     ;[dados, metodo] = await Promise.all([
-      consultarMaritimo(ctx, ano === undefined ? {} : { ano }),
-      consultarMetodo(ctx, { modulo: 'maritimo' }),
+      consultarMaritimo(ctx, { ano }),
+      consultarMetodo(ctx, { ano, modulo: 'maritimo' }),
     ])
   } catch (erro) {
     if (erro instanceof AcessoNegadoError) {
@@ -92,7 +92,6 @@ export default async function Page({
   }
 
   const empresaConhecida = dados.porEmpresa.some((g) => !g.rotulo.startsWith('Sem '))
-  const modalConhecido = dados.porModal.length > 1
 
   return (
     <Casca ctx={ctx} atual="/maritimo">
@@ -100,19 +99,18 @@ export default async function Page({
         titulo="Transporte marítimo de importações"
         descricao="Frete das importações, Escopo 3 categoria 4. O CO₂ informado pelo agente não é recalculado."
         acao={
-          dados.anos.length > 1 ? (
-            <SeletorDeAno
-              anos={dados.anos}
-              atual={ano ?? null}
-              href={(a) => (a === null ? '/maritimo' : `/maritimo?ano=${a}`)}
-            />
-          ) : undefined
+          <span
+            className="shrink-0 rounded-[9px] bg-[#E2EADF] px-3.5 py-1.5 text-[13px] font-semibold text-[var(--color-tinta)]"
+            title="O inventário relata um ano; a coleção do módulo atravessa três."
+          >
+            Relatório de {ano}
+          </span>
         }
       />
 
       {dados.embarques === 0 ? (
         <Vazio>
-          Nenhum embarque carregado{ano === undefined ? '' : ` para ${ano}`}.
+          Nenhum embarque carregado para {ano}.
           {dados.previsoes.embarques > 0 && (
             <>
               {' '}
@@ -139,7 +137,7 @@ export default async function Page({
                 }
               />
               <Cartao
-                rotulo={ano === undefined ? 'Total do período' : `Total de ${ano}`}
+                rotulo={`Total de ${ano}`}
                 valor={dados.co2Toneladas}
                 casas={2}
                 unidade="t CO₂e"
@@ -200,17 +198,6 @@ export default async function Page({
                   nota="Embarque previsto não entra; o frete aéreo de fornecedor entra."
                 />
               </Painel>
-              <Painel titulo="Por modal">
-                {modalConhecido ? (
-                  <ListaDeGrupos grupos={dados.porModal} mostrarPessoas={false} />
-                ) : (
-                  <Vazio>
-                    Todo o frete deste recorte é marítimo. O modal existe como corte
-                    porque o relatório do agente também traz frete aéreo de fornecedor,
-                    que é do mesmo escopo e da mesma categoria.
-                  </Vazio>
-                )}
-              </Painel>
               <Painel titulo="Por empresa">
                 {empresaConhecida ? (
                   <ListaDeGrupos grupos={dados.porEmpresa} mostrarPessoas={false} />
@@ -243,15 +230,42 @@ export default async function Page({
         </>
       )}
 
+      {/* **O resumo abre com duas coisas e só duas**: de onde vem o dado e como
+          a conta é feita. O lastro — parâmetros, mapa, exceções e alertas —
+          continua na página, recolhido, no formato que a Mobilidade estreou
+          (§11.5). A ressalva que impede ler o mapa errado não está aqui: ela é
+          visível, na legenda do próprio mapa. */}
       <SobreATela titulo="Transporte marítimo de importações">
         <Procedencia metodo={metodo} modulo="maritimo" />
+
         <Bloco titulo="Como o número é calculado">
-          <Parametros parametros={metodo.parametros} />
+          <p className="max-w-[80ch] leading-[1.5]">
+            O CO₂ é o que o agente informou por embarque, e não se recalcula. Onde ele
+            não informou, a estimativa é por contêiner — pela média do corredor, e só
+            depois pela média geral. O mês sai da partida prevista; embarque ainda não
+            partido tem o CO₂ lançado e fica fora do total.
+          </p>
         </Bloco>
-        <Bloco titulo="Mapa">
-          Ponto = porto do cadastro. A linha é geometria, não a derrota do navio.
-        </Bloco>
-        <Sinalizacoes metodo={metodo} modulo="maritimo" />
+
+        <Recolhido titulo="Parâmetros, mapa e sinalizações">
+          <Bloco titulo="Parâmetros">
+            <Parametros parametros={metodo.parametros} />
+          </Bloco>
+          <Bloco titulo="Mapa">
+            Ponto = porto do cadastro. A linha é geometria, não a derrota do navio.
+          </Bloco>
+          {/* **O porquê do recorte aéreo mora aqui, uma vez.** Na tela ele
+              aparece quatro vezes, e ali basta o fato — quatro cópias da
+              explicação afogam o dado que elas qualificam (§11.5). */}
+          {dados.embarquesAereos > 0 && (
+            <Bloco titulo="Frete aéreo de fornecedor">
+              Continua no total: é Escopo 3 categoria 4, frete upstream, emissão da
+              empresa. Fica fora de tudo que é por contêiner porque não tem contêiner,
+              e fora do mapa porque o destino dele não é porto.
+            </Bloco>
+          )}
+          <Sinalizacoes metodo={metodo} modulo="maritimo" />
+        </Recolhido>
       </SobreATela>
     </Casca>
   )

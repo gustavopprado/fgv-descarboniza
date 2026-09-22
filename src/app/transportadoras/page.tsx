@@ -1,12 +1,15 @@
 /**
  * Tela da distribuição rodoviária às filiais — CLAUDE.md §9.5.
  *
- * Escopo 3 categoria 4, frete de saída operado por transportadora terceirizada —
- * **e a categoria é provisória**: enquanto o levantamento de CIF/FOB não fechar,
- * todo documento grava `regimeFrete: 'indefinido'` e esta tela declara o escopo
- * como provisório (§9.1, §14). Se o regime for FOB, a classificação muda para
- * cat. 9 e o módulo pode precisar sair do consolidado — reclassificação, não
- * ajuste de tela.
+ * Escopo 3, frete de saída operado por transportadora terceirizada. **As
+ * entregas misturam CIF e FOB, e o relatório não diz qual é qual** (§9.1): a
+ * parcela CIF é cat. 4 e a FOB é cat. 9, as duas do mesmo escopo, e as duas
+ * entram somadas no número deste módulo.
+ *
+ * **A modalidade não muda valor nenhum desta tela** — total, filial e mês são os
+ * mesmos nas duas —, e por isso ela não aparece como ressalva sobre o número: é
+ * lastro, e mora no resumo, junto da fonte e do fator (§11.5). Onde ela decide
+ * alguma coisa é na montagem do relatório final, que separa as categorias.
  *
  * **A emissão é separada por filial, não por transportadora**, mesmo o nome do
  * módulo se referindo a elas: a planilha não identifica qual transportadora fez
@@ -41,6 +44,7 @@ import {
   Itens,
   Parametros,
   Procedencia,
+  Recolhido,
   SobreATela,
 } from '../informacoes'
 import { SerieMensal } from '../serie-mensal'
@@ -134,13 +138,11 @@ export default async function Page({
   const enderecoDaFilial = (filial: string) =>
     filial === filialAberta ? base : `${base}${separador}filial=${filial}`
 
-  const provisorio = dados.regimes.some((r) => r.regime === 'indefinido')
-
   return (
     <Casca ctx={ctx} atual="/transportadoras">
       <Cabecalho
         titulo="Distribuição rodoviária às filiais"
-        descricao="Entregas de produto vendido, por transportadora terceirizada, Escopo 3 categoria 4 — provisória até o regime de frete ser levantado."
+        descricao="Entregas de produto vendido às filiais, por transportadora terceirizada, no Escopo 3."
         acao={
           dados.anos.length > 1 ? (
             <SeletorDeAno
@@ -165,11 +167,6 @@ export default async function Page({
                 valor={dados.co2Toneladas}
                 casas={1}
                 unidade="t CO₂e"
-                etiqueta={
-                  provisorio
-                    ? { texto: 'regime de frete provisório', tom: 'atencao' }
-                    : undefined
-                }
                 nota="Peso vezes distância, com fator médio de frete de carga."
               />
               <Cartao
@@ -249,6 +246,14 @@ export default async function Page({
         </>
       )}
 
+      {/* **O resumo abre com duas coisas e só duas**: de onde vem o dado e como
+          a conta é feita. O lastro — parâmetro, fator e mapa — continua na
+          página, recolhido, no formato que a Mobilidade estreou (§11.5).
+
+          **A mistura de CIF e FOB entra recolhida, e é o lugar dela**: ela não
+          muda valor nenhum desta tela (§9.1), então é lastro e não ressalva.
+          Recolher não é remover — o parâmetro continua na página, nomeando as
+          duas modalidades e as duas categorias. */}
       <SobreATela titulo="Distribuição rodoviária às filiais">
         <Procedencia metodo={metodo} modulo="transportadoras" />
         {dados.entregas > 0 && (
@@ -268,24 +273,33 @@ export default async function Page({
                   rotulo: `Filial ${f.filial}`,
                   valor: String(f.entregas),
                 })),
-                ...dados.regimes.map((r) => ({
-                  rotulo: `Regime ${r.regime}`,
-                  valor: String(r.entregas),
-                })),
               ]}
             />
           </Bloco>
         )}
+
         <Bloco titulo="Como o número é calculado">
-          <Parametros parametros={metodo.parametros} />
+          <p className="max-w-[80ch] leading-[1.5]">
+            Cada entrega vira peso vezes distância: o peso em toneladas,
+            multiplicado pelos quilômetros do trecho da filial até o cliente e
+            pelo fator médio de frete rodoviário de carga. É só a ida, e o veículo
+            é a média da frota — a origem não diz qual caminhão fez a entrega. O
+            mês sai da data da entrega.
+          </p>
         </Bloco>
-        <Bloco titulo="Fator">
-          <Fatores fatores={metodo.fatores} categorias={CATEGORIAS} />
-        </Bloco>
-        <Bloco titulo="Mapa">
-          Ponto = filial de origem, no centroide do município. O destino da entrega não
-          é desenhado: a origem traz a distância, não a localização do cliente.
-        </Bloco>
+
+        <Recolhido titulo="Parâmetros, fator e mapa">
+          <Bloco titulo="Parâmetros">
+            <Parametros parametros={metodo.parametros} />
+          </Bloco>
+          <Bloco titulo="Fator">
+            <Fatores fatores={metodo.fatores} categorias={CATEGORIAS} />
+          </Bloco>
+          <Bloco titulo="Mapa">
+            Ponto = filial de origem, no centroide do município. O destino não é
+            desenhado: a origem traz a distância, não a localização do cliente.
+          </Bloco>
+        </Recolhido>
       </SobreATela>
     </Casca>
   )

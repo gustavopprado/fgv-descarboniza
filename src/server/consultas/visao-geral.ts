@@ -31,11 +31,11 @@
  * `viagemTrecho`, `embarque` e `entregaRodoviaria`, e nenhuma outra coleção de
  * emissão.
  *
- * **Transportadoras entra com o regime de frete ainda `indefinido`** (§9.1,
- * §14): é a leitura provisória, não a definitiva. Se o levantamento de CIF/FOB
- * apontar FOB, a categoria muda para a 9 e o módulo pode precisar sair deste
- * total — reclassificação de escopo, não ajuste de tela, e é por isso que a
- * ressalva viaja no próprio dado do módulo em vez de virar texto na tela.
+ * **Transportadoras entra inteira, com as duas categorias somadas** (§9.1): o
+ * frete das entregas é CIF em parte e FOB em parte — cat. 4 e cat. 9 —, e a
+ * origem não diz qual linha é qual. As duas são Escopo 3, então nenhuma parcela
+ * sai daqui; o que a mistura decide é a separação por categoria na montagem do
+ * relatório, e isso fica declarado no resumo da tela do módulo.
  */
 import type { Firestore } from 'firebase-admin/firestore'
 
@@ -88,17 +88,8 @@ export type VisaoGeral = {
   /** O que o cartão da mobilidade declara: ano-base da pesquisa e respondentes. */
   mobilidade: { anoBase: number | null; respondentes: number }
   viagens: { trechos: number }
-  /** O que o cartão de Transportadoras declara: entregas e regime de frete. */
-  transportadoras: {
-    entregas: number
-    /**
-     * Verdadeiro enquanto houver entrega com regime `indefinido` — o estado de
-     * hoje (§9.1). Sai do dado, e não de uma constante na tela: o dia em que o
-     * levantamento fechar aparece no número, sem depender de alguém lembrar de
-     * apagar um texto.
-     */
-    regimeProvisorio: boolean
-  }
+  /** O que o cartão de Transportadoras declara: quantas entregas somam nele. */
+  transportadoras: { entregas: number }
   maritimo: {
     embarques: number
     /** Agentes com detalhe por embarque; é daqui que sai a segunda declaração. */
@@ -214,10 +205,7 @@ export async function consultarVisaoGeral(
       respondentes: mobilidade?.respondentes ?? 0,
     },
     viagens: { trechos: viagens.trechos },
-    transportadoras: {
-      entregas: transportadoras.entregas,
-      regimeProvisorio: transportadoras.regimes.some((r) => r.regime === 'indefinido'),
-    },
+    transportadoras: { entregas: transportadoras.entregas },
     maritimo: {
       embarques: maritimo.embarques,
       agentes: maritimo.agentes,

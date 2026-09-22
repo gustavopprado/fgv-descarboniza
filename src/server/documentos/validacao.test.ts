@@ -590,8 +590,10 @@ test('filial fora das três conhecidas é recusada', () => {
 })
 
 /**
- * É `regimeFrete` que a tela lê para declarar o escopo como provisório (§9.1).
- * Texto livre aqui apagaria a ressalva sem apagar o número.
+ * A união fechada é o que mantém a modalidade agrupável (§9.1). Hoje a origem
+ * mistura CIF e FOB sem separá-los e todo documento grava `indefinido`; texto
+ * livre aqui tornaria impossível repartir o total entre cat. 4 e cat. 9 no dia
+ * em que a coluna vier.
  */
 test('regime de frete só admite cif, fob e indefinido', () => {
   validarEntregaRodoviaria('x', { ...entrega(), regimeFrete: 'cif' })

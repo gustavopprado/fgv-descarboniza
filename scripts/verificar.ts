@@ -1128,15 +1128,16 @@ function conferirIntegridadeRodoviaria(
   }
 
   /**
-   * O regime de frete é **contado, não reprovado**: hoje é `indefinido` em toda
-   * entrega, e a decisão de CIF/FOB é levantamento em aberto (§9.1, §14).
-   * Reprovar aqui seria reprovar o que ninguém pode consertar por código — o
-   * alerta que se aprende a ignorar.
+   * O regime de frete é **contado, não reprovado**, e esta é a única contagem
+   * dele que sobrou: a tela deixou de exibi-lo e o agregado deixou de lê-lo
+   * (§9.1). Reprovar aqui seria reprovar o que nenhum código conserta — a origem
+   * mistura CIF e FOB e não traz a modalidade por linha. Contar é o que faz o
+   * dia em que ela vier aparecer sozinho nesta linha.
    */
   console.log(
     `  Regime de frete no banco: ${[...porRegime].map(([k, v]) => `${k} ${v}`).join(', ')}` +
       (porRegime.get('indefinido') === noBanco.length
-        ? ' — provisório até o levantamento de CIF/FOB fechar (§9.1).'
+        ? ' — CIF e FOB somados, sem separação na origem (§9.1).'
         : ''),
   )
 

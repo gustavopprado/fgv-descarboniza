@@ -528,30 +528,33 @@ test('entrega de outro ano não move o indicador', async () => {
 })
 
 /**
- * A ressalva de escopo provisório sai do **dado**, não de uma constante na tela
- * (§9.1): o dia em que o levantamento de CIF/FOB fechar, ela some sozinha.
+ * **A mistura de CIF e FOB não recorta este total** (§9.1). As duas são Escopo
+ * 3 — cat. 4 e cat. 9 —, então toda entrega do ano soma aqui qualquer que seja
+ * a modalidade, e o cartão não muda de número por causa dela. O que a mistura
+ * decide é a separação por categoria na montagem do relatório, declarada no
+ * resumo da tela do módulo.
  */
-test('o regime de frete provisório é declarado a partir do documento', async () => {
-  const provisorio = await comAmbiente(AMBIENTE, () =>
-    consultarVisaoGeral(ctx(), bancoCompleto()),
-  )
-  assert.equal(provisorio.transportadoras.regimeProvisorio, true)
-  assert.equal(provisorio.transportadoras.entregas, 1)
-
-  const fechado = await comAmbiente(AMBIENTE, () =>
+test('entrega entra no total seja qual for o regime de frete', async () => {
+  const comMistura = await comAmbiente(AMBIENTE, () =>
     consultarVisaoGeral(
       ctx(),
       bancoCom({
         mobilidade: [],
         viagemTrecho: [],
         embarque: [],
-        entregaRodoviaria: [entrega({ regimeFrete: 'cif' })],
+        entregaRodoviaria: [
+          entrega({ regimeFrete: 'cif' }),
+          entrega({ ordem: 2, regimeFrete: 'fob' }),
+          entrega({ ordem: 3 }),
+        ],
         aeroporto: [],
         porto: [],
       }),
     ),
   )
-  assert.equal(fechado.transportadoras.regimeProvisorio, false)
+
+  assert.equal(comMistura.transportadoras.entregas, 3)
+  assert.equal(doModulo(comMistura, 'transportadoras').documentos, 3)
 })
 
 /**

@@ -53,6 +53,18 @@ export type BarraDoGrafico = {
   destaque?: boolean
   /** Barra que não é uma categoria real: o balde de recortes suprimidos. */
   atenuada?: boolean
+  /**
+   * O que escrever no topo, quando o valor cru não cabe ali.
+   *
+   * **Texto pronto, e não uma função de formatar**, pela lição de 15/09: função
+   * não atravessa a fronteira entre servidor e cliente, e nem o typecheck nem o
+   * build acusam — o erro aparece na primeira requisição. Quem sabe a unidade é
+   * quem chama; aqui só se desenha.
+   *
+   * **O `title` continua com o valor cru**, na unidade do módulo: o que encolhe
+   * é o rótulo, nunca o dado.
+   */
+  valorEscrito?: string
 }
 
 export function GraficoDeBarras({
@@ -141,7 +153,7 @@ export function GraficoDeBarras({
                   fontWeight={600}
                   fill="var(--color-tinta)"
                 >
-                  {numero(barra.valor, casas)}
+                  {estilo?.valorEscrito ?? numero(barra.valor, casas)}
                 </text>
               )}
 

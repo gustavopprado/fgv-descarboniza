@@ -412,3 +412,126 @@ test('trecho de carro não é desenhado, e o que ele pesa sai declarado', async 
     'município não vira corredor: ele não tem coordenada no inventário',
   )
 })
+
+/* ------------------------------------- mobilidade: a faixa que o radar abre */
+
+/**
+ * **O recorte do radar é a faixa, nunca o ponto** (§3.1.1).
+ *
+ * Clicar num ponto mostraria modal e distância de uma pessoa, que é isolar um
+ * indivíduo — com as distâncias quase todas distintas, o par identifica tão bem
+ * quanto um nome. A faixa responde à mesma pergunta em agregado, e o modal
+ * dentro dela passa pela mesma supressão do bairro.
+ *
+ * O teste não é vazio por construção: a faixa cheia **mostra o modal pelo
+ * nome**, e é isso que prova que a supressão da faixa pequena é a regra agindo,
+ * e não a lista vindo vazia.
+ */
+test('a faixa do radar agrega, e não separa o modal de quem está sozinho', async () => {
+  const respostas = [
+    ...Array.from({ length: 6 }, (_, i) =>
+      resposta({
+        funcionarioId: `pessoa-ficticia-${i + 1}`,
+        transporte: 'carro',
+        distanciaKm: 3,
+        co2KgMes: 10,
+      }),
+    ),
+    resposta({
+      funcionarioId: 'pessoa-ficticia-99',
+      transporte: 'moto',
+      distanciaKm: 40,
+      co2KgMes: 30,
+    }),
+  ]
+
+  const dados = await comAmbiente({ MOBILIDADE_SUPRESSAO_MINIMA: LIMITE }, () =>
+    consultarMobilidade(ctx(), { anoBase: ANO }, bancoCom({ mobilidade: respostas })),
+  )
+
+  const perto = dados.faixas.find((f) => f.pessoas === 6)
+  const longe = dados.faixas.find((f) => f.pessoas === 1)
+  assert.notEqual(perto, undefined, 'a faixa de quem mora perto sumiu')
+  assert.notEqual(longe, undefined, 'a faixa de quem mora longe sumiu')
+
+  // A faixa cheia mostra o modal pelo nome — sem isto, o resto passaria à toa.
+  assert.ok(
+    perto!.porModal.some((g) => g.rotulo === 'carro' && !g.agrupadoPorSupressao),
+    'a faixa com gente suficiente deixou de nomear o modal',
+  )
+
+  // A faixa de uma pessoa não diz de que ela vai.
+  assert.equal(
+    longe!.porModal.some((g) => g.rotulo === 'moto'),
+    false,
+    'o modal de quem mora sozinho numa faixa apareceu pelo nome: isso é o ' +
+      'ponto clicável que a §3.1.1 proíbe, por outra porta',
+  )
+  assert.ok(
+    longe!.porModal.every((g) => g.agrupadoPorSupressao),
+    'a faixa pequena precisa cair inteira no balde',
+  )
+})
+
+/**
+ * **Cada pessoa cai em exatamente uma faixa**, então as faixas somam o total —
+ * ao contrário do agregado por região de viagens, em que somar passa do total.
+ * Um vão entre dois anéis não quebraria nada: sumiria da contagem e o total
+ * continuaria parecendo plausível.
+ */
+test('as faixas do radar somam o total da tela', async () => {
+  const respostas = [
+    ...Array.from({ length: 6 }, (_, i) =>
+      resposta({
+        funcionarioId: `pessoa-ficticia-${i + 1}`,
+        transporte: 'carro',
+        distanciaKm: 2 + i * 4,
+        co2KgMes: 10 + i,
+      }),
+    ),
+    resposta({
+      funcionarioId: 'pessoa-ficticia-99',
+      transporte: 'onibus',
+      distanciaKm: 41.5,
+      co2KgMes: 7,
+    }),
+    // **Quem mora a zero quilômetro da fábrica**, que é o piso do primeiro
+    // anel. Sem massa aqui, o ramo que recolhe essa pessoa fica sem guarda: o
+    // vão não aparece em nenhuma outra distância, porque todas as outras faixas
+    // têm o piso aberto.
+    resposta({
+      funcionarioId: 'pessoa-ficticia-100',
+      transporte: 'a_pe',
+      distanciaKm: 0,
+      co2KgMes: 0,
+    }),
+  ]
+
+  const dados = await comAmbiente({ MOBILIDADE_SUPRESSAO_MINIMA: LIMITE }, () =>
+    consultarMobilidade(ctx(), { anoBase: ANO }, bancoCom({ mobilidade: respostas })),
+  )
+
+  assert.equal(
+    dados.faixas.reduce((s, f) => s + f.pessoas, 0),
+    dados.respondentes,
+    'alguém ficou fora de todas as faixas, ou foi contado em duas',
+  )
+  assert.ok(
+    Math.abs(dados.faixas.reduce((s, f) => s + f.co2Kg, 0) - dados.co2KgMes) < 1e-9,
+    'as faixas não reproduzem a emissão do módulo',
+  )
+
+  // Um ponto no radar para cada pessoa que as faixas contam.
+  assert.equal(dados.radarDistanciasKm.length, dados.respondentes)
+
+  // A primeira regra da §3.1 continua absoluta, e agora também no que a faixa
+  // devolve: nenhum identificador, nenhum bairro, nenhuma cidade.
+  const saida = JSON.stringify(dados.faixas)
+  for (const vazamento of ['pessoa-ficticia', 'funcionarioId', 'Bairro', 'Cidade']) {
+    assert.equal(
+      saida.includes(vazamento),
+      false,
+      `a faixa do radar levou algo que não é dela: ${vazamento}`,
+    )
+  }
+})

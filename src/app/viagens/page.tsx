@@ -25,7 +25,6 @@ import {
   Cabecalho,
   Cartao,
   Grade,
-  ListaDeGrupos,
   Painel,
   Revelar,
   SeletorDeAno,
@@ -39,6 +38,7 @@ import {
   Itens,
   Parametros,
   Procedencia,
+  Recolhido,
   Sinalizacoes,
   SobreATela,
 } from '../informacoes'
@@ -65,7 +65,7 @@ const GRADE_DA_TELA = 'mt-4 grid items-start gap-4 [&>*]:min-w-0 lg:grid-cols-[1
  */
 const LUGAR = {
   mapa: 'lg:col-span-2 xl:col-span-1 xl:col-start-1 xl:row-start-1',
-  pilha: 'space-y-4 xl:col-start-2 xl:row-start-1',
+  serie: 'xl:col-start-2 xl:row-start-1',
   destinos: 'xl:col-start-1 xl:row-start-2',
   rotas: 'lg:col-span-2 xl:col-span-1 xl:col-start-2 xl:row-start-2',
 } as const
@@ -125,7 +125,6 @@ export default async function Page({
   // de Método. Quando há mais de um, quem diz qual é o próprio seletor.
   const anoUnico = ano === undefined && anos.length === 1 ? anos[0] : null
   const anoNaTela = ano ?? anoUnico
-  const empresaConhecida = dados.porEmpresa.some((g) => !g.rotulo.startsWith('Sem '))
 
   return (
     <Casca ctx={ctx} atual="/viagens">
@@ -249,10 +248,14 @@ export default async function Page({
               </Painel>
             </Revelar>
 
-            {/* A pilha existe por altura: um painel só ao lado de um mapa alto
-                ou de uma tabela de dez linhas volta a ser a coluna curta que a
-                grade esticava. Empilhar equilibra com conteúdo. */}
-            <Revelar ordem={3} className={LUGAR.pilha}>
+            {/* **Os recortes por modal e por empresa saíram daqui**, e os dois
+                eram painéis que não recortavam nada: as duas fontes deste módulo
+                só trazem aéreo, e nenhuma delas informa a empresa por trecho —
+                um mostrava uma linha, o outro mostrava a explicação de estar
+                vazio. Os dois cortes da §11.1 continuam existindo na camada de
+                consulta, para voltarem à tela no dia em que a origem informar a
+                empresa e em que houver trecho rodoviário no inventário. */}
+            <Revelar ordem={3} className={LUGAR.serie}>
               <Painel
                 titulo="Emissão por mês"
                 descricao="Pela data do voo, nunca pela data de lançamento da passagem."
@@ -261,20 +264,6 @@ export default async function Page({
                   serie={dados.porMes}
                   nota="Ela soma as duas fontes administrativas do módulo."
                 />
-              </Painel>
-              <Painel titulo="Por modal">
-                <ListaDeGrupos grupos={dados.porModal} mostrarPessoas={false} />
-              </Painel>
-              <Painel titulo="Por empresa">
-                {empresaConhecida ? (
-                  <ListaDeGrupos grupos={dados.porEmpresa} mostrarPessoas={false} />
-                ) : (
-                  <Vazio>
-                    A base de viagens ainda não informa a empresa por trecho, então
-                    tudo aparece como &ldquo;sem empresa&rdquo;. O campo existe desde
-                    já para não exigir migração quando a origem passar a informá-lo.
-                  </Vazio>
-                )}
               </Painel>
             </Revelar>
 
@@ -290,28 +279,47 @@ export default async function Page({
         </>
       )}
 
+      {/* **O resumo abre com duas coisas e só duas**: de onde vem o dado e como
+          a conta é feita. O lastro — parâmetro, fator, procedência de região,
+          exceção e alerta — continua na página, recolhido, no formato que a
+          Mobilidade estreou (§11.5). A ressalva que impede ler o mapa errado
+          não está aqui e nem poderia estar: ela é visível, na legenda do
+          próprio mapa, porque quem precisa dela é quem não vai clicar. */}
       <SobreATela titulo="Viagens corporativas">
         <Procedencia metodo={metodo} modulo="viagens" />
+
         <Bloco titulo="Como o número é calculado">
-          <Parametros parametros={metodo.parametros} />
+          <p className="max-w-[80ch] leading-[1.5]">
+            A unidade é o trecho, e cada trecho é um passageiro: a distância entre os
+            dois aeroportos, multiplicada pelo fator da faixa de distância e pelo
+            multiplicador da classe. Escala conta como trecho separado, e o mês sai da
+            data do voo — nunca da data em que a passagem foi lançada. O cartão do topo
+            divide essa emissão pelas viagens do período.
+          </p>
         </Bloco>
-        <Bloco titulo="Fatores">
-          <Fatores fatores={metodo.fatores} categorias={['viagem_aerea']} />
-        </Bloco>
-        <Bloco titulo="Mapa">
-          Ponto = média dos aeroportos da região. Só trecho aéreo.
-        </Bloco>
-        {metodo.regioesInferidas.length > 0 && (
-          <Bloco titulo="Região deduzida da coordenada, não do estado">
-            <Itens
-              itens={metodo.regioesInferidas.map((r) => ({
-                rotulo: r.iata,
-                valor: r.regiao,
-              }))}
-            />
+
+        <Recolhido titulo="Parâmetros, fatores e sinalizações">
+          <Bloco titulo="Parâmetros">
+            <Parametros parametros={metodo.parametros} />
           </Bloco>
-        )}
-        <Sinalizacoes metodo={metodo} modulo="viagens" />
+          <Bloco titulo="Fatores">
+            <Fatores fatores={metodo.fatores} categorias={['viagem_aerea']} />
+          </Bloco>
+          <Bloco titulo="Mapa">
+            Ponto = média dos aeroportos da região. Só trecho aéreo.
+          </Bloco>
+          {metodo.regioesInferidas.length > 0 && (
+            <Bloco titulo="Região deduzida da coordenada, não do estado">
+              <Itens
+                itens={metodo.regioesInferidas.map((r) => ({
+                  rotulo: r.iata,
+                  valor: r.regiao,
+                }))}
+              />
+            </Bloco>
+          )}
+          <Sinalizacoes metodo={metodo} modulo="viagens" />
+        </Recolhido>
       </SobreATela>
     </Casca>
   )

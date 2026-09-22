@@ -169,8 +169,8 @@ async function principal(): Promise<void> {
         `${linhas[0]?.vigenciaInicio} → ${linhas[0]?.vigenciaFim ?? 'em aberto'}.`,
     )
     console.log(
-      'O regime de frete continua indefinido: o fator não decide se é cat. 4 ou ' +
-        'cat. 9 (§9.1, §14).',
+      'O fator não separa cat. 4 de cat. 9: quem paga o frete é outra dimensão, e ' +
+        'a origem não a informa por entrega (§9.1).',
     )
   } finally {
     await encerrar()

@@ -228,16 +228,20 @@ test('o recorte por ano filtra na consulta, e não depois da leitura', async () 
 })
 
 /**
- * É `regimes` que sustenta a declaração de escopo provisório na tela (§9.1).
- * Vindo da consulta, o dia em que o levantamento fechar aparece no número —
- * em vez de depender de alguém lembrar de trocar um texto.
+ * **O agregado não lê o regime de frete, e a ausência é decisão** (§9.1). A
+ * origem mistura CIF e FOB sem separar, então o campo é o mesmo em toda a
+ * coleção: ele não recorta nada aqui e agruparia tudo num balde só. Quem
+ * declara a mistura é o resumo da tela; quem a confere documento a documento é
+ * o `verificar`. O que esta guarda prende é o corolário — **o regime não
+ * trafega para o cliente**, como não trafega o código do cliente.
  */
-test('o regime de frete sai contado, e hoje é indefinido', async () => {
+test('o regime de frete não sai no agregado', async () => {
   const { db } = bancoCom([entrega({ co2Kg: 10 }), entrega({ co2Kg: 30, ordem: 2 })])
 
   const dados = await consultarTransportadoras(ctx(), {}, db)
 
-  assert.deepEqual(dados.regimes, [{ regime: 'indefinido', entregas: 2, co2Kg: 40 }])
+  assert.equal(JSON.stringify(dados).includes('indefinido'), false)
+  assert.equal(JSON.stringify(dados).includes('regime'), false)
 })
 
 /* ---------------------------------------------------------- autorização */

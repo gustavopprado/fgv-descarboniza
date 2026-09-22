@@ -23,6 +23,45 @@ export function proporcao(valor: number, casas = 1): string {
 }
 
 /**
+ * Como escrever uma massa de CO₂ em cima de uma barra, dado o maior valor da
+ * série — CLAUDE.md §10.
+ *
+ * **O rótulo do topo tem orçamento de largura, e ele é apertado.** Medido com a
+ * casca na coluna em que a série mensal vive: doze meses dão pouco mais de
+ * trinta e seis pixels cada, e um valor em quilos com seis dígitos ocupa quase
+ * quarenta e nove — **vizinhos se sobrepõem em cerca de doze pixels**, e hoje só
+ * não colidem porque as barras têm alturas diferentes e os números acompanham.
+ * Dois meses parecidos os encostam.
+ *
+ * **Não há tamanho de fonte que resolva**: abaixo de nove pixels o texto vira
+ * sujeira (§14, 18/09), e mesmo ali ele continua estourando. O que resolve é
+ * escrever menos glifos **sem perder o número** — a mesma massa em toneladas
+ * cabe em três.
+ *
+ * As casas saem da ordem de grandeza da própria série, para uma série pequena
+ * não virar uma coluna de zeros. E **abaixo de uma tonelada a unidade continua
+ * sendo o quilo**, porque ali é a tonelada que escreveria zero: um mês de
+ * trezentos quilos é "300", nunca "0,30".
+ *
+ * O valor exato, em quilos, continua no `title` de cada barra — é ele que a
+ * tela nunca arredonda.
+ */
+export function escalaDeMassa(maiorKg: number): {
+  divisor: number
+  casas: number
+  unidade: string
+} {
+  // Escrito assim para NaN cair no quilo, que é o dado como ele chega.
+  if (!(maiorKg >= 1000)) return { divisor: 1, casas: 0, unidade: 'kg CO₂' }
+  const toneladas = maiorKg / 1000
+  return {
+    divisor: 1000,
+    casas: toneladas >= 100 ? 0 : toneladas >= 10 ? 1 : 2,
+    unidade: 't CO₂e',
+  }
+}
+
+/**
  * Plural simples, para os rótulos de contagem não saírem como "1 respostas".
  * O português tem casos irregulares; nenhum deles aparece aqui.
  */

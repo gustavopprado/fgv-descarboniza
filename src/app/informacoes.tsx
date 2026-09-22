@@ -122,6 +122,44 @@ export function Bloco({
 }
 
 /**
+ * Um bloco de lastro que abre só quando alguém quer — CLAUDE.md §10.5 e §13.
+ *
+ * **Recolhido, não removido.** A §13 nomeia o risco desta classe de mudança: o
+ * que pode sair é prosa que explica uma decisão; o que não pode sair é o que
+ * muda o número, e a diferença entre as duas é que a segunda some sem nada
+ * quebrar. Fator, parâmetro, exceção e alerta continuam na página — o que muda é
+ * que eles deixam de disputar a primeira olhada com a resposta que quase todo
+ * mundo procura, que é de onde vem o dado e como a conta é feita.
+ *
+ * `<details>` nativo, sem uma linha de JavaScript, pela mesma regra do popover
+ * que o abriga: num navegador que não o suportasse, o pior caso é o conteúdo
+ * aparecer aberto, nunca inalcançável.
+ *
+ * **Atravessa as duas colunas do resumo** em vez de escorrer numa delas: aberto,
+ * ele é o bloco mais alto de todos, e uma coluna com dez parâmetros ao lado de
+ * outra com duas linhas é a grade com buraco que o resumo evita.
+ */
+export function Recolhido({
+  titulo,
+  children,
+}: {
+  titulo: string
+  children: React.ReactNode
+}) {
+  return (
+    <details className="mt-1 border-t border-[var(--color-linha)] pt-3 sm:[column-span:all]">
+      <summary className="cursor-pointer list-none text-[11px] font-semibold tracking-[0.02em] text-[var(--color-apoio)] uppercase hover:text-[var(--color-tinta)]">
+        {titulo}
+        <span aria-hidden className="ml-1.5 text-[9px] align-[1px]">
+          ▼
+        </span>
+      </summary>
+      <div className="mt-2.5 sm:columns-2 sm:gap-7">{children}</div>
+    </details>
+  )
+}
+
+/**
  * Os parâmetros que esta tela declara, escolhidos por chave.
  *
  * **Por chave, e não por rótulo**: renomear um rótulo é edição de texto, e por

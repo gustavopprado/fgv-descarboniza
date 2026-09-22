@@ -153,8 +153,13 @@ export function ConteudoDaVisaoGeral({ dados }: { dados: VisaoGeral }) {
                   unidade="t CO₂e"
                   nota={
                     <>
-                      Escopo 3, categoria 4. Fatia de {dados.ano} de uma série que
-                      começa antes — a tela de Marítimo mostra o período inteiro.{' '}
+                      {/* **A frase sobre as duas telas divergirem saiu em 21/09**,
+                          e saiu porque deixou de ser verdade: a tela de Marítimo
+                          passou a relatar o mesmo ano-base deste cartão, então o
+                          número é um só. Manter o aviso seria a tela declarando
+                          um arranjo que ela não tem. A declaração que a §11.0
+                          exige — o módulo cobre um agente — continua. */}
+                      Escopo 3, categoria 4.{' '}
                       {dados.maritimo.agentes === 1
                         ? 'Cobre um agente de carga; a importação do ano é maior que este número.'
                         : `Cobre ${inteiro(dados.maritimo.agentes)} agentes de carga.`}
@@ -162,11 +167,11 @@ export function ConteudoDaVisaoGeral({ dados }: { dados: VisaoGeral }) {
                   }
                 />
 
-                {/* **A quarta declaração obrigatória da §10.0 mora aqui, no
-                    cartão, e não em rodapé** — rodapé é onde a ressalva morre.
-                    Se o levantamento de CIF/FOB apontar FOB, a categoria muda
-                    para a 9 e este módulo pode precisar sair do total: é
-                    reclassificação de escopo, não ajuste de tela. */}
+                {/* **Duas categorias num cartão só, e não é imprecisão.** O
+                    frete destas entregas é CIF em parte e FOB em parte — cat. 4
+                    e cat. 9 do mesmo escopo —, e o relatório de origem não diz
+                    qual linha é qual. As duas somam neste número; o porquê fica
+                    no resumo da tela do módulo, que é onde o lastro mora. */}
                 <Cartao
                   rotulo="Distribuição rodoviária"
                   valor={transportadoras.toneladas}
@@ -174,15 +179,9 @@ export function ConteudoDaVisaoGeral({ dados }: { dados: VisaoGeral }) {
                   unidade="t CO₂e"
                   nota={
                     <>
-                      Escopo 3, categoria 4 <strong className="font-medium">provisória</strong>
-                      . Agrupa pela data da entrega, em{' '}
+                      Escopo 3, categorias 4 e 9. Agrupa pela data da entrega, em{' '}
                       {plural(dados.transportadoras.entregas, 'entrega', 'entregas')}.
                     </>
-                  }
-                  etiqueta={
-                    dados.transportadoras.regimeProvisorio
-                      ? { texto: 'Regime de frete indefinido', tom: 'atencao' }
-                      : undefined
                   }
                 />
               </Grade>
@@ -214,11 +213,6 @@ export function ConteudoDaVisaoGeral({ dados }: { dados: VisaoGeral }) {
         </Bloco>
         <Bloco titulo="Fora do total">
           Embarque previsto e o programa de viagens.
-        </Bloco>
-        <Bloco titulo="Provisório">
-          {dados.transportadoras.regimeProvisorio
-            ? 'A distribuição rodoviária entra como cat. 4 enquanto o regime de frete não for levantado; se for FOB, a categoria muda e o total é recortado de novo.'
-            : 'O regime de frete das entregas já está levantado.'}
         </Bloco>
         <Bloco titulo="Cada módulo">
           Fonte, fatores e parâmetros ficam no botão da tela dele.

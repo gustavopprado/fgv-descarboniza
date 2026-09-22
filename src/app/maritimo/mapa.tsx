@@ -69,12 +69,10 @@ export function NaoDesenhado({ mapa }: { mapa: MapaMaritimo }) {
   return (
     <>
       {inteiro(mapa.semGeografia)}{' '}
-      {mapa.semGeografia === 1
-        ? 'embarque ficou fora do desenho'
-        : 'embarques ficaram fora do desenho'}{' '}
-      por não ter código de porto numa das pontas ou por o código não ter coordenada
-      na lista oficial — {proporcao(total === 0 ? 0 : mapa.co2KgSemGeografia / total)} da
-      emissão marítima, que continua somando em todos os totais desta tela.
+      {mapa.semGeografia === 1 ? 'embarque ficou' : 'embarques ficaram'} fora do desenho
+      por falta de código de porto ou de coordenada
+      ({proporcao(total === 0 ? 0 : mapa.co2KgSemGeografia / total)} da emissão
+      marítima), que continua somando nos totais.
     </>
   )
 }
@@ -94,13 +92,15 @@ export function MapaDeCorredoresMaritimos({
         <strong className="font-medium text-[var(--color-tinta)]">
           A linha não é a derrota do navio
         </strong>{' '}
-        — é a geometria entre os dois portos, e o ponto que a percorre mostra só o
-        sentido da carga.
+        — é a geometria entre os dois portos; o ponto mostra o sentido da carga.
       </>
     ),
+    /* **Encurtado, não apagado** (§11.5, §14). As duas coisas que ficam são as
+       que impedem ler o mapa errado: o que ele não desenha, e o que soma no
+       total sem caber nele. O porquê de cada uma é lastro, e mora no resumo. */
     ressalva: (
       <>
-        Espessura pela emissão do corredor. {ressalva} <NaoDesenhado mapa={mapa} />
+        Espessura pela emissão. {ressalva} <NaoDesenhado mapa={mapa} />
       </>
     ),
   }

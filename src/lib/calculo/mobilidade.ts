@@ -16,6 +16,29 @@
 export type Transporte = 'carro' | 'onibus' | 'moto' | 'bicicleta' | 'a_pe' | 'outro'
 export type Combustivel = 'gasolina' | 'etanol' | 'diesel' | 'flex' | 'eletrico'
 
+/**
+ * Como cada modal se escreve na tela.
+ *
+ * A chave é técnica e vira chave de fator, de agrupamento e de documento; ela
+ * não é texto de interface. Sem este mapa a tela mostrava `a_pe` e `onibus` ao
+ * lado de `Carro`, que é a chave vazando para onde ela não devia chegar.
+ *
+ * Chave desconhecida volta como veio: o balde da supressão passa por aqui com
+ * o rótulo dele ("outros modais") e não pode ser reescrito.
+ */
+const ROTULO_DO_TRANSPORTE: Record<Transporte, string> = {
+  carro: 'Carro',
+  onibus: 'Ônibus',
+  moto: 'Moto',
+  bicicleta: 'Bicicleta',
+  a_pe: 'A pé',
+  outro: 'Outro',
+}
+
+export function rotuloDoTransporte(chave: string): string {
+  return ROTULO_DO_TRANSPORTE[chave as Transporte] ?? chave
+}
+
 export const CATEGORIA_MOBILIDADE = 'mobilidade'
 
 /** Categoria do fator na tabela, por modal. */

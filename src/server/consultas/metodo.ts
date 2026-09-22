@@ -23,7 +23,7 @@
  *    recusada — e é exatamente o tipo de coisa que atravessaria a anonimização
  *    por uma porta lateral. A tela mostra tipo, severidade e quantas vezes.
  */
-import type { Firestore } from 'firebase-admin/firestore'
+import type { Firestore, Query } from 'firebase-admin/firestore'
 
 import { MARITIMO_BASE_DE_DATA, opcional, parametrosDeclarados } from '@/lib/env'
 import type {
@@ -611,13 +611,21 @@ function parametros(
       escopo: 'transportadoras',
     })
 
+    /**
+     * **CIF e FOB convivem, e a origem não separa os dois** (§9.1). A parcela de
+     * frete pago pela empresa é cat. 4 e a paga pelo cliente é cat. 9 — mesmo
+     * escopo, categorias diferentes —, e o relatório de entregas não traz a
+     * modalidade por linha. Declarar aqui é o que separa "misto, não separável na
+     * fonte" de "ninguém olhou": a segunda é a que faria alguém refazer o
+     * levantamento que já foi feito.
+     */
     lista.push({
       chave: 'tra-regime-frete',
       rotulo: 'Regime de frete',
-      valor: 'indefinido, provisório',
+      valor: 'CIF e FOB, não separados na origem',
       definido: true,
       observacao:
-        'Enquanto CIF/FOB não fechar, o módulo entra como Escopo 3 cat. 4 provisória.',
+        'A parcela CIF é cat. 4 e a FOB é cat. 9; as duas entram somadas neste total.',
       escopo: 'transportadoras',
     })
 
@@ -642,7 +650,7 @@ function parametros(
  */
 export async function consultarMetodo(
   ctx: ContextoDeAcesso,
-  filtros: { anoBase?: number; modulo?: Modulo } = {},
+  filtros: { anoBase?: number; ano?: number; modulo?: Modulo } = {},
   db: Firestore = firestore(),
 ): Promise<Metodo> {
   exigirInventario(ctx)
@@ -811,9 +819,13 @@ export async function consultarMetodo(
   }
 
   if (pedido('maritimo')) {
-    const todos = (await db.collection(COLECAO.embarque).get()).docs.map(
-      (d) => d.data() as DocEmbarque,
-    )
+    // **O resumo lê o mesmo recorte que a tela desenha.** Sem o ano aqui, "o
+    // que entrou" contaria embarque de período que a tela não mostra, e o
+    // lastro passaria a descrever um número que não é o da tela — que é a
+    // forma silenciosa de o resumo deixar de servir para conferir.
+    let consulta: Query = db.collection(COLECAO.embarque)
+    if (filtros.ano !== undefined) consulta = consulta.where('ano', '==', filtros.ano)
+    const todos = (await consulta.get()).docs.map((d) => d.data() as DocEmbarque)
     // **A cascata é medida sobre o que está no total**, e previsão está fora
     // dele. Medir os dois juntos diria que parte do número vem de dado do
     // agente para um número que não é o número do módulo.

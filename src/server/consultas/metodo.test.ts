@@ -370,6 +370,7 @@ function parametro(metodo: { parametros: { rotulo: string }[] }, rotulo: string)
   return achado as (typeof metodo.parametros)[number] & {
     valor: string
     definido: boolean
+    observacao: string | null
   }
 }
 
@@ -588,4 +589,37 @@ test('o motivo do alerta descreve a regra, e não repete a descrição gravada',
     false,
     'a descrição gravada, que cita valor da linha, chegou ao cliente',
   )
+})
+
+/* ------------------------------------------- transportadoras (§9.1, §11.5) */
+
+/**
+ * **A declaração do regime de frete saiu da tela e continua aqui.**
+ *
+ * A etiqueta dizia que o regime era indefinido — verdade enquanto o
+ * levantamento corria, e falsa depois dele: o frete destas entregas é CIF em
+ * parte e FOB em parte. O que a etiqueta cobria **não desapareceu com ela**: a
+ * parcela CIF é cat. 4 e a FOB é cat. 9, a origem não separa as duas, e é disso
+ * que o relatório final precisa. Declaração se move de lugar, não se apaga
+ * (§11.5, §14).
+ *
+ * A guarda prende o **fato, não a redação**: as duas modalidades e as duas
+ * categorias precisam estar ditas em algum lugar do parâmetro. Quem reescrever
+ * a frase continua passando; quem apagar a informação, não.
+ */
+test('o resumo de Transportadoras declara as duas modalidades de frete', async () => {
+  const metodo = await consultarMetodo(
+    ctx('admin'),
+    { modulo: 'transportadoras' },
+    bancoCom({}),
+  )
+
+  const regime = parametro(metodo, 'Regime de frete')
+  const dito = `${regime.valor} ${regime.observacao ?? ''}`
+
+  assert.equal(regime.definido, true)
+  assert.match(dito, /CIF/)
+  assert.match(dito, /FOB/)
+  assert.match(dito, /cat\. 4/)
+  assert.match(dito, /cat\. 9/)
 })
