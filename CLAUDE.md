@@ -1583,6 +1583,85 @@ documento.
 
 ### Histórico
 
+#### 2026-09-22 — O sistema no ar, e três diagnósticos para uma causa
+
+O primeiro deploy subiu e **toda página devolveu 500**. O build passou, os 375
+testes passaram, o `tsc` passou, e a aplicação não abria. Levou três tentativas,
+e as duas primeiras estavam erradas — fica registrado porque o modo de errar é
+mais instrutivo que o conserto.
+
+**A causa, que só a terceira tentativa achou.** O `firebase-admin` traz
+`jwks-rsa`, que é CommonJS e abre com `require('jose')`. A `jose` 6 é **ESM
+puro** — não tem condição `require` no `exports` —, então esse `require` só
+funciona onde o runtime aceite `require()` de módulo ESM. Onde não aceita, o erro
+é `ERR_REQUIRE_ESM`, e como tudo neste sistema passa pelo Firestore, **toda rota
+caiu**. O conserto é um `overrides` prendendo `jose` na linha 5, que tem CJS: o
+`require` vira require comum e **o carregamento deixa de depender do runtime**.
+
+Antes de prender a versão, conferi que o `jwks-rsa` usa dela exatamente duas
+funções — `importJWK` e `exportSPKI` — e exercitei as duas com um JWK RSA de
+verdade. Prender dependência transitiva sem olhar o que ela usa é trocar um
+defeito por outro.
+
+**As duas tentativas erradas, e o que cada uma ensina:**
+
+- **A primeira culpou o Turbopack.** O rastro do erro trazia um alias interno
+  dele, `firebase-admin-<hash>/auth`, e eu construí em cima disso uma explicação
+  coerente: resolver pela condição `import` e carregar com `require`. Troquei o
+  build para webpack, conferi no artefato que o alias sumia — e **o alias não era
+  a causa, era o caminho**. A explicação era plausível, o sintoma sumia do
+  artefato, e nada disso é evidência.
+- **A segunda culpou a versão do Node.** `require(esm)` existe a partir do 22.12,
+  e a máquina de quem desenvolve tem 22.23 — onde aquele `require` funciona. Era
+  uma diferença real entre as duas máquinas, e mesmo assim não era a causa: a
+  falha continuou num runtime que suporta `require(esm)`.
+
+> **O que as duas têm em comum é o que vale guardar.** As duas tentaram fazer o
+> runtime **aceitar** o `require` de um módulo ESM; a terceira **tirou o ESM da
+> equação**. Enquanto o conserto depende de um comportamento do ambiente, ele
+> continua sendo uma aposta sobre o ambiente — e o ambiente muda sem avisar.
+
+**As duas tentativas erradas foram revertidas, não deixadas.** A do webpack
+deixava no repositório um comentário explicando um motivo falso, que é o defeito
+que este log cataloga com outro sinal; a do Node virou `engines.node` declarado,
+que fica — não porque conserta, mas para a versão do runtime não voltar a ser uma
+variável escondida.
+
+**Por que nenhuma verificação pegou, e esta é a lição de verdade.** O `§14` já
+registrava desde 15/09 que `next build` compila sem renderizar, porque todas as
+páginas são dinâmicas. Este foi o caso em que isso custou: **a única verificação
+que teria pego era abrir uma página**, e ela não estava ao meu alcance — não
+posso subir servidor. E a máquina de quem desenvolve mascarava a diferença, por
+aceitar aquele `require`. Três camadas de verificação verde, e o defeito
+atravessou todas.
+
+**O favicon, que foi o último pedido.** O logo é um wordmark de 240×93 gravado a
+44% de opacidade — o verde pálido da tela não é a cor dele, é a transparência.
+Usando o alfa como máscara, a marca sai em opacidade cheia.
+
+> **Ele foi escolhido olhando, no tamanho em que vive** (regra de 22/09). Três
+> variantes reduzidas de verdade a 16 e 32px e ampliadas com pixel duro: fundo
+> escuro com marca clara, fundo branco com marca verde, e fundo no verde da marca
+> com letras brancas. **A terceira é a que se lê a 16px**; a do fundo branco é a
+> mais fraca, porque verde claro sobre branco quase some numa aba clara.
+>
+> **Recortar no "G" foi considerado e recusado**, e por um fato do desenho: há
+> uma barra horizontal contínua no topo, atravessando as três letras. Um recorte
+> no G cortaria essa barra no meio, e o resultado seria um fragmento de wordmark,
+> não uma marca.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (375 testes) e `next build` passam. Nenhum servidor
+  foi subido por mim — e é justamente essa a verificação que faltou.
+- A compatibilidade da `jose` 5 foi exercitada no caminho exato do `jwks-rsa`,
+  com um JWK RSA gerado na hora, antes de o override entrar.
+- Conferido no artefato: o rastreamento passa a incluir a `jose` CJS e deixa de
+  incluir o `webapi` da 6.
+- O ícone entra pela convenção do App Router, e a tag que o Next injeta foi lida
+  no HTML pré-renderizado — `rel="icon"`, com tamanho e tipo declarados.
+- **A aplicação está no ar e abre**, confirmado pelo Gustavo.
+
 #### 2026-09-22 — Checagem pré-deploy: a rotação feita, e um fallback que valia em produção
 
 Antes de publicar na Vercel. Nada de número mudou — o que mudou foi **quem pode
