@@ -130,9 +130,15 @@ export default async function Page() {
                 unidade="kg CO₂"
                 nota={
                   <>
-                    {plural(dados.containers, 'contêiner marítimo', 'contêineres marítimos')} em{' '}
-                    {plural(dados.embarques, 'embarque', 'embarques')}.{' '}
-                    <ForaDoIndicador dados={dados} />
+                    {plural(dados.containers, 'contêiner marítimo', 'contêineres marítimos')}
+                    {dados.residuo.containers > 0 ? (
+                      <>
+                        , dos quais {dados.residuo.containers} sem detalhe de agente
+                      </>
+                    ) : (
+                      <> em {plural(dados.embarques, 'embarque', 'embarques')}</>
+                    )}
+                    . <ForaDoIndicador dados={dados} />
                   </>
                 }
               />
@@ -143,15 +149,24 @@ export default async function Page() {
                 unidade="t CO₂e"
                 nota={
                   dados.previsoes.embarques === 0
-                    ? 'Soma o que o agente informou, sem recálculo.'
+                    ? 'O que o agente informou não é recalculado; o resto é estimativa.'
                     : `Soma o realizado; ${plural(dados.previsoes.embarques, 'um embarque previsto está', 'embarques previstos estão')} fora desta conta.`
                 }
               />
+              {/* **O denominador é embarque, então o numerador também precisa
+                  ser.** Os contêineres sem detalhe de agente não vêm de embarque
+                  nenhum: somá-los aqui dividiria a operação inteira pelas linhas
+                  de um agente só, e o resultado sairia várias vezes maior — como
+                  número plausível, nunca como falha. */}
               <Cartao
                 rotulo="Contêineres por embarque"
-                valor={dados.embarques === 0 ? 0 : dados.containers / dados.embarques}
+                valor={
+                  dados.embarques === 0
+                    ? 0
+                    : (dados.containers - dados.residuo.containers) / dados.embarques
+                }
                 unidade="contêineres"
-                nota="Só marítimo."
+                nota="Só marítimo, e só o que tem detalhe linha a linha."
               />
             </Grade>
           </Revelar>

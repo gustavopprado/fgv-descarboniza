@@ -714,6 +714,17 @@ export type ResumoDeMaritimo = {
    * marítimo não cobre toda a importação do período (§10.0).
    */
   agentes: number
+  /**
+   * Os contêineres que a contagem do período tem e nenhum agente detalhou
+   * (§8.2), com a emissão estimada deles.
+   *
+   * **Está no total acima, e é por isso que precisa ser declarado à parte.** Sem
+   * este recorte a tela não teria como dizer que parte do número não vem de
+   * linha de relatório nenhuma — e um total que cobre a operação inteira,
+   * apresentado como se fosse todo medido, é pior que um total pequeno e
+   * honesto. A cascata em `qualidade` diz a proporção; este diz a contagem.
+   */
+  residuo: { containers: number; co2Kg: number }
 }
 
 /** O embarque entra nos totais do período? Previsão não entra (§8.3). */
@@ -754,6 +765,18 @@ export async function consultarMaritimo(
   const maritimos = embarques.filter((e) => e.modal !== 'aereo')
   const aereos = embarques.filter((e) => e.modal === 'aereo')
 
+  /**
+   * **Emissão e contêineres somam juntos; contagem de embarque, não** (§8.2).
+   *
+   * O resíduo de porto é o que a contagem do período tem e nenhum agente
+   * detalhou: ele é emissão do escopo e contêiner movimentado, e é por isso que
+   * entra em tudo que é total. O que ele não é, é embarque — contá-lo como tal
+   * faria a tela declarar centenas de embarques que não existem, e o número
+   * continuaria plausível.
+   */
+  const detalhados = embarques.filter((e) => e.unidade === 'embarque')
+  const residuos = embarques.filter((e) => e.unidade === 'residuo')
+
   const co2Kg = somar(embarques, valor)
   const co2KgMaritimo = somar(maritimos, valor)
   const containers = somar(maritimos, (e) => e.containers ?? 0)
@@ -788,7 +811,7 @@ export async function consultarMaritimo(
 
   return {
     ano: filtros.ano ?? null,
-    embarques: embarques.length,
+    embarques: detalhados.length,
     containers,
     co2Kg,
     co2Toneladas: emToneladas(co2Kg),
@@ -824,7 +847,11 @@ export async function consultarMaritimo(
       }))
       .sort((a, b) => b.co2Kg - a.co2Kg),
     previsoes: { embarques: previstos.length, co2Kg: somar(previstos, valor) },
-    agentes: new Set(embarques.map((e) => e.agente)).size,
+    agentes: new Set(detalhados.map((e) => e.agente)).size,
+    residuo: {
+      containers: somar(residuos, (e) => e.containers ?? 0),
+      co2Kg: somar(residuos, valor),
+    },
   }
 }
 

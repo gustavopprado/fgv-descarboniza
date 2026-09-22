@@ -96,6 +96,18 @@ export type VisaoGeral = {
     agentes: number
     /** Previsão, que fica fora do total aqui como fica no módulo (§8.3). */
     previsoes: { embarques: number; co2Kg: number }
+    /**
+     * Contêineres do período, e quantos deles nenhum agente detalhou (§8.2).
+     *
+     * **É daqui que a segunda declaração passou a sair**, e a ressalva mudou de
+     * sinal junto com o número. Enquanto o módulo era o inventário de um agente,
+     * o risco era ler um total parcial como se cobrisse a importação inteira;
+     * agora ele cobre a contagem inteira, e o risco é ler como medido um número
+     * cuja maior parte é estimativa. As duas leituras erradas são caras, e a que
+     * vale declarar é sempre a que o número atual permite.
+     */
+    containers: number
+    containersSemDetalhe: number
   }
 }
 
@@ -210,6 +222,8 @@ export async function consultarVisaoGeral(
       embarques: maritimo.embarques,
       agentes: maritimo.agentes,
       previsoes: maritimo.previsoes,
+      containers: maritimo.containers,
+      containersSemDetalhe: maritimo.residuo.containers,
     },
   }
 }

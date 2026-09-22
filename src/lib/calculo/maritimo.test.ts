@@ -27,8 +27,9 @@ function medido(
   co2Kg: number,
   containers: number | null,
   pesoKg = 1000,
+  destino: string | null = null,
 ): EmbarqueParaEstimar {
-  return { corredor, co2Kg, containers, pesoKg }
+  return { corredor, co2Kg, containers, pesoKg, destino }
 }
 
 /* ----------------------------------------------------------- referências */
@@ -40,7 +41,7 @@ test('a média do corredor sai só dos medidos, e declara o tamanho da amostra',
       medido(CORREDOR_A, 4000, 2),
       medido(CORREDOR_A, 3000, 1),
       // Sem CO₂: não é medido, não entra na média de nada.
-      { corredor: CORREDOR_A, co2Kg: null, containers: 5, pesoKg: 100 },
+      { corredor: CORREDOR_A, co2Kg: null, containers: 5, pesoKg: 100, destino: null },
       // Sem contagem: não diz nada sobre CO₂ por contêiner.
       medido(CORREDOR_A, 500, null),
     ],
@@ -89,7 +90,7 @@ test('a cascata desce do corredor para a média geral e só então para o peso',
 
   // 1. corredor com referência própria
   const noCorredor = estimar(
-    { co2Kg: null, containers: 3, pesoKg: 500, corredor: CORREDOR_A },
+    { co2Kg: null, containers: 3, pesoKg: 500, corredor: CORREDOR_A, destino: null },
     refs,
   )
   assert.equal(noCorredor?.nivel, 'estimado_corredor')
@@ -99,7 +100,7 @@ test('a cascata desce do corredor para a média geral e só então para o peso',
   // 2. corredor sem referência própria — só um medido, abaixo da amostra
   //    mínima — cai na média geral: (2000 + 2000 + 6000) / 3 por contêiner.
   const naMedia = estimar(
-    { co2Kg: null, containers: 2, pesoKg: 500, corredor: CORREDOR_B },
+    { co2Kg: null, containers: 2, pesoKg: 500, corredor: CORREDOR_B, destino: null },
     refs,
   )
   assert.equal(naMedia?.nivel, 'estimado_media')
@@ -109,7 +110,7 @@ test('a cascata desce do corredor para a média geral e só então para o peso',
 
   // 3. sem contagem de contêiner, o último recurso é o peso
   const noPeso = estimar(
-    { co2Kg: null, containers: null, pesoKg: 500, corredor: CORREDOR_A },
+    { co2Kg: null, containers: null, pesoKg: 500, corredor: CORREDOR_A, destino: null },
     refs,
   )
   assert.equal(noPeso?.nivel, 'estimado_peso')
@@ -117,7 +118,10 @@ test('a cascata desce do corredor para a média geral e só então para o peso',
 
   // 4. sem contagem e sem peso, não há estimativa — e não há zero no lugar
   assert.equal(
-    estimar({ co2Kg: null, containers: null, pesoKg: null, corredor: CORREDOR_A }, refs),
+    estimar(
+      { co2Kg: null, containers: null, pesoKg: null, corredor: CORREDOR_A, destino: null },
+      refs,
+    ),
     null,
   )
 })
@@ -128,7 +132,7 @@ test('corredor nulo não impede a estimativa: ele cai na média geral', () => {
     { amostraMinimaDoCorredor: 2 },
   )
   const estimativa = estimar(
-    { co2Kg: null, containers: 1, pesoKg: 100, corredor: null },
+    { co2Kg: null, containers: 1, pesoKg: 100, corredor: null, destino: null },
     refs,
   )
   assert.equal(estimativa?.nivel, 'estimado_media')

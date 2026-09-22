@@ -53,8 +53,29 @@ export type PropriedadeVeiculo = 'frota' | 'proprio' | 'locado'
 export type NivelDado =
   | 'medido'
   | 'estimado_corredor'
+  | 'estimado_porto'
   | 'estimado_media'
   | 'estimado_peso'
+
+/**
+ * O documento é um embarque, ou o resíduo de um porto num mês?
+ *
+ * **A coleção passou a guardar duas coisas, e misturá-las erra em silêncio.**
+ * `embarque` é a unidade de emissão da §10.1: uma linha do relatório de um
+ * agente, com identificador, itinerário e datas. `residuo` é o que a tabela de
+ * contêineres por porto tem e nenhum agente detalhou — um número de contêineres
+ * num porto num mês, com a emissão estimada pela cascata da §8.2.
+ *
+ * Sem o discriminador, os dois somariam contagem de embarques: a tela diria que
+ * o módulo tem centenas de embarques a mais do que existem, e o número
+ * continuaria plausível. **Emissão e contêineres somam juntos de propósito** —
+ * é isso que faz o módulo cobrir a operação inteira; o que não soma é a
+ * contagem de embarques, porque resíduo não é embarque.
+ *
+ * `nivelDado` não substitui este campo: um embarque de verdade pode ter chegado
+ * sem CO₂ e ser estimado pela mesma cascata, e continua sendo um embarque.
+ */
+export type UnidadeDeEmbarque = 'embarque' | 'residuo'
 
 /**
  * De onde vem o número de uma entrega rodoviária — e **por que não é o
@@ -290,6 +311,8 @@ export type DocViagemRegistrada = NucleoDeEmissao & {
 export type DocEmbarque = EnvelopeEmissao & {
   modulo: 'maritimo'
   periodicidade: 'evento'
+  /** Embarque do relatório de um agente, ou resíduo de porto — ver o tipo. */
+  unidade: UnidadeDeEmbarque
   agente: string
   /**
    * Bloco de origem — a aba do relatório de onde o embarque veio.
@@ -336,8 +359,15 @@ export type DocEmbarque = EnvelopeEmissao & {
   pesoKg: number | null
   volumeM3: number | null
   containers: number | null
-  /** De onde saiu a contagem: a coluna numérica ou o texto de tipo (§8.3). */
-  containersFonte: 'coluna' | 'tipo' | null
+  /**
+   * De onde saiu a contagem: a coluna numérica, o texto de tipo (§8.3) — ou a
+   * tabela de contêineres por porto da aba de resumo, no documento de resíduo.
+   *
+   * O terceiro valor não é detalhe de procedência: ele é a marca de que aquela
+   * contagem vem de **outra base de data**, o registro de DI, enquanto as duas
+   * primeiras vêm da partida.
+   */
+  containersFonte: 'coluna' | 'tipo' | 'resumo' | null
   co2Kg: number
   nivelDado: NivelDado
   /**

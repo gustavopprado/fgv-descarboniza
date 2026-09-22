@@ -118,6 +118,7 @@ function trecho(parcial: Partial<DocViagemTrecho>): DocViagemTrecho {
 function embarque(parcial: Partial<DocEmbarque>): DocEmbarque {
   return {
     modulo: 'maritimo',
+    unidade: 'embarque',
     modal: 'maritimo',
     escopo: 3,
     periodicidade: 'evento',
@@ -479,20 +480,57 @@ test('a cascata do marítimo sai por degrau, medida sobre o total sem previsão'
   assert.equal(item(/^Previstos/), '1')
 })
 
-test('a fonte do marítimo declara o agente que falta, sem inventar o embarque', async () => {
+test('a fonte do marítimo declara quantos agentes têm detalhe por embarque', async () => {
   const metodo = await comAmbiente(PARAMETROS_DO_MARITIMO, () =>
     consultarMetodo(ctx('importacao'), {}, bancoCom({ embarque: [embarque({})] })),
   )
 
   const fonte = metodo.fontes.find((f) => f.modulo === 'maritimo')
   assert.ok(fonte)
-  // Quantos agentes o inventário tem é fato do banco, e sai aqui.
+  // Quantos agentes o inventário tem detalhe de é fato do banco, e sai aqui.
   assert.match(fonte.situacao, /agente/i)
-  // **O que nunca pode sumir:** agente sem detalhe por embarque não está no
-  // inventário, nem como estimativa — a cascata estima dentro de um embarque, não
-  // inventa o embarque. O ponteiro para a conferência de cobertura saiu da tela no
-  // enxugamento de 20/09; a afirmação que ele acompanhava ficou.
-  assert.match(fonte.situacao, /não está no inventário/i)
+})
+
+/**
+ * **Esta guarda substitui uma que prendia o arranjo anterior, e a troca é a
+ * decisão inteira.**
+ *
+ * Até aqui ela exigia a frase "agente sem detalhe por embarque não está no
+ * inventário" — verdade enquanto o módulo era o inventário de um agente. Deixou
+ * de ser: os contêineres que a contagem do período tem e nenhum relatório
+ * detalha passaram a entrar pela cascata da §8.2. Ela reprovou quando o texto
+ * mudou, e **reprovar foi o comportamento certo**: o conserto é reapontá-la para
+ * o fato que passou a valer, nunca afrouxá-la até parar de morder.
+ *
+ * O que ela prende agora é o **fato**, não a redação: que a parcela sem detalhe
+ * de agente existe e é declarada com número. Quem reescrever a frase continua
+ * passando; quem apagar a informação, não.
+ */
+test('a fonte do marítimo declara os contêineres que nenhum agente detalhou', async () => {
+  const metodo = await comAmbiente(PARAMETROS_DO_MARITIMO, () =>
+    consultarMetodo(
+      ctx('importacao'),
+      {},
+      bancoCom({
+        embarque: [
+          embarque({ shipmentId: 'A', containers: 2 }),
+          embarque({
+            shipmentId: 'RESIDUO',
+            unidade: 'residuo',
+            containers: 7,
+            nivelDado: 'estimado_porto',
+            etd: null,
+            baseDaEstimativa: 5,
+          }),
+        ],
+      }),
+    ),
+  )
+
+  const fonte = metodo.fontes.find((f) => f.modulo === 'maritimo')
+  assert.ok(fonte)
+  assert.match(fonte.situacao, /7/, 'a contagem sem detalhe precisa sair com número')
+  assert.match(fonte.situacao, /sem detalhe|estimad/i)
 })
 
 /**

@@ -401,6 +401,52 @@ export function validarEmbarque(id: string, doc: DocEmbarque): void {
   if (doc.containers !== null && doc.containersFonte === null) {
     falhar(ctx, 'containersFonte', 'há contagem de contêineres sem dizer de onde veio')
   }
+
+  /**
+   * **O resíduo de porto não é um embarque, e o que o prende é isto** (§8.2).
+   *
+   * Ele existe porque a tabela de contêineres por porto conta contêineres que
+   * nenhum agente detalhou; dele se sabe o porto, o mês e a contagem, e mais
+   * nada. Cada regra abaixo fecha uma porta pela qual ele passaria por embarque:
+   *
+   *  - **sem itinerário e sem data.** Data de partida inventada faria a série
+   *    mensal afirmar uma partida que ninguém observou, e o `mes` é o único dado
+   *    de período que ele tem — por isso ele é obrigatório aqui, enquanto no
+   *    embarque a data de referência é que manda;
+   *  - **nunca `medido`.** A emissão dele é sempre média × contagem;
+   *  - **sem peso nem volume.** O peso da aba de resumo é a subtração circular
+   *    que a §8.1 proíbe reproduzir; deixá-lo entrar por aqui seria a proibição
+   *    valendo na leitura e não valendo na escrita;
+   *  - **nunca previsão.** Previsão é classificação de linha de relatório, e
+   *    aqui não há linha.
+   */
+  if (doc.unidade === 'residuo') {
+    if (medido) falhar(ctx, 'nivelDado', 'resíduo de porto não tem número de agente a medir')
+    if (doc.mes === null) falhar(ctx, 'mes', 'resíduo de porto sem mês sai da série mensal')
+    for (const campo of ['etd', 'eta', 'atd', 'ata', 'ataFinal'] as const) {
+      if (doc[campo] !== null) falhar(ctx, campo, 'resíduo de porto não tem itinerário')
+    }
+    for (const campo of ['pesoKg', 'volumeM3'] as const) {
+      if (doc[campo] !== null) falhar(ctx, campo, 'o peso da aba de resumo é derivado (§8.1)')
+    }
+    if (doc.previsao) falhar(ctx, 'previsao', 'resíduo de porto não é linha de relatório')
+    if (doc.modal !== 'maritimo') falhar(ctx, 'modal', 'resíduo de porto é sempre marítimo')
+    if (doc.portoOrigem !== null) {
+      falhar(ctx, 'portoOrigem', 'a tabela de resumo não diz de onde a carga saiu')
+    }
+    if (doc.containers === null || doc.containers <= 0) {
+      falhar(ctx, 'containers', 'resíduo de porto sem contagem não é resíduo de nada')
+    }
+    if (doc.containersFonte !== 'resumo') {
+      falhar(ctx, 'containersFonte', 'a contagem do resíduo vem da aba de resumo')
+    }
+  } else if (doc.unidade === 'embarque') {
+    if (doc.containersFonte === 'resumo') {
+      falhar(ctx, 'containersFonte', 'embarque não conta contêiner pela aba de resumo')
+    }
+  } else {
+    falhar(ctx, 'unidade', `só pode ser "embarque" ou "residuo": ${JSON.stringify(doc.unidade)}`)
+  }
 }
 
 /**

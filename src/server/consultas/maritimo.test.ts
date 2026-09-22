@@ -63,6 +63,7 @@ const CADASTRO = [
 function embarque(parcial: Partial<DocEmbarque>): DocEmbarque {
   return {
     modulo: 'maritimo',
+    unidade: 'embarque',
     modal: 'maritimo',
     escopo: 3,
     periodicidade: 'evento',
@@ -328,4 +329,95 @@ test('o perfil de importação vê o módulo, e a empresa dele recorta a consult
     bancoCom([embarque({ empresa: 'Empresa Fictícia A' })]),
   )
   assert.equal(dados.embarques, 1)
+})
+
+/* ------------------------------------------------- resíduo de porto (§8.2) */
+
+/** Os contêineres que a contagem do período tem e nenhum agente detalhou. */
+function residuo(parcial: Partial<DocEmbarque> = {}): DocEmbarque {
+  return embarque({
+    unidade: 'residuo',
+    agente: 'SEM_DETALHE',
+    bloco: 'RESUMO',
+    shipmentId: 'RESIDUO_2031-03_XX',
+    portoOrigem: null,
+    portoOrigemNome: null,
+    etd: null,
+    eta: null,
+    atd: null,
+    ata: null,
+    ataFinal: null,
+    pesoKg: null,
+    volumeM3: null,
+    containersFonte: 'resumo',
+    nivelDado: 'estimado_porto',
+    baseDaEstimativa: 5,
+    fator: {
+      categoria: 'maritimo_media_porto',
+      chave: 'BRZZZ',
+      versao: 'carga_2031-06-01',
+      valor: 1000,
+      unidade: 'kg CO2e/contêiner',
+      vigenciaInicio: '2031-06-01',
+    },
+    ...parcial,
+  })
+}
+
+test('o resíduo soma em emissão e em contêineres, e não em contagem de embarques', async () => {
+  // É a separação inteira: sem ela, a tela declara embarques que não existem —
+  // e o número continua plausível, que é o pior resultado possível.
+  const dados = await consultarMaritimo(
+    ctx(),
+    {},
+    bancoCom([
+      embarque({ shipmentId: 'A', co2Kg: 1000, containers: 1 }),
+      residuo({ shipmentId: 'R1', co2Kg: 4000, containers: 4 }),
+    ]),
+  )
+
+  assert.equal(dados.embarques, 1, 'só a linha de relatório é embarque')
+  assert.equal(dados.containers, 5, 'o contêiner do resíduo é contêiner movimentado')
+  assert.equal(dados.co2Kg, 5000, 'e a emissão dele é emissão do escopo')
+  assert.equal(dados.residuo.containers, 4)
+  assert.equal(dados.residuo.co2Kg, 4000)
+  assert.equal(dados.co2KgPorContainer, 1000)
+})
+
+test('o resíduo não conta como agente com detalhe', async () => {
+  // A tela declara quantos agentes o recorte tem detalhe de, e o resíduo é
+  // justamente o que nenhum agente detalhou: contá-lo inverteria a frase.
+  const dados = await consultarMaritimo(
+    ctx(),
+    {},
+    bancoCom([
+      embarque({ shipmentId: 'A', agente: 'Agente Fictício' }),
+      residuo({ shipmentId: 'R1', co2Kg: 4000, containers: 4 }),
+    ]),
+  )
+  assert.equal(dados.agentes, 1)
+})
+
+test('o resíduo entra na série mensal e na cascata de qualidade', async () => {
+  // Fora da série, o gráfico somaria menos que o indicador acima dele — e isso
+  // se lê como falha de carga, não como estimativa.
+  const dados = await consultarMaritimo(
+    ctx(),
+    {},
+    bancoCom([
+      embarque({ shipmentId: 'A', co2Kg: 1000, containers: 1, mes: `${ANO}-03` }),
+      residuo({ shipmentId: 'R1', co2Kg: 4000, containers: 4, mes: `${ANO}-07` }),
+    ]),
+  )
+
+  assert.equal(
+    dados.porMes.reduce((s, m) => s + m.co2Kg, 0),
+    dados.co2Kg,
+    'a soma dos meses reproduz o total do módulo',
+  )
+  assert.equal(dados.porMes.find((m) => m.mes === `${ANO}-07`)?.co2Kg, 4000)
+
+  const estimado = dados.qualidade.find((q) => q.nivel === 'estimado_porto')
+  assert.equal(estimado?.co2Kg, 4000)
+  assert.equal(estimado?.proporcao, 0.8)
 })

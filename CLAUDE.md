@@ -701,11 +701,84 @@ genérico:
 
 1. `medido` — CO₂ informado pelo agente para aquele embarque
 2. `estimado_corredor` — contêineres reais × média de CO₂/contêiner do corredor
-3. `estimado_media` — contêineres reais × média geral de CO₂/contêiner
-4. `estimado_peso` — último recurso, só se nem a contagem de contêiner existir
+3. `estimado_porto` — contêineres reais × média de CO₂/contêiner do porto de desembarque
+4. `estimado_media` — contêineres reais × média geral de CO₂/contêiner
+5. `estimado_peso` — último recurso, só se nem a contagem de contêiner existir
 
 Gravar `nivelDado` em todo documento. No rodapé do módulo, uma linha de texto:
 *"X% deste número vem de dado do agente, o restante é estimativa por média."*
+
+**O degrau do porto existe por causa do resíduo, abaixo.** Dos contêineres que nenhum
+agente detalhou sabe-se o porto de desembarque e o mês, nunca o porto de origem — e sem
+origem não há corredor. Cair direto na média geral jogaria fora a única coisa específica
+que se sabe deles, e a média geral mistura rotas cujo CO₂ por contêiner é de ordens
+visivelmente diferentes. Ele vale para qualquer degrau da cascata, não só para o resíduo.
+
+#### 8.2.1 Os contêineres que nenhum agente detalhou
+
+**A cascata passou a responder também pelo que não tem linha de relatório nenhuma**, e isso
+inverte uma regra anterior deste documento — a §14 dizia que agente sem detalhe ficava fora
+do inventário, *nem como estimativa*.
+
+**Por que mudou.** Com dois dos três agentes sem detalhe, o módulo cobria menos de um terço
+dos contêineres do período. O número era preciso e incompleto, e essa combinação é a pior
+das duas: um total que fecha linha a linha com o arquivo, e que mesmo assim descreve um
+terço da operação. Num relatório que alguém assina, isso não se corrige com ressalva — a
+ressalva estava lá, e o número continuava sendo lido como o frete marítimo do ano.
+
+**O que entra da aba de resumo é a contagem de contêineres por porto, e só ela.** Ela é
+**contada**: não sai de divisão, não depende de constante e não é derivada de nenhum outro
+número daquela aba. **Peso, CO₂ e a repartição por agente continuam fora**, pelo motivo da
+§8.1 — lá o CO₂ de um agente sai do indicador dos outros, o peso de um é resíduo de
+subtração dos demais, e o peso total vem da contagem multiplicada por uma constante por
+contêiner que está acima da média real medida.
+
+**A conta é resíduo, e é anual por porto:**
+
+```
+resíduo do porto = contagem do período para aquele porto
+                 − contêineres que o detalhe linha a linha cobre naquele porto
+CO₂ estimado     = resíduo × média medida de CO₂/contêiner daquele porto, no ano relatado
+```
+
+Cinco decisões dentro dela, e cada uma fecha uma porta:
+
+- **o resíduo é anual, nunca mensal.** Subtrair mês a mês é subtrair duas bases de data
+  célula a célula, e o resultado fica negativo em alguns meses só pela defasagem entre
+  partida e registro. A repartição pelos doze meses segue a forma mensal que a tabela tem
+  para aquele porto, em inteiro, com sobra-e-resto: contêiner é unidade inteira, e
+  arredondar cada mês separado faria o ano não fechar;
+- **a média vem do próprio ano relatado**, não da coleção inteira. A coleção atravessa mais
+  de um ano civil e o CO₂ por contêiner do último é sensivelmente menor — uma diferença que
+  pode ser mudança no cálculo do agente, não eficiência, e que a origem ainda não confirmou.
+  Amostra maior de coisa errada continua sendo errada;
+- **resíduo negativo é recusado**, nomeando o porto. O detalhe trazendo mais contêineres que
+  a contagem inteira não é defasagem: é a tabela descrevendo outro período;
+- **a identidade `medido + resíduo = contagem do período` é conferida**, e falha a carga se
+  não fechar. É ela que pega porto no detalhe que a tabela não tem, e o contrário;
+- **o ano da tabela precisa ser o ano-base.** Um arquivo de outro período aplicado ao
+  ano-base carregaria a contagem errada sem nada parecer quebrado.
+
+**O resíduo não é um embarque, e o documento diz isso** — ver `unidade` na §10.7. Ele soma
+em emissão e em contêineres, que é o ponto; **não soma em contagem de embarques**, porque
+não há embarque a contar. Ele também não tem itinerário, não tem peso, não tem porto de
+origem e nunca é `medido`, e a validação de escrita recusa cada uma dessas coisas.
+
+**A base de data é outra, e isso é declarado.** A contagem por porto usa o registro de DI; o
+detalhe usa a partida (§8.3). A parcela estimada cai no mês do registro e a medida no mês da
+partida — a diferença desloca o mês, nunca o total do ano, e **não se corrige com um
+deslocamento inventado**.
+
+**O rótulo de porto da tabela não vira lista no código.** A ponte entre ele e o código
+UN/LOCODE é um mapa que mora fora do repositório, no molde do mapa de primeiro nome da
+planilha do cartão (§7): uma lista de terminais versionada publicaria por onde a empresa
+importa (§2.2). Rótulo sem correspondência não derruba a carga — entra sem porto, pela média
+geral, com alerta próprio, e o script diz quantos foram.
+
+**Isto não substitui pedir o detalhe à origem.** Estimativa por média não vira medição, e a
+§14 continua com o pedido aberto. O que mudou é que, enquanto ele não vem, o módulo relata a
+operação inteira declarando o que é estimado — em vez de relatar um terço dela declarando
+que é pouco.
 
 ### 8.3 Regras de ingestão
 
@@ -744,6 +817,24 @@ ficaram sem conferir.
 atravessa a virada do ano — o período dele não coincide com o ano civil —, então dois blocos
 do mesmo agente contêm documentos do mesmo ano. Com o ano no escopo, recarregar um bloco
 apagaria os documentos do outro que caíssem naquele ano (§10.9).
+
+**A aba de resumo é um escopo de recarga como os outros**, porque dela sai o resíduo da
+§8.2.1. Ela não é bloco de detalhe e mesmo assim precisa estar na lista: sem isso a limpeza
+não alcançaria o resíduo antigo, e uma recarga que o reduzisse deixaria os documentos
+anteriores no banco, somando duas vezes. Pelo mesmo motivo ela deixa de contar como "aba
+ignorada" no relatório — aviso que dispara sempre é aviso que se aprende a ignorar.
+
+**A cobertura pergunta duas coisas, e a segunda só existe desde a §8.2.1.** A primeira é
+*"chegou toda linha do relatório?"*: documentos no banco mais recusas declaradas, contra as
+linhas úteis de cada bloco. A segunda é *"o módulo cobre a operação do período?"*, e a
+identidade dela é **contêineres do ano-base no banco = contagem que a aba de resumo
+declara**.
+
+> **Ela precisou existir porque a primeira não a fazia, e isso é a lição.** A conferência de
+> bloco fechava com diferença zero enquanto o módulo cobria menos de um terço dos contêineres
+> do ano — a conta batia linha a linha com o arquivo, e o arquivo era de um agente. É a
+> terceira vez que este projeto encontra a mesma forma: **conferência que compara o banco com
+> a fonte que ele tem não pergunta se a fonte que ele tem é toda a operação.**
 
 ---
 
@@ -1039,14 +1130,35 @@ gente usando a aplicação, e é onde erro de digitação chega.
 ### 10.7 `embarque` — um embarque do relatório do agente
 
 ```
-agente, empresa, shipmentId, houseRef, trans, mode,
+unidade, agente, empresa, shipmentId, houseRef, trans, mode,
 portoOrigem, portoDestino, navioPartida, navioTransbordo,
 etd, eta, atd, ata, pesoKg, volumeM3, containers,
-co2Kg, nivelDado, status, previsao
+co2Kg, nivelDado, baseDaEstimativa, status, previsao
 ```
 
 `ano` e `mes` saem da base de data escolhida na §8.3, e qual é fica declarado na
 método do módulo (§11.5).
+
+**`unidade` (`embarque` | `residuo`) é o que impede a coleção somar duas coisas
+diferentes** (§8.2.1). `embarque` é a unidade de emissão da §10.1: uma linha do
+relatório de um agente, com identificador, itinerário e datas. `residuo` é o que
+a contagem de contêineres por porto tem e nenhum agente detalhou — porto, mês e
+quantidade, com emissão estimada.
+
+> **Sem o discriminador, os dois somariam contagem de embarques**, e a tela
+> declararia centenas de embarques que não existem com o número continuando
+> plausível. **Emissão e contêineres somam juntos de propósito** — é isso que faz
+> o módulo cobrir a operação; o que não soma é a contagem de embarques, o
+> indicador de contêineres por embarque e a contagem de agentes com detalhe.
+>
+> **`nivelDado` não substitui este campo.** Um embarque de verdade pode ter
+> chegado sem CO₂ e ser estimado pela mesma cascata, e continua sendo um
+> embarque.
+
+O documento de resíduo **não tem itinerário, peso, volume, porto de origem nem
+previsão, e nunca é `medido`** — a validação de escrita recusa cada um deles, e
+exige `mes`, porque ali o mês é o único dado de período que existe. Data de
+partida inventada faria a série mensal afirmar uma partida que ninguém observou.
 
 ### 10.8 `fatorEmissao` e apoio
 
@@ -1339,9 +1451,18 @@ uma leitura só, e é a tela que alguém abre para ver o número do ano.
 #### Três declarações obrigatórias, curtas, na própria tela
 
 1. **A mobilidade é ano-base 2026 aplicada a 2025** — no cartão dela.
-2. **O marítimo de 2025 é o inventário de um agente.** Dois dos três não entregam
-   detalhe linha a linha (§14); sem a frase, o total parece cobrir toda a importação do
-   ano.
+2. **A maior parte do marítimo de 2025 é estimativa.** O módulo cobre a contagem de
+   contêineres do ano inteiro, e só um dos três agentes entrega detalhe linha a linha
+   (§8.2.1): o resto entra pela contagem por porto, com a emissão estimada. A declaração
+   sai do **dado** — contêineres do ano e contêineres sem detalhe —, nunca de constante na
+   tela, então ela some sozinha no dia em que o detalhe vier.
+
+   > **Esta declaração mudou de sinal em 22/09, e o texto mudou junto.** Enquanto o módulo
+   > era o inventário de um agente, ela dizia que a importação do ano era maior que o
+   > número — a leitura errada era tomar um total parcial por completo. Agora o total cobre
+   > a contagem inteira e a leitura errada é a oposta: tomar por medido um número cuja
+   > maior parte é estimativa. **Declaração que descreve o risco antigo não protege
+   > ninguém**, e é por isso que ela não sobreviveu por já estar escrita.
 3. **Previsão está fora do total** — regra do módulo marítimo, que continua valendo no
    consolidado.
 
@@ -1520,14 +1641,22 @@ Coisas que provavelmente vão acontecer, mas não agora.
   metodológica de quem assina o relatório e entram por arquivo próprio.
 - **A data de corte deixou de existir** (§0.1, §7). Agência e formulário não são a mesma
   série, então não há o que cortar.
-- **Dois dos três agentes de carga não entregam detalhe linha a linha**, e por isso não
-  estão no inventário — nem como estimativa. A cascata da §8.2 estima o que falta **dentro
-  de um embarque**; ela não inventa o embarque. Um deles entrega quatro números agregados,
-  o outro entrega uma aba vazia, e os totais que a aba de resumo lhes atribui são a conta
-  circular que a §8.1 proíbe reproduzir — o CO₂ de um sai do indicador dos outros e o peso
-  é resíduo de subtração. **A saída é pedir detalhe por embarque à origem, que é operação,
-  não código.** Enquanto não vier, o marítimo é o inventário de um agente, a cobertura
-  conta os dois blocos ausentes e a tela declara quantos embarques ficam de fora.
+- **Dois dos três agentes de carga não entregam detalhe linha a linha.** Um entrega quatro
+  números agregados, o outro uma aba vazia. **A saída continua sendo pedir detalhe por
+  embarque à origem, que é operação e não código** — e continua valendo que os totais que a
+  aba de resumo lhes atribui não servem, porque a conta de lá é circular (§8.1).
+
+  ~~E por isso não estão no inventário, nem como estimativa.~~ **Isso mudou em 22/09**: os
+  contêineres deles entram pela contagem por porto, com emissão estimada pela cascata
+  (§8.2.1). A frase anterior dizia que a cascata estima dentro de um embarque e não inventa
+  o embarque — e ela **continua valendo para o CO₂**, que sai só de média medida; o que
+  passou a entrar é a **contagem**, que é contada e não derivada.
+
+  O que decidiu foi a magnitude: sem eles, o módulo cobria menos de um terço dos contêineres
+  do período. **Um total preciso e incompleto é pior que um estimado e declarado**, porque a
+  ressalva existia e o número continuava sendo lido como o frete marítimo do ano.
+  Enquanto o detalhe não vem, a cobertura conta os dois blocos ausentes, a cascata declara a
+  proporção estimada e a tela declara quantos contêineres não têm detalhe de agente.
 - **Chaves do Google separadas por função e por destino** (§12.8). Já estão separadas por
   API — uma para geocodificação, outra para roteamento —, porque restringir uma chave única
   a uma API derrubaria a chamada da outra ponta. Falta a separação por **destino**: a chave
@@ -1616,6 +1745,143 @@ documento.
 **Sem dado real nas entradas** — descreva o que mudou, não os números que apareceram.
 
 ### Histórico
+
+#### 2026-09-22 — O marítimo passa a cobrir a operação, e a estimativa fica declarada
+
+Pedido do Gustavo, a partir da contagem de contêineres que a origem mandou: o
+módulo relatava uma fração da operação, e ele queria o número do período inteiro.
+
+**O pedido veio com um ano errado, e conferir isso foi metade do trabalho.** Ele
+dizia "apenas os dados de 2026", e a contagem do print é de 2025 — o título
+interno da aba diz o ano, o bloco consolidado repete, e a tabela de portos vai de
+janeiro a dezembro somando exatamente o total declarado. **Não existe contagem de
+2026 naquele arquivo**: o que há do ano seguinte são poucos meses, de um agente
+só. O nome do arquivo tem "2026" porque é o nome de um **bloco de agente**, não do
+período consolidado — e foi daí que a confusão saiu. Levantado antes de escrever
+código; o Gustavo confirmou 2025 e depois corrigiu o próprio pedido.
+
+> **Vale registrar porque o erro era barato de cometer e caro de descobrir
+> depois.** Aplicar a contagem de um ano ao outro carregaria o período errado sem
+> nada quebrar: o total simplesmente apareceria diferente. Virou guarda — a carga
+> recusa tabela cujo ano não seja o ano-base, nomeando os dois.
+
+**A decisão, também dele: estimar.** As três saídas foram medidas e apresentadas
+com o número de cada uma antes de qualquer linha — pedir detalhe à origem e não
+mexer no código, estimar pela cascata, ou importar o CO₂ da aba de resumo. A
+terceira eu recomendei contra e continua proibida pela §8.1: a conta de lá é
+circular, e a constante por contêiner que ela usa está acima da média real medida.
+
+**Isto reverte uma regra que estava escrita na §14**, e a reversão é a entrada
+inteira. Aquela seção dizia que agente sem detalhe ficava fora do inventário
+*nem como estimativa*, com o argumento de que a cascata estima dentro de um
+embarque e não inventa o embarque. **O argumento continua válido para o CO₂** —
+ele sai só de média medida — e o que passou a entrar é a **contagem**, que é
+contada, não derivada. O que decidiu foi a magnitude: o módulo cobria menos de um
+terço dos contêineres do período, e **um total preciso e incompleto é pior que um
+estimado e declarado**, porque a ressalva já existia e o número continuava sendo
+lido como o frete marítimo do ano.
+
+**O que entra da aba de resumo, e o que não entra.** Entra a contagem de
+contêineres por porto e por mês. Ficam fora o peso, o CO₂ e a repartição por
+agente daquela aba — as três derivadas umas das outras. A separação não é
+confiança no arquivo: é que uma das colunas é contada e as outras saem de divisão.
+
+**Cinco decisões dentro da conta, cada uma fechando uma porta:**
+
+- **o resíduo é anual por porto, nunca mensal.** Subtrair mês a mês é subtrair
+  duas bases de data célula a célula — a contagem usa o registro de DI e o
+  detalhe usa a partida —, e o resultado fica negativo em alguns meses só pela
+  defasagem. **Medido antes de decidir:** anual não fica negativo em porto nenhum
+  e fecha exatamente com o total declarado; mensal fica negativo em várias
+  células. A repartição pelos doze meses segue a forma da própria tabela, em
+  inteiro e com sobra-e-resto;
+- **a média vem do próprio ano relatado.** Este foi um defeito meu, e só apareceu
+  ao medir: a primeira versão montava as referências com a coleção inteira, que
+  atravessa mais de um ano civil. O CO₂ por contêiner do último ano é
+  sensivelmente menor, e o `CONTEXTO` avisa que essa queda **pode ser mudança no
+  cálculo do agente, não eficiência**. A média com os dois períodos juntos tinha
+  amostra maior e media duas coisas, puxando o resíduo de um ano pela taxa de
+  outro — **amostra grande de coisa errada continua sendo errada**, e o resultado
+  saía com cara de número mais robusto;
+- **resíduo negativo é recusado**, nomeando o porto;
+- **a identidade `medido + resíduo = contagem do período` é conferida** e derruba
+  a carga se não fechar. É ela que pega porto no detalhe que a tabela não tem;
+- **um degrau novo na cascata**, `estimado_porto`, entre corredor e média geral.
+  Do resíduo se sabe o porto de desembarque e nunca a origem, então não há
+  corredor; cair direto na média geral jogaria fora a única coisa específica que
+  se sabe dele.
+
+**O resíduo não é um embarque, e é um campo do documento que diz isso.** Sem o
+discriminador, os dois somariam contagem de embarques e a tela declararia
+centenas de embarques que não existem — **com o número continuando plausível**,
+que é a forma que este log vem catalogando. Emissão e contêineres somam juntos de
+propósito; contagem de embarques, contagem de agentes com detalhe e o indicador
+de contêineres por embarque, não. Esse último era o mais fácil de errar: com o
+resíduo no numerador e só as linhas de relatório no denominador, ele sairia
+várias vezes maior sem nada acusar.
+
+**O rótulo de porto da tabela não virou lista no código.** A ponte até o código
+UN/LOCODE mora fora do repositório, no molde do mapa de primeiro nome da planilha
+do cartão: uma lista de terminais versionada publicaria por onde a empresa importa
+(§2.2). Rótulo sem correspondência não derruba a carga — entra sem porto, pela
+média geral, com alerta próprio.
+
+**A conferência de cobertura ganhou a pergunta que ela não fazia.** A que existia
+respondia *"chegou toda linha do relatório?"* e **fechava com diferença zero
+enquanto o módulo cobria menos de um terço da operação** — a conta batia linha a
+linha com o arquivo, e o arquivo era de um agente. A nova é *"o módulo cobre a
+operação do período?"*, e a identidade é a contagem do banco contra a contagem
+que a origem declara. É a terceira vez que este projeto encontra a mesma forma:
+**conferência que compara o banco com a fonte que ele tem não pergunta se a fonte
+que ele tem é toda a operação.**
+
+**Uma declaração de tela mudou de sinal, e por isso mudou de texto.** A segunda
+declaração obrigatória da §11.0 dizia que a importação do ano era maior que o
+número — a leitura errada era tomar um total parcial por completo. Agora o total
+cobre a contagem inteira, e a leitura errada é a oposta: tomar por medido um
+número cuja maior parte é estimativa. Ela sai do **dado**, não de constante na
+tela, então some sozinha no dia em que o detalhe vier.
+
+> **Uma guarda reprovou nisso, e reprovar foi o certo.** Ela prendia a frase
+> "agente sem detalhe não está no inventário", que a decisão acabou de desfazer. O
+> conserto foi reapontá-la para o fato que passou a valer — que a parcela sem
+> detalhe é declarada com número —, nunca afrouxá-la. É a lição de 19/09 outra
+> vez: quem reescrever a frase continua passando, quem apagar a informação, não.
+
+**E uma que estava velha desde 21/09 foi corrigida de carona:** o parâmetro de
+período do marítimo ainda declarava "série contínua, sem ano-base", e a tela
+passou a relatar um ano naquele dia. Declaração que descreve um arranjo que a tela
+não tem é pior que declaração ausente, porque parece conferir.
+
+**Validação**
+
+- `tsc --noEmit`, `npm test` (402 testes, 22 novos) e `next build` passam. Nenhum
+  servidor foi subido.
+- **As guardas novas foram conferidas ligando a violação, uma a uma:** sem o
+  sobra-e-resto, a repartição perde contêiner e duas reprovam; com resíduo
+  negativo virando zero, uma reprova; com o resíduo contado como embarque, duas
+  reprovam — e, o que importa, **as outras continuam passando**, porque prendem
+  soma de emissão e de contêineres, que é o que deve somar junto.
+- A carga rodou em simulação antes de gravar, e o relatório dela fecha por
+  identidade: o que o detalhe cobre mais o que entra por estimativa é exatamente a
+  contagem que a origem declara.
+- `verificar` fecha inteiro, incluindo as duas linhas novas de cobertura em
+  contêineres e a de integridade do resíduo — e **as três reprovações que ele deu
+  na primeira execução eram todas legítimas**: o nível novo fora da lista de
+  níveis válidos, o resíduo sendo cobrado por uma data de partida que ele não tem,
+  e a aba de resumo aparecendo como bloco órfão por não estar na lista de escopos.
+- A coerência entre a tela do módulo e o consolidado continua com diferença zero,
+  agora com o número maior.
+- **A varredura da §2 achou um deslize meu e ele foi desfeito**: uma dispersão
+  medida na base real tinha virado número num comentário de código. Conferido
+  também que nenhum nome de porto, de terminal ou de agente entrou em arquivo
+  versionado — o mapa de rótulos está em pasta ignorada, e a conferência foi no
+  conteúdo, não no cabeçalho.
+
+**O que este passo não faz, e é decisão de quem assina:** o consolidado de 2025
+sobe de forma expressiva e o marítimo passa a ser o maior módulo do inventário. O
+número é maior porque cobre mais operação, não porque a operação emitiu mais — e é
+exatamente isso que as declarações de tela precisam continuar dizendo.
 
 #### 2026-09-22 — Todos do domínio veem tudo, e o que continua não sendo concedido
 

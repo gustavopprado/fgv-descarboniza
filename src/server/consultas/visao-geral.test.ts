@@ -128,6 +128,7 @@ function embarque(parcial: Partial<DocEmbarque> = {}): DocEmbarque {
   const ano = parcial.ano ?? ANO_BASE_INVENTARIO
   return {
     modulo: 'maritimo',
+    unidade: 'embarque',
     modal: 'maritimo',
     escopo: 3,
     periodicidade: 'evento',

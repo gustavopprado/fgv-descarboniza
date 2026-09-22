@@ -153,16 +153,19 @@ export function ConteudoDaVisaoGeral({ dados }: { dados: VisaoGeral }) {
                   unidade="t CO₂e"
                   nota={
                     <>
-                      {/* **A frase sobre as duas telas divergirem saiu em 21/09**,
-                          e saiu porque deixou de ser verdade: a tela de Marítimo
-                          passou a relatar o mesmo ano-base deste cartão, então o
-                          número é um só. Manter o aviso seria a tela declarando
-                          um arranjo que ela não tem. A declaração que a §11.0
-                          exige — o módulo cobre um agente — continua. */}
+                      {/* **A segunda declaração da §11.0 mudou de sinal, e por
+                          isso mudou de texto.** Enquanto o módulo era o
+                          inventário de um agente, a frase dizia que a importação
+                          do ano era maior que este número — a leitura errada era
+                          tomar um total parcial por completo. Agora o total cobre
+                          a contagem inteira do período, e a leitura errada é a
+                          oposta: tomar por medido um número cuja maior parte é
+                          estimativa. Declaração que descreve o risco antigo é
+                          declaração que já não protege ninguém. */}
                       Escopo 3, categoria 4.{' '}
-                      {dados.maritimo.agentes === 1
-                        ? 'Cobre um agente de carga; a importação do ano é maior que este número.'
-                        : `Cobre ${inteiro(dados.maritimo.agentes)} agentes de carga.`}
+                      {dados.maritimo.containersSemDetalhe === 0
+                        ? `Cobre ${inteiro(dados.maritimo.agentes)} agente(s) de carga, todos com detalhe por embarque.`
+                        : `Cobre os ${inteiro(dados.maritimo.containers)} contêineres do ano; ${inteiro(dados.maritimo.containersSemDetalhe)} deles não têm detalhe de agente e entram por estimativa.`}
                     </>
                   }
                 />

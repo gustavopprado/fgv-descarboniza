@@ -80,6 +80,7 @@ export const NAO_DEFINIDO = 'não definida'
 const NIVEL_DA_CASCATA: { nivel: NivelDado; rotulo: string }[] = [
   { nivel: 'medido', rotulo: 'Medido — informado pelo agente' },
   { nivel: 'estimado_corredor', rotulo: 'Estimado — média do corredor' },
+  { nivel: 'estimado_porto', rotulo: 'Estimado — média do porto de desembarque' },
   { nivel: 'estimado_media', rotulo: 'Estimado — média geral' },
   { nivel: 'estimado_peso', rotulo: 'Estimado — por peso' },
 ]
@@ -140,6 +141,12 @@ export const MOTIVO_DO_ALERTA: Record<string, string> = {
     'O CO₂ por contêiner desta linha destoa da mediana do próprio corredor acima do limiar declarado nos parâmetros. Contêiner pouco carregado, carga solta e embarque partido produzem isso, e são plausíveis: a linha entra no total e fica marcada. Tirá-la seria remover emissão real por ser incomum.',
   co2_estimado_por_media:
     'O agente não informou CO₂ para este embarque, e o valor veio da cascata da §8.2. O documento guarda a média usada e o tamanho da amostra.',
+  container_sem_detalhe_de_agente:
+    'Contêineres que a contagem do período tem e nenhum agente detalhou linha a linha. Não há embarque: há porto, mês e quantidade. A emissão vem da média medida no agente que entrega detalhe, e o documento guarda qual média e sobre quantos embarques.',
+  contagem_por_registro_de_di:
+    'Esta contagem vem da tabela de contêineres por porto, que conta pelo registro de DI — enquanto o detalhe linha a linha conta pela partida. A diferença desloca o mês, nunca o total do ano.',
+  rotulo_de_porto_sem_correspondencia:
+    'O rótulo do porto na tabela de resumo não corresponde a nenhum código do cadastro, então estes contêineres entram sem porto e pela média geral em vez da média do porto. O mapa de rótulos é operação, não código.',
   embarque_previsto:
     'CO₂ lançado para embarque que ainda não partiu — o relatório já traz número antes da viagem acontecer. Fica fora do total do módulo e contado à parte.',
   embarque_sem_data_efetiva:
@@ -561,12 +568,37 @@ function parametros(
       escopo: 'maritimo',
     })
 
+    /**
+     * **O que fecha a contagem do período, e é o parâmetro que mais move o
+     * número deste módulo** (§8.2).
+     *
+     * Ele declara três coisas de uma vez, e as três mudam o total: que os
+     * contêineres sem detalhe de agente entram; que a emissão deles é média
+     * medida, nunca o CO₂ da aba de resumo; e que a contagem deles vem de outra
+     * base de data que a do embarque. A terceira é a que se perde mais fácil, e
+     * é a única que explica um mês estimado não coincidir com a partida.
+     */
+    lista.push({
+      chave: 'mar-sem-detalhe',
+      rotulo: 'Contêineres sem detalhe de agente',
+      valor: 'entram pela contagem por porto, com emissão estimada',
+      definido: true,
+      observacao:
+        'A emissão sai da média medida no porto de desembarque, no ano relatado; o CO₂ e o peso da aba de resumo ficam fora, porque a conta de lá é circular. A contagem usa o registro de DI, e não a partida.',
+      escopo: 'maritimo',
+    })
+
+    // Esta linha dizia "série contínua, sem ano-base", e deixou de ser verdade
+    // quando a tela passou a relatar um ano só. Declaração que descreve um
+    // arranjo que a tela não tem é pior que declaração ausente: ela parece
+    // conferir.
     lista.push({
       chave: 'mar-periodo',
       rotulo: 'Período relatado',
-      valor: 'série contínua, sem ano-base',
+      valor: `ano-base do inventário, ${env.inventarioAnoBase}`,
       definido: true,
-      observacao: null,
+      observacao:
+        'A coleção do módulo atravessa mais de um ano civil; a tela recorta um, e é o mesmo do consolidado.',
       escopo: 'maritimo',
     })
   }
@@ -833,22 +865,37 @@ export async function consultarMetodo(
     const embarques = todos.filter((e) => !e.previsao)
     const co2Total = embarques.reduce((s, e) => s + e.co2Kg, 0)
 
-    // **Um agente que não entrega detalhe não está aqui, nem como estimativa.**
-    // A cascata da §8.2 estima o que falta *dentro* de um embarque; ela não
-    // inventa o embarque. Quantos agentes o inventário tem é fato do banco;
-    // quantos ficaram de fora é fato do arquivo, e quem responde isso é a
-    // conferência de cobertura — a tela diz onde procurar em vez de fingir que
-    // sabe.
-    const agentes = new Set(embarques.map((e) => e.agente)).size
-    const blocos = new Set(embarques.map((e) => e.bloco)).size
+    /**
+     * **O que tem detalhe de agente e o que só tem contagem** (§8.2).
+     *
+     * Enquanto o módulo era o inventário de um agente, esta linha declarava que
+     * quem não entrega detalhe ficava de fora — nem como estimativa. Isso mudou:
+     * os contêineres que a contagem do período tem e nenhum relatório detalha
+     * entram pela cascata, sobre a média medida no porto de desembarque. O que
+     * **não** mudou é de onde o número vem: peso e CO₂ da aba de resumo
+     * continuam fora, porque a conta de lá é circular (§8.1).
+     */
+    const detalhados = embarques.filter((e) => e.unidade === 'embarque')
+    const residuos = embarques.filter((e) => e.unidade === 'residuo')
+    const agentes = new Set(detalhados.map((e) => e.agente)).size
+    const blocos = new Set(detalhados.map((e) => e.bloco)).size
+    const containers = embarques
+      .filter((e) => e.modal === 'maritimo')
+      .reduce((s, e) => s + (e.containers ?? 0), 0)
+    const containersSemDetalhe = residuos.reduce((s, e) => s + (e.containers ?? 0), 0)
 
     fontes.push({
       modulo: 'maritimo',
-      descricao: 'Relatório do agente de carga, um documento por embarque.',
+      descricao:
+        residuos.length === 0
+          ? 'Relatório do agente de carga, um documento por embarque.'
+          : 'Relatório do agente de carga, um documento por embarque, mais a contagem de contêineres por porto do período.',
       situacao:
         embarques.length === 0
           ? 'Módulo ainda não carregado. O painel consolidado segue parcial até ele existir.'
-          : `${agentes === 1 ? 'Um agente' : `${agentes} agentes`}, ${blocos === 1 ? 'um bloco' : `${blocos} blocos`}. Agente sem detalhe por embarque não está no inventário.`,
+          : containersSemDetalhe === 0
+            ? `${agentes === 1 ? 'Um agente' : `${agentes} agentes`}, ${blocos === 1 ? 'um bloco' : `${blocos} blocos`}, todos com detalhe por embarque.`
+            : `${agentes === 1 ? 'Um agente' : `${agentes} agentes`} com detalhe por embarque, em ${blocos === 1 ? 'um bloco' : `${blocos} blocos`}. Dos ${containers} contêineres do período, ${containersSemDetalhe} não têm detalhe de agente e entram pela contagem por porto, com emissão estimada.`,
     })
 
     const porNivel = new Map<NivelDado, { embarques: number; co2Kg: number }>()

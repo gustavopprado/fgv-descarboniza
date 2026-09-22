@@ -193,18 +193,33 @@ export function TabelaDePortos({
  *
  * Ele responde "quanto deste número veio do agente" — e, quando tudo veio, diz
  * isso em vez de sumir: rodapé ausente se lê como pergunta não respondida.
+ *
+ * **Desde que os contêineres sem detalhe de agente entraram, ele carrega também
+ * a contagem**, e essa é a ressalva que impede a leitura errada (§11.5): a
+ * proporção sozinha diz que parte do número é estimada, e não diz que a maior
+ * parte da operação nunca teve linha de relatório nenhuma. Quem precisa dessa
+ * frase é justamente quem não vai abrir o resumo.
  */
 export function QualidadeDoDado({ dados }: { dados: ResumoDeMaritimo }) {
   const medido = dados.qualidade.find((q) => q.nivel === 'medido')?.proporcao ?? 0
+  const semDetalhe = dados.residuo.containers
 
   return (
     <Nota>
       <strong className="font-medium text-[var(--color-tinta)]">
         {proporcao(medido)} deste número vem de dado do agente
       </strong>
-      {medido >= 1
-        ? ', e não há estimativa neste recorte.'
-        : '; o restante é estimativa por média de contêiner.'}
+      {medido >= 1 ? (
+        ', e não há estimativa neste recorte.'
+      ) : semDetalhe === 0 ? (
+        '; o restante é estimativa por média de contêiner.'
+      ) : (
+        <>
+          ; o restante são {semDetalhe} de {dados.containers} contêineres que nenhum agente
+          detalhou linha a linha, com a emissão estimada pela média medida no porto de
+          desembarque. A contagem deles vem do registro de DI, e não da partida.
+        </>
+      )}
     </Nota>
   )
 }

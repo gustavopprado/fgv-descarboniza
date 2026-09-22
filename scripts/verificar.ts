@@ -76,6 +76,7 @@ import { carregarFatores } from '../src/server/fatores'
 import { COLECAO } from '../src/server/firestore'
 import { lerPlanilha } from './ingest-cartao'
 import {
+  lerMapaDePortos,
   lerRelatorioDoArquivo,
   montarEmbarques,
   type Parametros,
@@ -698,7 +699,18 @@ async function conferirMaritimo(db: Firestore): Promise<number> {
   const noBanco = (
     await db
       .collection(COLECAO.embarque)
-      .select('bloco', 'agente', 'nivelDado', 'etd', 'mes')
+      .select(
+        'bloco',
+        'agente',
+        'nivelDado',
+        'etd',
+        'mes',
+        'unidade',
+        'ano',
+        'modal',
+        'containers',
+        'previsao',
+      )
       .get()
   ).docs.map((d) => d.data() as EmbarqueConferido)
 
@@ -739,12 +751,21 @@ async function conferirMaritimo(db: Firestore): Promise<number> {
     portosLidos.docs.map((d) => [d.id, d.data() as DocPorto]),
   )
 
-  const montagem = montarEmbarques(await lerRelatorioDoArquivo(caminho), portos, parametros)
+  const montagem = montarEmbarques(
+    await lerRelatorioDoArquivo(caminho),
+    portos,
+    parametros,
+    lerMapaDePortos(),
+  )
 
   console.log('  Blocos conferidos; um bloco que não esteja nesta lista não é visto por')
   console.log('  conferência nenhuma. O escopo é a aba de origem, nunca o ano (§8.4).')
 
-  const conhecidos = new Set(montagem.blocos.map((b) => b.bloco))
+  // **O escopo do resíduo é um bloco conhecido, e não um bloco de detalhe.**
+  // Sem ele nesta lista, a aba de resumo apareceria como bloco órfão a cada
+  // execução — aviso que dispara sempre é aviso que se aprende a ignorar, e o
+  // que ele existe para pegar é bloco de verdade sumindo da origem.
+  const conhecidos = new Set(montagem.escopos)
   for (const bloco of montagem.blocos) {
     const doBanco = noBanco.filter((d) => d.bloco === bloco.bloco).length
     const recusadas = montagem.recusas.filter((r) => r.bloco === bloco.bloco).length
@@ -791,12 +812,13 @@ async function conferirMaritimo(db: Firestore): Promise<number> {
    */
   if (montagem.semDetalhe.length > 0) {
     console.log(
-      `  ${montagem.semDetalhe.length} bloco(s) de agente SEM detalhe linha a linha. O ` +
-        'volume deles não está no total: é ausência de FONTE, não de qualidade (§8.2), e a',
+      `  ${montagem.semDetalhe.length} bloco(s) de agente SEM detalhe linha a linha. Os ` +
+        'contêineres deles entram no total por estimativa, pela contagem da aba de resumo',
     )
     console.log(
-      '  saída é pedir detalhe por embarque à origem — os totais da aba de resumo não ' +
-        'servem, porque a conta de lá é circular (§8.1).',
+      '  (§8.2) — o CO₂ e o peso daquela aba continuam fora, porque a conta de lá é ' +
+        'circular (§8.1). A saída continua sendo pedir detalhe por embarque à origem: ' +
+        'estimativa por média não vira medição.',
     )
     for (const bloco of montagem.semDetalhe) {
       conferencias.push({
@@ -808,11 +830,83 @@ async function conferirMaritimo(db: Firestore): Promise<number> {
       })
     }
   }
-  if (montagem.ignoradas.length > 0) {
-    console.log(
-      `  Abas ignoradas, sem forma de detalhe nem nome de bloco: ` +
-        `${montagem.ignoradas.join(', ')}.`,
+  /**
+   * **A cobertura em contêineres, que é a pergunta que a contagem de documentos
+   * não faz** (§8.4).
+   *
+   * As conferências acima respondem *"chegou toda linha do relatório?"*. Esta
+   * responde outra coisa: *"o módulo cobre a operação do período?"* — e foi
+   * justamente ela que faltou enquanto o inventário era de um agente só. O
+   * banco fechava com o arquivo, linha por linha, e mesmo assim cobria menos de
+   * um terço dos contêineres do ano.
+   *
+   * A identidade é **contêineres do ano-base no banco = contagem que a aba de
+   * resumo declara**. Ela pega o resíduo que não foi gravado, o resíduo gravado
+   * duas vezes e o bloco de detalhe que entrou sem o resíduo correspondente.
+   */
+  if (montagem.residuo !== null) {
+    const r = montagem.residuo
+    const doAno = noBanco.filter(
+      (d) => d.ano === r.ano && d.modal === 'maritimo' && !d.previsao,
     )
+    conferencias.push({
+      item: `contêineres de ${r.ano} — banco × contagem do período`,
+      esperado: r.totalDeclarado,
+      obtido: doAno.reduce((s, d) => s + (d.containers ?? 0), 0),
+      origem: 'cobertura em contêineres',
+      ...inteiro,
+    })
+
+    const residuoNoBanco = doAno.filter((d) => d.unidade === 'residuo')
+    conferencias.push({
+      item: `contêineres de ${r.ano} sem detalhe de agente`,
+      esperado: r.residuo,
+      obtido: residuoNoBanco.reduce((s, d) => s + (d.containers ?? 0), 0),
+      origem: 'origem × banco',
+      ...inteiro,
+    })
+
+    const proporcao = r.totalDeclarado === 0 ? 0 : r.medido / r.totalDeclarado
+    console.log(
+      `  Cobertura em contêineres de ${r.ano}: ${r.medido} de ${r.totalDeclarado} vêm de ` +
+        `detalhe linha a linha (${(proporcao * 100).toFixed(0)}%); ${r.residuo} entram por`,
+    )
+    console.log(
+      '  estimativa sobre a contagem por porto. A contagem usa o registro de DI e o ' +
+        'detalhe usa a partida, então o mês da parcela estimada é o do registro (§8.3).',
+    )
+    if (r.semCorrespondencia.length > 0) {
+      console.log(
+        `  ${r.semCorrespondencia.length} rótulo(s) de porto sem correspondência no ` +
+          'cadastro: entram sem porto e pela média geral.',
+      )
+    }
+  } else if (noBanco.some((d) => d.unidade === 'residuo')) {
+    // Resíduo no banco sem tabela na origem é o outro lado do mesmo ponto cego:
+    // documento que entrou e não tem mais quem o confronte.
+    console.log(
+      '  ATENÇÃO: há resíduo de porto no banco e a origem não traz mais a tabela de ' +
+        'contêineres por porto.',
+    )
+  }
+
+  if (montagem.ignoradas.length > 0) {
+    // A aba de resumo não tem forma de detalhe e por isso cai nesta lista — mas
+    // ela **é** lida, pela tabela de contêineres por porto. Dizer "ignorada" sem
+    // ressalva contradiria a linha de cobertura logo acima.
+    const resumo = montagem.residuo?.bloco
+    const ignoradas = montagem.ignoradas.filter((a) => a !== resumo)
+    if (ignoradas.length > 0) {
+      console.log(
+        `  Abas sem forma de detalhe e sem nome de bloco, ignoradas: ${ignoradas.join(', ')}.`,
+      )
+    }
+    if (resumo !== undefined && montagem.ignoradas.includes(resumo)) {
+      console.log(
+        `  A aba ${resumo} não tem detalhe linha a linha e não é ignorada: dela sai a ` +
+          'contagem de contêineres por porto, e só ela (§8.1).',
+      )
+    }
   }
   console.log(`  O arquivo enxerga o que aconteceu até ${montagem.referencia ?? '—'} (§8.3).`)
 
@@ -831,7 +925,19 @@ async function conferirMaritimo(db: Firestore): Promise<number> {
   return conferirIntegridadeMaritima(noBanco, conferencias, inteiro, falhas)
 }
 
-type EmbarqueConferido = Pick<DocEmbarque, 'bloco' | 'agente' | 'nivelDado' | 'etd' | 'mes'>
+type EmbarqueConferido = Pick<
+  DocEmbarque,
+  | 'bloco'
+  | 'agente'
+  | 'nivelDado'
+  | 'etd'
+  | 'mes'
+  | 'unidade'
+  | 'ano'
+  | 'modal'
+  | 'containers'
+  | 'previsao'
+>
 
 /**
  * Integridade do que está no banco, independente da origem.
@@ -845,7 +951,13 @@ function conferirIntegridadeMaritima(
   inteiro: { tolerancia: number; casas: number },
   falhas: number,
 ): number {
-  const niveis = new Set(['medido', 'estimado_corredor', 'estimado_media', 'estimado_peso'])
+  const niveis = new Set([
+    'medido',
+    'estimado_corredor',
+    'estimado_porto',
+    'estimado_media',
+    'estimado_peso',
+  ])
 
   conferencias.push({
     item: 'embarques com nível de dado inválido',
@@ -855,12 +967,35 @@ function conferirIntegridadeMaritima(
     ...inteiro,
   })
 
-  // Mês desnormalizado que não bate com a data de referência faz o corte por
-  // período mentir sem nenhum sinal (§9.9).
+  /**
+   * Mês desnormalizado que não bate com a data de referência faz o corte por
+   * período mentir sem nenhum sinal (§9.9).
+   *
+   * **O resíduo de porto não tem ETD, e isso não é ausência a corrigir**: ele
+   * não é um embarque, não tem itinerário, e o mês é o dado de período que ele
+   * de fato tem — a validação de escrita exige o mês dele e proíbe data
+   * inventada. Cobrá-lo aqui seria exigir a partida que ninguém observou, e a
+   * conferência reprovaria a coisa certa. Ele é conferido logo abaixo, pela
+   * regra que cabe nele.
+   */
+  const comItinerario = noBanco.filter((d) => d.unidade !== 'residuo')
   conferencias.push({
     item: 'mês ≠ mês do ETD',
     esperado: 0,
-    obtido: noBanco.filter((d) => d.etd === null || d.mes !== d.etd.slice(0, 7)).length,
+    obtido: comItinerario.filter((d) => d.etd === null || d.mes !== d.etd.slice(0, 7)).length,
+    origem: 'integridade',
+    ...inteiro,
+  })
+
+  // O resíduo tem o ano no mês, e nunca data: as duas metades importam. Sem mês
+  // ele sai da série e o gráfico soma menos que o indicador; com data, ele
+  // afirmaria uma partida que não existe.
+  conferencias.push({
+    item: 'resíduo de porto sem mês, ou com data de itinerário',
+    esperado: 0,
+    obtido: noBanco.filter(
+      (d) => d.unidade === 'residuo' && (d.mes === null || d.etd !== null),
+    ).length,
     origem: 'integridade',
     ...inteiro,
   })

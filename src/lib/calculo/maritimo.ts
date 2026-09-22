@@ -21,10 +21,15 @@ export const UNIDADE_POR_CONTAINER = 'kg CO2e/contêiner'
 export const UNIDADE_POR_KG = 'kg CO2e/kg'
 
 export const CATEGORIA_MEDIA_CORREDOR = 'maritimo_media_corredor'
+export const CATEGORIA_MEDIA_PORTO = 'maritimo_media_porto'
 export const CATEGORIA_MEDIA_GERAL = 'maritimo_media_geral'
 export const CATEGORIA_MEDIA_PESO = 'maritimo_media_peso'
 
-export type NivelEstimado = 'estimado_corredor' | 'estimado_media' | 'estimado_peso'
+export type NivelEstimado =
+  | 'estimado_corredor'
+  | 'estimado_porto'
+  | 'estimado_media'
+  | 'estimado_peso'
 
 /**
  * Uma referência usada para estimar, com o bastante para **reproduzir a conta a
@@ -47,6 +52,17 @@ export type Referencia = {
 
 export type Referencias = {
   porCorredor: Map<string, Referencia>
+  /**
+   * Média por **porto de desembarque**, que é o degrau entre o corredor e a
+   * média geral.
+   *
+   * Ele existe por causa dos contêineres que nenhum agente detalhou (§8.2): deles
+   * se sabe o porto onde desembarcaram e o mês, nunca o porto de origem — e sem
+   * a origem não há corredor. Cair direto na média geral jogaria fora a única
+   * coisa específica que se sabe sobre eles, e a média geral mistura rotas cujo
+   * CO₂ por contêiner é de ordens visivelmente diferentes.
+   */
+  porDestino: Map<string, Referencia>
   geral: Referencia | null
   porPeso: Referencia | null
 }
@@ -56,6 +72,8 @@ export type EmbarqueParaEstimar = {
   containers: number | null
   pesoKg: number | null
   corredor: string | null
+  /** Porto de desembarque. Existe onde o corredor não existe — ver `porDestino`. */
+  destino: string | null
 }
 
 export type Estimativa = {
@@ -93,26 +111,40 @@ export function montarReferencias(
     (e) => e.containers !== null && e.containers > 0,
   ) as (EmbarqueParaEstimar & { co2Kg: number; containers: number })[]
 
-  const porCorredor = new Map<string, Referencia>()
-  const agrupado = new Map<string, number[]>()
-  for (const e of porContainer) {
-    if (e.corredor === null) continue
-    const lista = agrupado.get(e.corredor) ?? []
-    lista.push(e.co2Kg / e.containers)
-    agrupado.set(e.corredor, lista)
+  /**
+   * Média das taxas por embarque, agrupada por uma chave. O mínimo de amostra é
+   * o mesmo do corredor, e de propósito: o argumento — média de um embarque só
+   * não é média — não muda com a chave, e um segundo parâmetro seria um segundo
+   * número a declarar na tela de método sem nada acrescentar.
+   */
+  const agruparPor = (
+    chaveDe: (e: EmbarqueParaEstimar) => string | null,
+    categoria: string,
+  ): Map<string, Referencia> => {
+    const taxas = new Map<string, number[]>()
+    for (const e of porContainer) {
+      const k = chaveDe(e)
+      if (k === null) continue
+      taxas.set(k, [...(taxas.get(k) ?? []), e.co2Kg / e.containers])
+    }
+    const referencias = new Map<string, Referencia>()
+    for (const [k, lista] of taxas) {
+      if (lista.length < opcoes.amostraMinimaDoCorredor) continue
+      const valor = media(lista)
+      if (valor === null) continue
+      referencias.set(k, {
+        categoria,
+        chave: k,
+        valor,
+        unidade: UNIDADE_POR_CONTAINER,
+        amostra: lista.length,
+      })
+    }
+    return referencias
   }
-  for (const [corredor, taxas] of agrupado) {
-    if (taxas.length < opcoes.amostraMinimaDoCorredor) continue
-    const valor = media(taxas)
-    if (valor === null) continue
-    porCorredor.set(corredor, {
-      categoria: CATEGORIA_MEDIA_CORREDOR,
-      chave: corredor,
-      valor,
-      unidade: UNIDADE_POR_CONTAINER,
-      amostra: taxas.length,
-    })
-  }
+
+  const porCorredor = agruparPor((e) => e.corredor, CATEGORIA_MEDIA_CORREDOR)
+  const porDestino = agruparPor((e) => e.destino, CATEGORIA_MEDIA_PORTO)
 
   const taxasGerais = porContainer.map((e) => e.co2Kg / e.containers)
   const valorGeral = media(taxasGerais)
@@ -143,7 +175,7 @@ export function montarReferencias(
           amostra: taxasPeso.length,
         }
 
-  return { porCorredor, geral, porPeso }
+  return { porCorredor, porDestino, geral, porPeso }
 }
 
 /**
@@ -155,7 +187,7 @@ export function estimar(
   embarque: EmbarqueParaEstimar,
   referencias: Referencias,
 ): Estimativa | null {
-  const { containers, pesoKg, corredor } = embarque
+  const { containers, pesoKg, corredor, destino } = embarque
 
   if (containers !== null && containers > 0) {
     const doCorredor = corredor === null ? undefined : referencias.porCorredor.get(corredor)
@@ -164,6 +196,14 @@ export function estimar(
         nivel: 'estimado_corredor',
         co2Kg: doCorredor.valor * containers,
         referencia: doCorredor,
+      }
+    }
+    const doDestino = destino === null ? undefined : referencias.porDestino.get(destino)
+    if (doDestino !== undefined) {
+      return {
+        nivel: 'estimado_porto',
+        co2Kg: doDestino.valor * containers,
+        referencia: doDestino,
       }
     }
     if (referencias.geral !== null) {

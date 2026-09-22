@@ -434,6 +434,7 @@ test('ocupantes e passageiros são inteiros positivos', () => {
 function embarque(): DocEmbarque {
   return {
     modulo: 'maritimo',
+    unidade: 'embarque',
     modal: 'maritimo',
     escopo: 3,
     periodicidade: 'evento',
@@ -523,6 +524,78 @@ test('ano e mês do embarque batem com a data de partida prevista', () => {
   // período mentir sem nenhum sinal (§9.9).
   recusa(() => validarEmbarque('x', { ...embarque(), mes: '2031-04' }))
   recusa(() => validarEmbarque('x', { ...embarque(), ano: 2030, mes: '2030-05' }))
+})
+
+/* --------------------------------------------------- resíduo de porto (§8.2) */
+
+/**
+ * O resíduo: contêineres que a contagem do período tem e nenhum agente
+ * detalhou. Não é embarque, e cada guarda abaixo fecha uma porta pela qual ele
+ * passaria por um.
+ */
+function residuo(): DocEmbarque {
+  return {
+    ...embarque(),
+    unidade: 'residuo',
+    agente: 'SEM_DETALHE',
+    bloco: 'RESUMO',
+    shipmentId: 'RESIDUO_2031-05_PORTO FICTÍCIO B',
+    portoOrigem: null,
+    portoOrigemNome: null,
+    portoDestinoNome: 'PORTO FICTÍCIO B',
+    etd: null,
+    eta: null,
+    pesoKg: null,
+    volumeM3: null,
+    containers: 4,
+    containersFonte: 'resumo',
+    nivelDado: 'estimado_porto',
+    fator: fatorDaMedia(),
+    baseDaEstimativa: 6,
+  }
+}
+
+test('resíduo de porto válido passa, sem itinerário e sem peso', () => {
+  validarEmbarque('SEM_DETALHE_RESIDUO_2031-05', residuo())
+})
+
+test('resíduo de porto nunca é medido nem previsão', () => {
+  // A emissão dele é sempre média × contagem; e previsão é classificação de
+  // linha de relatório, que aqui não existe.
+  recusa(() =>
+    validarEmbarque('x', { ...residuo(), nivelDado: 'medido', fator: null, baseDaEstimativa: null }),
+  )
+  recusa(() => validarEmbarque('x', { ...residuo(), previsao: true }))
+})
+
+test('resíduo de porto recusa data inventada e peso derivado', () => {
+  // Data de partida aqui afirmaria uma partida que ninguém observou; e o peso da
+  // aba de resumo é a subtração circular que a §8.1 proíbe reproduzir.
+  recusa(() => validarEmbarque('x', { ...residuo(), etd: '2031-05-04' }))
+  recusa(() => validarEmbarque('x', { ...residuo(), ata: '2031-06-04' }))
+  recusa(() => validarEmbarque('x', { ...residuo(), pesoKg: 5000 }))
+  recusa(() => validarEmbarque('x', { ...residuo(), volumeM3: 60 }))
+})
+
+test('resíduo de porto exige mês, contagem e a procedência da contagem', () => {
+  // Sem mês ele sai da série mensal e o gráfico soma menos que o indicador.
+  recusa(() => validarEmbarque('x', { ...residuo(), mes: null }))
+  recusa(() => validarEmbarque('x', { ...residuo(), containers: 0 }))
+  recusa(() => validarEmbarque('x', { ...residuo(), containersFonte: 'coluna' }))
+  // E a procedência do resumo não é escrevível num embarque de verdade.
+  recusa(() => validarEmbarque('x', { ...embarque(), containersFonte: 'resumo' }))
+})
+
+test('resíduo de porto não declara de onde a carga saiu', () => {
+  // A tabela de resumo não diz o porto de origem; afirmá-lo desenharia um
+  // corredor que o dado não tem.
+  recusa(() => validarEmbarque('x', { ...residuo(), portoOrigem: 'XXAAA' }))
+})
+
+test('a unidade do documento só admite os dois valores', () => {
+  recusa(() =>
+    validarEmbarque('x', { ...embarque(), unidade: 'bloco' } as unknown as DocEmbarque),
+  )
 })
 
 function fatorDaMedia(): DocEmbarque['fator'] {
