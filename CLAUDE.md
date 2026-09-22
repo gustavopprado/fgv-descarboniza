@@ -278,7 +278,19 @@ Só aqui a pessoa aparece pelo nome:
 - **Firestore** — banco de documentos, acessado só pelo **Admin SDK**, no servidor
 - **Firebase Auth**, provedor Google, restrito ao domínio corporativo
 - **Deploy: Vercel**
+- **Node 22.12 ou mais novo, e isso é requisito e não preferência**
 - Aplicação única, com telas e acessos variando por perfil
+
+**Por que a versão do Node está fixada.** O `firebase-admin` traz `jwks-rsa`, que é
+CommonJS e faz `require('jose')`; e `jose` na versão 6 é ESM puro. Essa combinação só
+carrega em Node **22.12+**, que foi quando `require()` passou a aceitar módulo ESM. Em
+runtime mais antigo o erro é `ERR_REQUIRE_ESM` e **toda página que toca o Firestore
+devolve 500**.
+
+`engines.node` no `package.json` é o que impede a Vercel de escolher um runtime mais
+antigo por conta própria. O pino parece capricho e não é: sem ele a aplicação sobe, o
+build passa, e a primeira requisição falha — que foi exatamente o que aconteceu no
+primeiro deploy, em 22/09.
 
 O Firebase é a plataforma dos demais sistemas internos da empresa: a autenticação
 corporativa já está resolvida nesse ecossistema e o volume deste inventário é
