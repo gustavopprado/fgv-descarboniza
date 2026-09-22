@@ -217,19 +217,34 @@ export function programaFechadoAte(): string | null {
  * abandonar a restrição por IP das cargas — e chave paga sem restrição não é só
  * risco de privacidade, é conta a pagar.
  *
- * Cai de volta na chave das cargas quando esta não existe, para o formulário
+ * Cai de volta na chave das cargas **só fora de produção**, para o formulário
  * funcionar em desenvolvimento sem exigir duas chaves na máquina de quem
  * desenvolve.
+ *
+ * **Em produção o fallback não existe, e a trava está aqui e não na
+ * configuração.** Sem ela, bastava alguém acrescentar `GOOGLE_ROUTES_API_KEY`
+ * na Vercel — por hábito, ou copiando o `.env` inteiro — para o formulário
+ * passar a queimar a chave restrita por IP: ou a chamada falha de um jeito que
+ * parece problema do provedor, ou a restrição por IP foi afrouxada e a chave
+ * paga ficou aberta. **Nada quebraria, nada avisaria**, e é essa a família de
+ * defeito que este projeto vem catalogando. Confiar em "não configure aquela
+ * variável lá" é confiar na lembrança de alguém daqui a seis meses.
+ *
+ * Faltando a chave em produção, a falha é explícita, no molde do §10.8: melhor
+ * o envio do formulário recusar dizendo o que falta do que calcular distância
+ * com uma chave que não deveria estar ali.
  */
 export function chaveDeRotaDaAplicacao(): string {
   const doApp = opcional('GOOGLE_ROUTES_API_KEY_APP')
   if (doApp !== undefined) return doApp
-  const dasCargas = opcional('GOOGLE_ROUTES_API_KEY')
-  if (dasCargas !== undefined) return dasCargas
+  if (process.env.NODE_ENV !== 'production') {
+    const dasCargas = opcional('GOOGLE_ROUTES_API_KEY')
+    if (dasCargas !== undefined) return dasCargas
+  }
   throw new Error(
     'Sem chave de rota para a aplicação. Configure GOOGLE_ROUTES_API_KEY_APP ' +
-      '(restrita por API, com teto de faturamento) ou, em desenvolvimento, ' +
-      'GOOGLE_ROUTES_API_KEY. Veja .env.example.',
+      '(restrita por API, com teto de faturamento). Em produção não há queda ' +
+      'para GOOGLE_ROUTES_API_KEY, que é a chave das cargas. Veja .env.example.',
   )
 }
 

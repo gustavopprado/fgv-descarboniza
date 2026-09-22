@@ -1487,8 +1487,16 @@ Coisas que provavelmente vão acontecer, mas não agora.
   **O lado do código está feito:** `GOOGLE_ROUTES_API_KEY_APP` existe e é a única chave que
   o formulário lê; as cargas continuam na antiga. Falta a **configuração no console**, que
   é operação: criar a segunda chave, restringir só à Routes API, pôr teto de faturamento
-  com alerta e acrescentar a variável na Vercel. Sem ela o formulário cai na chave das
-  cargas — conveniente em desenvolvimento, e não é o que deve ir para produção.
+  com alerta e acrescentar a variável na Vercel.
+
+  **Em produção não há queda para a chave das cargas, e a trava está no código** (22/09).
+  Fora de produção a queda continua, para não exigir duas chaves na máquina de quem
+  desenvolve; em produção, faltando a chave da aplicação, o envio do formulário falha
+  dizendo o que falta. A alternativa era simplesmente não configurar a variável das cargas
+  na Vercel, e ela foi recusada pelo motivo de sempre: dependeria de alguém lembrar disso
+  daqui a seis meses, e no dia em que a variável aparecesse lá — por hábito, ou copiando o
+  `.env` inteiro — o formulário passaria a queimar a chave restrita por IP **sem nada
+  quebrar e sem nada avisar**. Guarda que depende de lembrança não é guarda.
 - **O provedor de rota não fica carimbado no documento.** O documento de emissão carimba o
   fator (§10.1), não o provedor de geocodificação nem o de roteamento — então a tela de
   método declara a configuração **atual** do ambiente, e não necessariamente a que produziu
@@ -1536,9 +1544,14 @@ Coisas que provavelmente vão acontecer, mas não agora.
   é. Sem `PROGRAMA_QUADRO` no ambiente, a tela mostra a contagem e **declara que não há
   denominador** — indicador com denominador errado é pior que indicador ausente, porque
   parece funcionar. O que falta é o número, que vem de quem tem o quadro, não do código.
-- **Rotação da chave da service account** — pendente desde 14/09, depois de a credencial ter
-  ido parar no `.env.example` duas vezes. Operação, não código: rotacionar, atualizar as
-  variáveis na Vercel, redeploy, e só então apagar a chave antiga.
+- ~~**Rotação da chave da service account**~~ — feita em 22/09, pendente desde 14/09. A
+  chave nova está em uso e a antiga foi revogada no console; a varredura do histórico
+  confirmou que nenhuma credencial real chegou a entrar em commit nenhum, então a §2.4 não
+  se aplicava. **A rotação valeu mesmo assim, e é a §12.7**: chave que passou por arquivo
+  versionado conta como comprometida, porque não há como provar por onde mais ela passou.
+
+  O que fica em aberto daqui é a Vercel, que ainda não recebeu variável nenhuma — e é
+  assim que devia ser: a chave antiga nunca chegou lá.
 
 ---
 
@@ -1552,6 +1565,105 @@ documento.
 **Sem dado real nas entradas** — descreva o que mudou, não os números que apareceram.
 
 ### Histórico
+
+#### 2026-09-22 — Checagem pré-deploy: a rotação feita, e um fallback que valia em produção
+
+Antes de publicar na Vercel. Nada de número mudou — o que mudou foi **quem pode
+usar qual chave**, e uma frase deste documento que tinha envelhecido.
+
+**A rotação da service account, pendente desde 14/09, foi feita.**
+
+A varredura veio antes, por três ângulos independentes: `git grep` de padrões de
+credencial em todos os commits, varredura objeto a objeto de todos os blobs
+alcançáveis, e os commits soltos que sobraram de stash e amend — que **não** são
+alcançáveis e por isso ficam de fora das duas primeiras. **Nenhum rastro de
+credencial real em lugar nenhum**, e os únicos achados foram os placeholders
+fictícios e o próprio regex da guarda aparecendo na busca.
+
+> **A §2.4 não se aplicava, e a rotação valeu do mesmo jeito.** Como nada entrou
+> em commit, não havia histórico a reescrever nem repositório novo a criar. O que
+> sustenta a rotação é a §12.7: chave que passou por arquivo versionado conta como
+> comprometida, porque **não há como provar por onde mais ela passou** — backup do
+> editor, índice de busca, pasta sincronizada. A ausência de rastro no git prova
+> uma coisa só, que é a ausência de rastro no git.
+
+A ordem foi gerar, usar, conferir e **só então** revogar — e a conferência foi o
+`verificar` inteiro, que inicializa o Admin SDK com a credencial nova e lê todas
+as coleções. Ele fecha antes e depois da revogação, com as mesmas contagens: a
+credencial mudou, o dado não. A Vercel não foi tocada, e é isso que garante que a
+chave antiga nunca chegou lá.
+
+> **Um defeito meu no meio, e é o de sempre com outra roupa.** A substituição no
+> `.env` rodou embutida em `node -e`, e o shell comeu as barras invertidas: o PEM
+> foi gravado com **quebras de linha reais** em vez de `\n` escapado. A escrita
+> "funcionou" — nenhum erro, arquivo salvo, uma variável trocada. Apareceu na
+> conferência seguinte, quando a chave deixou de ser parseável. Refeito com o
+> script em arquivo, sem shell no meio do escape, e com backup fora do repositório
+> antes de encostar no arquivo.
+
+**O fallback da chave de rota valia em produção, e agora não vale.**
+
+O código já lia `GOOGLE_ROUTES_API_KEY_APP` como a única chave do formulário, como
+a §14 dizia. O que a §14 **não** dizia é que, faltando ela, a queda para a chave
+das cargas acontecia em qualquer ambiente — a intenção estava declarada em
+comentário e a trava não estava em lugar nenhum.
+
+> **Por que isso importa mais do que parece.** As duas chaves existem porque os
+> destinos são dois: a das cargas roda de máquina com IP estável e é restrita por
+> ele; a da aplicação sai da Vercel, onde o IP não é estável. Bastava alguém
+> acrescentar a variável das cargas no painel — por hábito, ou copiando o `.env`
+> inteiro — para o formulário passar a queimar a chave restrita por IP. **Nada
+> quebraria, nada avisaria**, o inventário continuaria certo, e o que mudaria é
+> qual chave paga é consumida e por qual porta.
+>
+> A alternativa era instruir "não configure aquela variável lá", e ela foi
+> recusada: depende da lembrança de alguém daqui a seis meses, que é exatamente o
+> argumento da §0.1 para duas coleções em vez de um campo discriminador. **A trava
+> ficou no código**, e fora de produção a queda continua, para não exigir duas
+> chaves na máquina de quem desenvolve.
+
+**Duas declarações foram corrigidas junto, e a razão é a de sempre.** O
+`.env.example` e o §14 diziam que sem a chave o formulário cai na das cargas, sem
+ressalva de ambiente. Era verdade quando foi escrito e deixou de ser — e o
+`.env.example` é justamente o arquivo que alguém lê ao configurar a Vercel.
+Especificação que descreve um arranjo que o código não tem é o defeito que este
+log vem catalogando, e ele não muda de natureza quando é só uma frase.
+
+**A varredura da §2 não achou nada**, e vale registrar o que foi procurado, porque
+"nada encontrado" só significa alguma coisa com a lista à vista: nome de pessoa,
+de agente, de cliente, de fornecedor e de navio; valor real de emissão, contagem
+de contêiner e total de conferência; coordenada da fábrica em constante; e arquivo
+que devia estar ignorado e não estava. Toda a massa dos testes continua declarada
+e de fato fictícia — o que a entrada de 21/09 registra é que **a declaração não
+torna a massa fictícia**, então a conferência foi no conteúdo, não no cabeçalho.
+
+**O `.gitignore` ganhou cinco formatos de planilha** que faltavam ao lado dos que
+já estavam. Conferido nos dois sentidos: os formatos passam a ser ignorados, e
+**nada rastreado passou a ser ignorado** — a segunda metade importa mais que a
+primeira, porque regra nova que esconde arquivo existente tira do próximo commit
+coisa que ninguém decidiu tirar.
+
+**Validação**
+
+- `tsc --noEmit` e `npm test` (375 testes, 6 novos) passam. **`next build` não
+  foi rodado**, por ser build de produção e a publicação depender do Gustavo.
+  Nenhum servidor foi subido.
+- **A guarda nova foi conferida ligando a violação:** com o fallback de volta em
+  produção, dois dos seis reprovam — e os outros quatro continuam passando, que é
+  a parte que importa. Eles prendem **produção**, não o fallback de
+  desenvolvimento, que é o que se queria preservar. Guarda que reprovasse os seis
+  estaria prendendo a coisa errada.
+- O `verificar` fecha inteiro, antes e depois da revogação.
+- As guardas do `.env.example` — placeholder plausível e credencial — continuam
+  passando depois da reescrita do comentário.
+- A varredura do histórico cobriu também os commits não alcançáveis, que nenhuma
+  das duas varreduras normais enxerga.
+
+**O que fica em aberto, e é operação:** a segunda chave do Google no console, com
+restrição por API e teto de faturamento; as variáveis na Vercel; e a cópia solta
+do JSON da service account na pasta de downloads, que serve para configurar o
+painel e **precisa ser apagada depois** — credencial viva em pasta de download é
+a mesma classe de problema que a §12.7 descreve.
 
 #### 2026-09-22 — Transportadoras: o resumo no formato novo, e dois acertos de leitura
 

@@ -15,6 +15,11 @@ CLAUDE.local.md
 *.xls
 *.xlsx
 *.xlsm
+*.xlsb
+*.xlt
+*.xltx
+*.ods
+*.numbers
 *.csv
 *.tsv
 base_viagens*.json
