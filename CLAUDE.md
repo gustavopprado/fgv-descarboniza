@@ -1388,10 +1388,26 @@ espaço:**
 
 - **Ressalva que impede leitura errada fica visível** — o ângulo do radar não significar
   nada (§3.1.1), o ponto do mapa de Viagens não ser um aeroporto, a linha do mapa marítimo
-  não ser a derrota do navio, o que não pôde ser desenhado, a proporção da cascata (§8.2) e
-  as três declarações da §11.0. Quem precisa delas é justamente quem não vai clicar.
+  não ser a rota do navio, e as três declarações da §11.0. Quem precisa delas é justamente
+  quem não vai clicar.
 - **Lastro vai para o resumo** — fonte, situação da carga, parâmetro, fator com vigência,
   exceção com motivo e alerta com a regra que o levanta.
+
+> **Duas saíram desta lista em 22/09, por decisão do Gustavo, e as duas foram das que a
+> lista existia para proteger.** A proporção da cascata (§8.2) e a frase do que não pôde ser
+> desenhado deixaram de aparecer na tela de Marítimo e passaram a viver só no resumo.
+>
+> **O que isso custa, escrito para quem for mexer depois.** O mapa daquela tela desenha os
+> embarques com detalhe de agente, e a parcela estimada não tem porto de origem — ela não
+> vira linha. Hoje ela é a maior parte da emissão marítima, então **o mapa mostra uma fração
+> do número e não diz isso.** Quem olhar vai concluir que a carga vem de onde as linhas
+> estão. A conclusão é errada, e nada na tela a corrige.
+>
+> **Isto é o piso da §14 sendo encostado, não ultrapassado**: as declarações continuam no
+> sistema, a um clique, e nenhuma delas muda valor nenhum. Mas é o segundo enxugamento
+> seguido em que o que sai vinha desta lista, e a lista não é de gosto — **o próximo corte
+> aqui apaga declaração.** Se alguém precisar devolver uma só, devolva a do mapa: ela é a
+> única cuja ausência faz o leitor concluir algo falso em vez de apenas não saber.
 
 **A telinha é `popover` nativo do HTML, sem uma linha de JavaScript**, pela mesma regra das
 animações: o que depende de script não pode ser o que sustenta o conteúdo. Num navegador
@@ -1964,6 +1980,26 @@ deixou de ser verdade na etapa anterior.
   passa. Código exportado que ninguém lê é armadilha esperando alguém encontrar (§7).
 - `npm run lint` não roda neste projeto, e não é regressão desta etapa: o script
   chama `next lint`, que a versão instalada do Next não aceita mais.
+
+**Um sétimo corte veio logo depois, e ele é de outra natureza.** Saiu também a
+linha do mapa que declarava a espessura e o que não pôde ser desenhado. Levantei
+antes de fazer, e a decisão do Gustavo é a que vale.
+
+> **O que ela protegia, e agora não protege.** A parcela estimada não tem porto de
+> origem — a contagem por porto não diz de onde a carga saiu —, então ela não vira
+> linha nenhuma. Hoje ela é a maior parte da emissão marítima, e o mapa desenha o
+> resto. **Sem a frase, o mapa mostra uma fração do número e parece mostrar tudo.**
+>
+> **É diferente dos seis cortes anteriores, e a diferença é o tipo de erro que cada
+> ausência produz.** Os outros seis tiram informação: quem quiser saber, clica. Este
+> deixa o leitor concluir algo falso — que a carga vem de onde as linhas estão —
+> sem nada na tela para corrigi-lo. A §11.5 perdeu dois itens da lista de ressalvas
+> visíveis nesta leva, e a nota que ficou lá diz que **é esta a que se devolve
+> primeiro**, se alguém devolver uma só.
+
+`NaoDesenhado` continua no código e continua sendo usado: quando **nenhum**
+corredor pode ser desenhado, a tela mostra o quadro vazio com a explicação. Mapa
+vazio e calado se lê como falha de carga, e isso não mudou.
 
 #### 2026-09-22 — Todos do domínio veem tudo, e o que continua não sendo concedido
 

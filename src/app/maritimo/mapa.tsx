@@ -88,16 +88,15 @@ export function MapaDeCorredoresMaritimos({ mapa }: { mapa: MapaMaritimo }) {
         — é a ligação entre os dois portos; o ponto mostra o sentido da carga.
       </>
     ),
-    /* **Encurtado, não apagado** (§11.5, §14). Fica o que impede ler o mapa
-       errado: o que ele não desenha, e quanto isso pesa. O frete aéreo saiu
-       daqui e continua declarado sob as duas tabelas, que é onde o recorte por
-       contêiner de fato importa — na legenda ele era a quarta cópia da mesma
-       frase na mesma tela. */
-    ressalva: (
-      <>
-        Espessura pela emissão. <NaoDesenhado mapa={mapa} />
-      </>
-    ),
+    /* **A legenda ficou só com o aviso, por decisão do Gustavo em 22/09.**
+       O que saiu daqui foi a espessura e o que não pôde ser desenhado — e a
+       segunda é a que custa: a parcela estimada não tem porto de origem, então
+       não vira linha, e hoje ela é a maior parte da emissão marítima. O mapa
+       desenha os embarques com detalhe de agente.
+
+       `NaoDesenhado` continua sendo usado pela tela no caso em que **nenhum**
+       corredor pôde ser desenhado: ali o mapa está vazio, e um quadro vazio sem
+       explicação se lê como falha de carga. */
   }
 
   return <MapaDeRotasSvg ligacoes={ligacoesDosCorredores(mapa)} textos={textos} sentido divisas={false} />
