@@ -281,16 +281,21 @@ Só aqui a pessoa aparece pelo nome:
 - **Node 22.12 ou mais novo, e isso é requisito e não preferência**
 - Aplicação única, com telas e acessos variando por perfil
 
-**Por que a versão do Node está fixada.** O `firebase-admin` traz `jwks-rsa`, que é
-CommonJS e faz `require('jose')`; e `jose` na versão 6 é ESM puro. Essa combinação só
-carrega em Node **22.12+**, que foi quando `require()` passou a aceitar módulo ESM. Em
-runtime mais antigo o erro é `ERR_REQUIRE_ESM` e **toda página que toca o Firestore
-devolve 500**.
+**`jose` está presa na linha 5 por `overrides`, e isso não é preferência de versão.**
+O `firebase-admin` traz `jwks-rsa`, que é CommonJS e abre com `require('jose')`. A
+`jose` 6 é **ESM puro** — não tem condição `require` —, então esse `require` só
+funciona onde o runtime aceite `require()` de módulo ESM. Onde não aceita, o erro é
+`ERR_REQUIRE_ESM` e **toda página que toca o Firestore devolve 500**.
 
-`engines.node` no `package.json` é o que impede a Vercel de escolher um runtime mais
-antigo por conta própria. O pino parece capricho e não é: sem ele a aplicação sobe, o
-build passa, e a primeira requisição falha — que foi exatamente o que aconteceu no
-primeiro deploy, em 22/09.
+A `jose` 5 tem CJS, e o `jwks-rsa` usa dela exatamente duas funções — `importJWK` e
+`exportSPKI` —, que existem nas duas linhas com a mesma assinatura. Com o override o
+`require` vira require normal e **o carregamento deixa de depender do runtime**.
+
+Isso custou o primeiro deploy, em 22/09, e o motivo de ter custado está na §14: a
+máquina de quem desenvolve aceitava aquele `require`, e a que serve a aplicação não —
+então `tsc`, teste e build passavam nas duas, e a diferença só aparecia quando alguém
+pedia uma página. **`engines.node` fica declarado pelo mesmo motivo**: não é o que
+conserta, é o que impede a versão do runtime de voltar a ser uma variável escondida.
 
 O Firebase é a plataforma dos demais sistemas internos da empresa: a autenticação
 corporativa já está resolvida nesse ecossistema e o volume deste inventário é
