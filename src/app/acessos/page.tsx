@@ -95,7 +95,7 @@ export default async function Page({
     <Casca ctx={ctx} atual="/acessos">
       <Cabecalho
         titulo="Acessos"
-        descricao="Convidados de fora do domínio corporativo entram pelo link no e-mail e só passam depois de liberados aqui. Convidado visualiza o inventário e as emissões registradas; não registra viagem e não vê quem registrou."
+        descricao="Convidados de fora do domínio corporativo criam uma senha na tela de entrada e só passam depois de liberados aqui. Convidado visualiza o inventário e as emissões registradas; não registra viagem e não vê quem registrou."
       />
 
       {motivo !== null && (
@@ -110,7 +110,7 @@ export default async function Page({
       <Revelar ordem={0}>
         <Painel
           titulo="Pedidos pendentes"
-          descricao="Quem confirmou o próprio e-mail pelo link e ainda não foi liberado. Confira o endereço antes de liberar."
+          descricao="O sistema não confirma que o e-mail é mesmo da pessoa: qualquer um pode se cadastrar com o endereço de outra. Libere só quem combinou com você que acabou de se cadastrar."
         >
           {dados.pendentes.length === 0 ? (
             <Vazio>Nenhum pedido aguardando.</Vazio>
@@ -127,7 +127,14 @@ export default async function Page({
                 <tbody>
                   {dados.pendentes.map((p) => (
                     <tr key={p.uid}>
-                      <td className={`${TABELA.td} font-medium`}>{p.email}</td>
+                      <td className={`${TABELA.td} font-medium`}>
+                        {p.email}
+                        <span className="mt-0.5 block text-[11.5px] font-normal text-[var(--color-apoio)]">
+                          {p.emailVerificado
+                            ? 'e-mail confirmado pelo Google'
+                            : 'e-mail não confirmado'}
+                        </span>
+                      </td>
                       <td
                         className={`${TABELA.td} text-[var(--color-apoio)]`}
                         data-rotulo="Pedido em"

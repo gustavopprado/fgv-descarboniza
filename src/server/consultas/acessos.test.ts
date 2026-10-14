@@ -90,15 +90,19 @@ const semRevogar = async () => undefined
 
 test('primeira tentativa vira pedido pendente, sem perfil nenhum', async () => {
   const { db, colecao } = bancoFalso()
-  assert.equal(await registrarSolicitacaoDeAcesso('uid-1', CONVIDADO, db), 'pendente')
+  assert.equal(await registrarSolicitacaoDeAcesso('uid-1', CONVIDADO, false, db), 'pendente')
   assert.equal(colecao('usuarioPerfil').size, 0)
   const pedido = colecao('solicitacaoAcesso').get('uid-1') as DocSolicitacaoAcesso
   assert.equal(pedido.status, 'pendente')
+  // A conta de senha não confirma o e-mail, e a tela precisa saber disso.
+  assert.equal(pedido.emailVerificado, false)
+  const painel = await consultarAcessos(ctx('gestor'), db)
+  assert.equal(painel.pendentes[0]?.emailVerificado, false)
 })
 
 test('liberar grava o perfil externo com quem liberou', async () => {
   const { db, colecao } = bancoFalso()
-  await registrarSolicitacaoDeAcesso('uid-1', CONVIDADO, db)
+  await registrarSolicitacaoDeAcesso('uid-1', CONVIDADO, false, db)
   await aprovarAcesso(ctx('gestor'), 'uid-1', db)
 
   const perfil = colecao('usuarioPerfil').get('uid-1') as DocUsuarioPerfil
@@ -110,7 +114,7 @@ test('liberar grava o perfil externo com quem liberou', async () => {
 
 test('só admin e gestor decidem — usuario e externo são recusados antes de ler', async () => {
   const { db } = bancoFalso()
-  await registrarSolicitacaoDeAcesso('uid-1', CONVIDADO, db)
+  await registrarSolicitacaoDeAcesso('uid-1', CONVIDADO, false, db)
   for (const papel of ['usuario', 'externo', 'sustentabilidade', 'colaborador'] as Papel[]) {
     await assert.rejects(aprovarAcesso(ctx(papel), 'uid-1', db), AcessoNegadoError)
     await assert.rejects(consultarAcessos(ctx(papel), db), AcessoNegadoError)
@@ -120,7 +124,7 @@ test('só admin e gestor decidem — usuario e externo são recusados antes de l
 
 test('a tela nunca sobrescreve um perfil que não seja externo', async () => {
   const { db, colecao } = bancoFalso()
-  await registrarSolicitacaoDeAcesso('uid-1', CONVIDADO, db)
+  await registrarSolicitacaoDeAcesso('uid-1', CONVIDADO, false, db)
   colecao('usuarioPerfil').set('uid-1', { email: CONVIDADO, papel: 'admin' })
 
   await assert.rejects(
@@ -132,7 +136,7 @@ test('a tela nunca sobrescreve um perfil que não seja externo', async () => {
 
 test('conta do domínio não passa por convite', async () => {
   const { db, colecao } = bancoFalso()
-  await registrarSolicitacaoDeAcesso('uid-1', `alguem@${DOMINIO}`, db)
+  await registrarSolicitacaoDeAcesso('uid-1', `alguem@${DOMINIO}`, false, db)
   await assert.rejects(
     aprovarAcesso(ctx('gestor'), 'uid-1', db),
     (e: unknown) => e instanceof DecisaoDeAcessoInvalidaError && e.codigo === 'dominio',
@@ -142,10 +146,10 @@ test('conta do domínio não passa por convite', async () => {
 
 test('recusado não volta sozinho para a fila, mas pode ser liberado depois', async () => {
   const { db, colecao } = bancoFalso()
-  await registrarSolicitacaoDeAcesso('uid-1', CONVIDADO, db)
+  await registrarSolicitacaoDeAcesso('uid-1', CONVIDADO, false, db)
   await recusarAcesso(ctx('gestor'), 'uid-1', db)
 
-  assert.equal(await registrarSolicitacaoDeAcesso('uid-1', CONVIDADO, db), 'recusada')
+  assert.equal(await registrarSolicitacaoDeAcesso('uid-1', CONVIDADO, false, db), 'recusada')
   const painel = await consultarAcessos(ctx('admin'), db)
   assert.equal(painel.pendentes.length, 0)
   assert.equal(painel.encerrados.length, 1)
@@ -156,7 +160,7 @@ test('recusado não volta sozinho para a fila, mas pode ser liberado depois', as
 
 test('revogar apaga o perfil, registra a decisão e derruba a sessão', async () => {
   const { db, colecao } = bancoFalso()
-  await registrarSolicitacaoDeAcesso('uid-1', CONVIDADO, db)
+  await registrarSolicitacaoDeAcesso('uid-1', CONVIDADO, false, db)
   await aprovarAcesso(ctx('gestor'), 'uid-1', db)
 
   const revogados: string[] = []

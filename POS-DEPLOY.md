@@ -36,16 +36,31 @@ continuam sendo dados por `npm run perfil`.
 
 ### Como o convidado entra
 
-1. Na tela de entrada, ele informa o e-mail e recebe um **link de acesso** (login
-   por link do Firebase). Funciona com qualquer provedor de e-mail, e ele não
-   precisa de conta Google.
-2. No primeiro clique no link, o e-mail fica confirmado e o servidor grava um
-   pedido em `solicitacaoAcesso/{uid}`. **O login é recusado** com a mensagem de
-   que o pedido está em análise.
+1. Na tela de entrada, em **Primeiro acesso**, ele informa o e-mail e cria uma
+   senha (mínimo de 8 caracteres). Funciona com qualquer e-mail, e ele não precisa
+   de conta Google.
+2. O servidor grava um pedido em `solicitacaoAcesso/{uid}` e **recusa o login**,
+   avisando que o pedido está em análise.
 3. `admin` ou `gestor` abre **Acessos** no menu e libera ou recusa.
-4. Liberado, o convidado pede um link novo e entra.
+4. Liberado, o convidado entra com e-mail e senha.
 
-Quem é do domínio continua entrando com o Google, e pode usar o link também.
+Quem é do domínio continua entrando **só pelo Google**. Cadastro com senha usando
+e-mail da empresa é recusado no login e em cada requisição: sem isso, qualquer
+pessoa poderia cadastrar o e-mail de um colega e entrar como `usuario`, sem passar
+por aprovação.
+
+**O e-mail do convidado não é confirmado, e isso é decisão.** A primeira versão
+mandava um link de acesso para o e-mail, o que provava que a pessoa é dona da
+caixa postal. Saiu no mesmo dia: o fluxo confundia e o e-mail caía no spam.
+Consequência: **qualquer um pode se cadastrar com o e-mail de outra pessoa**, e o
+pedido aparece como se fosse dela. **A verificação passa a ser quem aprova:**
+libere só quem combinou com você que acabou de se cadastrar. A tela de Acessos diz
+isso, e mostra em cada pedido se o e-mail foi confirmado (só nos que entraram pelo
+Google).
+
+Esqueceu a senha: não há recuperação por e-mail, pelo mesmo motivo. Quem libera
+revoga, apaga a conta no Firebase Console (Authentication → Users) e a pessoa
+refaz o primeiro acesso.
 
 ### Regras que seguram a tela
 
@@ -74,10 +89,8 @@ isso é aceitável para os convidados liberados.
 ### Operação (fora do código)
 
 - **Firebase Console → Authentication → Sign-in method → Email/Password:** ligar
-  *Email link (passwordless sign-in)*. Sem isso, o envio do link falha com
-  `auth/operation-not-allowed`, e a tela diz isso.
-- O domínio de produção já está em *Authorized domains*, porque o login do Google
-  usa a mesma lista. Ele é o destino do link.
-- Opcional: em *Templates*, pôr o e-mail do link em português.
+  a primeira opção, *Email/Password*. **Deixar desligado** *Email link
+  (passwordless sign-in)*, que não é mais usado. Sem a primeira, o cadastro falha
+  com `auth/operation-not-allowed`, e a tela diz isso.
 - Conceder `gestor`: a pessoa entra uma vez e depois
   `npm run perfil -- <email> gestor`.

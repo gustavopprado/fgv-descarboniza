@@ -1,8 +1,8 @@
 /**
  * Sessão — CLAUDE.md §11.2, §11.3 e §11.4.
  *
- * Login por Firebase Auth: Google para quem é do domínio corporativo, e link por
- * e-mail para convidado externo — que só entra depois de liberado por `admin` ou
+ * Login por Firebase Auth: Google para quem é do domínio corporativo, e e-mail e
+ * senha para convidado externo — que só entra depois de liberado por `admin` ou
  * `gestor` na tela de acessos (POS-DEPLOY.md).
  * O navegador troca o ID token por um **cookie de sessão httpOnly** emitido aqui;
  * daí em diante o cliente não carrega credencial nenhuma e não fala com o
@@ -98,16 +98,8 @@ export const PAPEL_PADRAO_DO_DOMINIO: Papel = 'usuario'
  */
 export const PAPEL_DE_FORA_DO_DOMINIO: Papel = 'externo'
 
-/**
- * Provedores aceitos: Google, para quem é do domínio, e o link enviado por
- * e-mail, para convidado externo que não tem conta Google.
- *
- * O link por e-mail chega no token como `password` — é o provedor de e-mail do
- * Firebase, do qual o link é uma forma de entrar. Senha mesmo ninguém cadastra
- * aqui, e a conta criada por senha sem confirmar o e-mail cai na recusa de
- * e-mail não verificado logo abaixo.
- */
-const PROVEDORES_ACEITOS: ReadonlySet<string> = new Set(['google.com', 'password'])
+const GOOGLE = 'google.com'
+const SENHA = 'password'
 
 /** Recusa que diz à pessoa que o pedido dela está na fila. */
 export class AcessoEmAnaliseError extends LoginRecusadoError {
@@ -118,33 +110,76 @@ export class AcessoEmAnaliseError extends LoginRecusadoError {
 }
 
 /**
+ * De onde vem quem está entrando — ou a recusa, antes de qualquer leitura.
+ *
+ * `dominio` segue para a sessão com o papel do perfil ou o padrão; `convidado`
+ * só segue com perfil `externo`. Separada para ser testada sem Firebase: é aqui
+ * que mora a regra de que e-mail da empresa com senha não entra.
+ */
+export function classificarEntrada(
+  conta: { email: string | undefined; provedor: string | undefined; emailVerificado: boolean },
+  dominio: string,
+): 'dominio' | 'convidado' {
+  if (conta.email === undefined || conta.email === '') {
+    throw new LoginRecusadoError('A conta precisa ter e-mail.')
+  }
+
+  if (dominioDe(conta.email) === dominio.toLowerCase()) {
+    if (conta.provedor !== GOOGLE || !conta.emailVerificado) {
+      throw new LoginRecusadoError(
+        'Conta da empresa entra pelo botão "Entrar com a conta corporativa".',
+      )
+    }
+    return 'dominio'
+  }
+
+  if (conta.provedor !== GOOGLE && conta.provedor !== SENHA) {
+    throw new LoginRecusadoError('Entre com e-mail e senha.')
+  }
+  if (conta.provedor === GOOGLE && !conta.emailVerificado) {
+    throw new LoginRecusadoError('A conta precisa ter e-mail verificado.')
+  }
+  return 'convidado'
+}
+
+/**
  * Verifica o ID token recém-emitido e devolve o cookie de sessão.
  *
- * Recusas, todas antes de qualquer cookie existir: provedor fora dos aceitos,
- * e-mail não verificado e, fora do domínio, conta sem perfil `externo`. Neste
- * último caso o pedido de acesso é registrado para quem libera decidir.
+ * **Do domínio, só Google com e-mail verificado.** E-mail e senha não provam
+ * dono de caixa postal: aceitar senha aqui deixaria qualquer um cadastrar o
+ * e-mail de um colega e entrar como `usuario`, sem passar por aprovação.
+ *
+ * **De fora, Google ou e-mail e senha — e a aprovação é a verificação.** A conta
+ * de senha não tem o e-mail confirmado (o link de confirmação caía no spam e foi
+ * retirado, ver POS-DEPLOY.md), então o e-mail do pedido é só o que a pessoa
+ * digitou. Por isso nada passa sem perfil `externo` gravado por quem libera, e
+ * o pedido carrega se o e-mail foi confirmado, para a tela dizer.
  */
 export async function criarCookieDeSessao(idToken: string): Promise<string> {
   const auth = authAdmin()
   const token = await auth.verifyIdToken(idToken, true)
 
-  if (!PROVEDORES_ACEITOS.has(token.firebase?.sign_in_provider ?? '')) {
-    throw new LoginRecusadoError(
-      'Entre com a conta Google corporativa ou pelo link enviado ao seu e-mail.',
-    )
-  }
-  if (token.email === undefined || token.email_verified !== true) {
-    throw new LoginRecusadoError('A conta precisa ter e-mail verificado.')
-  }
+  const origem = classificarEntrada(
+    {
+      email: token.email,
+      provedor: token.firebase?.sign_in_provider,
+      emailVerificado: token.email_verified === true,
+    },
+    dominioWorkspace(),
+  )
 
-  if (dominioDe(token.email) !== dominioWorkspace().toLowerCase()) {
+  if (origem === 'convidado' && token.email !== undefined) {
     const perfil = await firestore()
       .collection(COLECAO.usuarioPerfil)
       .doc(token.uid)
       .get()
     const papel = perfil.exists ? (perfil.data() as DocUsuarioPerfil).papel : null
     if (papel !== PAPEL_DE_FORA_DO_DOMINIO) {
-      const status = await registrarSolicitacaoDeAcesso(token.uid, token.email)
+      const status = await registrarSolicitacaoDeAcesso(
+        token.uid,
+        token.email,
+        token.email_verified === true,
+      )
       throw new AcessoEmAnaliseError(
         status === 'pendente'
           ? 'Seu pedido de acesso foi registrado. Você poderá entrar assim que ele for aprovado.'
@@ -173,6 +208,14 @@ export async function sessaoAtual(): Promise<ContextoDeAcesso | null> {
     const sessao = await authAdmin().verifySessionCookie(cookie, true)
     uid = sessao.uid
     email = sessao.email ?? ''
+    // Do domínio, só sessão aberta pelo Google vale. O login já recusa senha
+    // com e-mail da empresa; conferir de novo aqui custa uma comparação.
+    if (
+      dominioDe(email) === dominioWorkspace().toLowerCase() &&
+      sessao.firebase?.sign_in_provider !== GOOGLE
+    ) {
+      return null
+    }
   } catch {
     // Cookie expirado, revogado ou adulterado: não há sessão. A tela manda
     // entrar de novo; não há informação a dar sobre qual dos três foi.

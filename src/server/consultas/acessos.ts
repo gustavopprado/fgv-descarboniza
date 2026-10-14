@@ -1,10 +1,11 @@
 /**
  * Acesso de convidado externo — ver POS-DEPLOY.md.
  *
- * Quem é de fora do domínio corporativo entra pelo link no e-mail. O primeiro
- * login com e-mail verificado e sem perfil **não concede nada**: vira um pedido
- * em `solicitacaoAcesso/{uid}`, e quem decide é `admin` ou `gestor`, na tela de
- * acessos.
+ * Quem é de fora do domínio corporativo entra com e-mail e senha. O primeiro
+ * login sem perfil **não concede nada**: vira um pedido em
+ * `solicitacaoAcesso/{uid}`, e quem decide é `admin` ou `gestor`, na tela de
+ * acessos. O e-mail da conta de senha não é confirmado, então a aprovação é a
+ * única verificação de que a pessoa é quem diz ser.
  *
  * Três regras que este módulo segura, e que a tela não pode afrouxar:
  *
@@ -71,6 +72,7 @@ function agora(): string {
 export async function registrarSolicitacaoDeAcesso(
   uid: string,
   email: string,
+  emailVerificado: boolean,
   db: Firestore = firestore(),
 ): Promise<StatusDaSolicitacao> {
   const ref = db.collection(COLECAO.solicitacaoAcesso).doc(uid)
@@ -84,6 +86,7 @@ export async function registrarSolicitacaoDeAcesso(
     }
     const novo: DocSolicitacaoAcesso = {
       email: email.toLowerCase(),
+      emailVerificado,
       status: 'pendente',
       pedidoEm: instante,
       ultimaTentativaEm: instante,
@@ -98,6 +101,7 @@ export async function registrarSolicitacaoDeAcesso(
 export type PedidoDeAcesso = {
   uid: string
   email: string
+  emailVerificado: boolean
   status: StatusDaSolicitacao
   pedidoEm: string
   ultimaTentativaEm: string
@@ -135,6 +139,7 @@ export async function consultarAcessos(
     return {
       uid: d.id,
       email: doc.email,
+      emailVerificado: doc.emailVerificado === true,
       status: doc.status,
       // Convidado liberado por script e depois revogado tem registro sem pedido.
       pedidoEm: doc.pedidoEm ?? '',

@@ -567,13 +567,18 @@ export type StatusDaSolicitacao = 'pendente' | 'aprovada' | 'recusada' | 'revoga
 /**
  * Pedido de acesso de quem é de fora do domínio — `solicitacaoAcesso/{uid}`.
  *
- * Nasce quando um e-mail externo **já verificado** tenta entrar sem perfil. O
- * pedido não concede nada: quem libera é `admin` ou `gestor`, na tela de acessos.
+ * Nasce quando um e-mail externo tenta entrar sem perfil. O pedido não concede
+ * nada: quem libera é `admin` ou `gestor`, na tela de acessos.
+ *
+ * `emailVerificado` diz se o provedor confirmou que a pessoa é dona do e-mail.
+ * Na conta de senha ele é falso: o e-mail é só o que foi digitado, e quem libera
+ * precisa saber disso antes de liberar.
  * Os instantes são ISO completos, e não `AAAA-MM-DD`, porque aqui servem de
  * registro de quem decidiu e quando, não de recorte de período.
  */
 export type DocSolicitacaoAcesso = {
   email: string
+  emailVerificado: boolean
   status: StatusDaSolicitacao
   pedidoEm: string
   ultimaTentativaEm: string

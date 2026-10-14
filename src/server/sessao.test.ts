@@ -20,6 +20,8 @@ import {
   podeVerQuemRegistrou,
 } from './consultas/acesso'
 import {
+  classificarEntrada,
+  LoginRecusadoError,
   DURACAO_MAXIMA_MS,
   DURACAO_MINIMA_MS,
   DURACAO_SESSAO_MS,
@@ -103,6 +105,65 @@ test('o padrão NÃO libera acesso de convidado externo', () => {
     podeLiberarAcessos(padrao),
     false,
     'se o padrão liberasse, qualquer pessoa da empresa abriria a porta para alguém de fora',
+  )
+})
+
+/* --------------------------------------------- de onde vem quem entra */
+
+const DOMINIO = 'empresa-ficticia.invalid'
+
+test('e-mail da empresa com senha não entra — senão qualquer um seria colega', () => {
+  assert.throws(
+    () =>
+      classificarEntrada(
+        { email: `colega@${DOMINIO}`, provedor: 'password', emailVerificado: false },
+        DOMINIO,
+      ),
+    LoginRecusadoError,
+  )
+  assert.throws(
+    () =>
+      classificarEntrada(
+        { email: `colega@${DOMINIO}`, provedor: 'password', emailVerificado: true },
+        DOMINIO,
+      ),
+    LoginRecusadoError,
+  )
+  assert.equal(
+    classificarEntrada(
+      { email: `colega@${DOMINIO.toUpperCase()}`, provedor: 'google.com', emailVerificado: true },
+      DOMINIO,
+    ),
+    'dominio',
+  )
+})
+
+test('convidado entra com senha sem e-mail confirmado, mas só como convidado', () => {
+  assert.equal(
+    classificarEntrada(
+      { email: 'convidado@outro.invalid', provedor: 'password', emailVerificado: false },
+      DOMINIO,
+    ),
+    'convidado',
+  )
+  assert.equal(
+    classificarEntrada(
+      { email: 'convidado@outro.invalid', provedor: 'google.com', emailVerificado: true },
+      DOMINIO,
+    ),
+    'convidado',
+  )
+  assert.throws(
+    () =>
+      classificarEntrada(
+        { email: 'convidado@outro.invalid', provedor: 'anonymous', emailVerificado: false },
+        DOMINIO,
+      ),
+    LoginRecusadoError,
+  )
+  assert.throws(
+    () => classificarEntrada({ email: undefined, provedor: 'password', emailVerificado: false }, DOMINIO),
+    LoginRecusadoError,
   )
 })
 

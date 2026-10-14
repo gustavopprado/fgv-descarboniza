@@ -3,10 +3,10 @@
 /**
  * Entrada — CLAUDE.md §11.4 e POS-DEPLOY.md.
  *
- * Dois caminhos: Google, para quem é do domínio corporativo, e link por e-mail,
- * para convidado externo de qualquer provedor de e-mail. O convidado só passa
- * depois de liberado na tela de acessos; antes disso o servidor registra o
- * pedido e recusa.
+ * Dois caminhos: Google, para quem é do domínio corporativo, e e-mail e senha,
+ * para convidado externo. O convidado cria a senha no primeiro acesso, o pedido
+ * aparece na tela de acessos, e ele só passa depois de liberado — antes disso o
+ * servidor registra o pedido e recusa.
  *
  * O único componente de cliente que fala com o Firebase, e só para provar quem
  * é. O ID token é trocado por cookie de sessão no servidor e a sessão do SDK web
@@ -15,16 +15,15 @@
  * cookie httpOnly.
  */
 import {
-  isSignInWithEmailLink,
-  sendSignInLinkToEmail,
-  signInWithEmailLink,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
   type Auth,
   type User,
 } from 'firebase/auth'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import { authWeb, provedorGoogle } from '@/lib/firebase-cliente'
 
@@ -33,9 +32,9 @@ import { authWeb, provedorGoogle } from '@/lib/firebase-cliente'
  *
  * **A mensagem genérica existe por um bom motivo e não vale para estas.** Do
  * lado do servidor, não distinguir token inválido de token expirado é
- * deliberado: quem está adivinhando não ganha pista. Estas três são outra
- * coisa — vêm do SDK no próprio navegador de quem clicou, já estão no console
- * dele, e nenhuma delas depende de quem é a pessoa. Esconder atrás de "tente
+ * deliberado: quem está adivinhando não ganha pista. Estas são outra coisa —
+ * vêm do SDK no próprio navegador de quem clicou, já estão no console dele, e
+ * nenhuma delas depende de quem é a pessoa. Esconder atrás de "tente
  * novamente" só garante que tentar de novo não vai funcionar.
  */
 const FALHAS_CONHECIDAS: Record<string, string> = {
@@ -46,38 +45,26 @@ const FALHAS_CONHECIDAS: Record<string, string> = {
   'auth/operation-not-supported-in-this-environment':
     'Este navegador não permite a janela de login neste endereço. Acontece quando a página é aberta fora de http ou https.',
   'auth/operation-not-allowed':
-    'O login por link no e-mail não está habilitado no provedor de autenticação. Quem administra o projeto precisa ativá-lo.',
+    'O login por e-mail e senha não está habilitado no provedor de autenticação. Quem administra o projeto precisa ativá-lo.',
   'auth/invalid-email': 'Esse endereço de e-mail não é válido.',
-  'auth/invalid-action-code':
-    'Este link já foi usado ou não é mais válido. Peça um link novo.',
-  'auth/expired-action-code': 'Este link expirou. Peça um link novo.',
+  'auth/email-already-in-use':
+    'Este e-mail já tem cadastro. Use "Entrar" com a senha que você criou.',
+  'auth/weak-password': 'A senha precisa ter pelo menos 8 caracteres.',
+  'auth/invalid-credential': 'E-mail ou senha incorretos.',
+  'auth/wrong-password': 'E-mail ou senha incorretos.',
+  'auth/user-not-found':
+    'Não há cadastro com este e-mail. No primeiro acesso, use "Primeiro acesso".',
+  'auth/too-many-requests':
+    'Muitas tentativas seguidas. Espere alguns minutos e tente de novo.',
 }
 
 /**
- * Onde o e-mail fica guardado entre pedir o link e clicar nele.
+ * Tamanho mínimo da senha do convidado.
  *
- * O Firebase exige o e-mail de novo ao abrir o link, para o link sozinho não
- * bastar a quem o interceptar. Guardar no navegador poupa digitar de novo quando
- * o link abre no mesmo navegador; em outro, a tela pede.
+ * O Firebase aceita a partir de seis; oito é o piso que a tela exige antes de
+ * enviar, para a senha fraca não chegar a virar conta.
  */
-const CHAVE_DO_EMAIL = 'fgv_email_para_link'
-
-function lerEmailGuardado(): string | null {
-  try {
-    return window.localStorage.getItem(CHAVE_DO_EMAIL)
-  } catch {
-    return null
-  }
-}
-
-function guardarEmail(email: string | null): void {
-  try {
-    if (email === null) window.localStorage.removeItem(CHAVE_DO_EMAIL)
-    else window.localStorage.setItem(CHAVE_DO_EMAIL, email)
-  } catch {
-    // Sem armazenamento a tela pede o e-mail ao abrir o link. Nada se perde.
-  }
-}
+const SENHA_MINIMA = 8
 
 function mensagemDeFalha(falha: unknown): string {
   const codigo = (falha as { code?: string })?.code
@@ -112,10 +99,13 @@ export function Entrada({ destino }: { destino: string }) {
   const router = useRouter()
   const [entrando, setEntrando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  /** Recusa que é aviso, não erro: o pedido de acesso foi registrado. */
+  const [aviso, setAviso] = useState<string | null>(null)
 
   async function entrar() {
     setEntrando(true)
     setErro(null)
+    setAviso(null)
 
     // **`authWeb()` fica DENTRO do `try`, e isso não é arrumação.** Ele lança
     // quando falta configuração, e fora daqui a rejeição escapava da função
@@ -164,82 +154,44 @@ export function Entrada({ destino }: { destino: string }) {
     }
   }
 
-  // ---------------------------------------------------- link por e-mail
+  // ------------------------------------------------ convidado: e-mail e senha
 
   const [email, setEmail] = useState('')
-  const [linkEnviado, setLinkEnviado] = useState(false)
-  /** Verdadeiro quando a página abriu pelo link e falta confirmar o e-mail. */
-  const [confirmandoLink, setConfirmandoLink] = useState(false)
+  const [senha, setSenha] = useState('')
+  const [primeiroAcesso, setPrimeiroAcesso] = useState(false)
 
-  async function concluirLink(enderecoInformado: string) {
-    setEntrando(true)
+  async function entrarComSenha(evento: React.FormEvent) {
+    evento.preventDefault()
     setErro(null)
+    setAviso(null)
+
+    if (primeiroAcesso && senha.length < SENHA_MINIMA) {
+      setErro(FALHAS_CONHECIDAS['auth/weak-password'])
+      return
+    }
+
+    setEntrando(true)
     let auth: Auth | null = null
     try {
       auth = authWeb()
-      const credencial = await signInWithEmailLink(
-        auth,
-        enderecoInformado.trim(),
-        window.location.href,
-      )
-      guardarEmail(null)
+      const endereco = email.trim()
+      const credencial = primeiroAcesso
+        ? await createUserWithEmailAndPassword(auth, endereco, senha)
+        : await signInWithEmailAndPassword(auth, endereco, senha)
       const recusa = await trocarPorSessao(auth, credencial.user)
-      setConfirmandoLink(false)
       if (recusa !== null) {
-        setErro(recusa)
-        // Tira o código do link do endereço: ele já foi gasto.
-        window.history.replaceState(null, '', window.location.pathname)
+        // Depois do cadastro a conta existe: da próxima vez é "Entrar".
+        setPrimeiroAcesso(false)
+        setSenha('')
+        setAviso(recusa)
         return
       }
       router.replace(destino)
       router.refresh()
     } catch (falha) {
-      console.error('[entrar] falha ao entrar pelo link', falha)
+      console.error('[entrar] falha ao entrar com e-mail e senha', falha)
       setErro(mensagemDeFalha(falha))
       if (auth !== null) await signOut(auth).catch(() => undefined)
-    } finally {
-      setEntrando(false)
-    }
-  }
-
-  // Ao abrir pelo link do e-mail, conclui sozinho quando o e-mail foi guardado
-  // neste navegador; senão, pede o e-mail para conferir.
-  useEffect(() => {
-    let auth: Auth
-    try {
-      auth = authWeb()
-    } catch {
-      return
-    }
-    if (!isSignInWithEmailLink(auth, window.location.href)) return
-    const guardado = lerEmailGuardado()
-    if (guardado !== null) {
-      void concluirLink(guardado)
-    } else {
-      setConfirmandoLink(true)
-    }
-    // Roda uma vez, ao abrir a página.
-  }, [])
-
-  async function enviarLink(evento: React.FormEvent) {
-    evento.preventDefault()
-    if (confirmandoLink) {
-      await concluirLink(email)
-      return
-    }
-    setEntrando(true)
-    setErro(null)
-    try {
-      const endereco = email.trim()
-      await sendSignInLinkToEmail(authWeb(), endereco, {
-        url: `${window.location.origin}/entrar`,
-        handleCodeInApp: true,
-      })
-      guardarEmail(endereco)
-      setLinkEnviado(true)
-    } catch (falha) {
-      console.error('[entrar] falha ao enviar o link', falha)
-      setErro(mensagemDeFalha(falha))
     } finally {
       setEntrando(false)
     }
@@ -250,55 +202,79 @@ export function Entrada({ destino }: { destino: string }) {
 
   return (
     <div className="space-y-4">
-      {!confirmandoLink && (
+      <button
+        type="button"
+        onClick={entrar}
+        disabled={entrando}
+        className="w-full rounded-[11px] bg-[var(--color-folha-900)] px-4 py-3.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#4F6D52] disabled:opacity-60"
+      >
+        {entrando ? 'Entrando…' : 'Entrar com a conta corporativa'}
+      </button>
+
+      <form
+        onSubmit={entrarComSenha}
+        className="space-y-2.5 border-t border-[var(--color-linha)] pt-4"
+      >
+        <p className="text-[13px] text-[var(--color-apoio)]">
+          {primeiroAcesso
+            ? 'Primeiro acesso de convidado: crie uma senha. Seu pedido vai para aprovação e você entra depois de liberado.'
+            : 'Convidado de fora da empresa? Entre com e-mail e senha.'}
+        </p>
+        <label htmlFor="email-convidado" className="sr-only">
+          E-mail
+        </label>
+        <input
+          id="email-convidado"
+          type="email"
+          required
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="seu@email.com"
+          className={campo}
+        />
+        <label htmlFor="senha-convidado" className="sr-only">
+          Senha
+        </label>
+        <input
+          id="senha-convidado"
+          type="password"
+          required
+          minLength={primeiroAcesso ? SENHA_MINIMA : undefined}
+          autoComplete={primeiroAcesso ? 'new-password' : 'current-password'}
+          value={senha}
+          onChange={(e) => setSenha(e.target.value)}
+          placeholder={primeiroAcesso ? `Senha (mínimo ${SENHA_MINIMA} caracteres)` : 'Senha'}
+          className={campo}
+        />
+        <button
+          type="submit"
+          disabled={entrando}
+          className="w-full rounded-[11px] border border-[var(--color-folha-700)] px-4 py-3 text-sm font-semibold text-[var(--color-folha-900)] transition-colors duration-150 hover:bg-[var(--color-folha-300)]/40 disabled:opacity-60"
+        >
+          {primeiroAcesso ? 'Criar senha e pedir acesso' : 'Entrar'}
+        </button>
         <button
           type="button"
-          onClick={entrar}
-          disabled={entrando}
-          className="w-full rounded-[11px] bg-[var(--color-folha-900)] px-4 py-3.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#4F6D52] disabled:opacity-60"
+          onClick={() => {
+            setPrimeiroAcesso(!primeiroAcesso)
+            setErro(null)
+            setAviso(null)
+          }}
+          className="w-full py-1.5 text-[12.5px] text-[var(--color-folha-900)] underline underline-offset-2"
         >
-          {entrando ? 'Entrando…' : 'Entrar com a conta corporativa'}
+          {primeiroAcesso ? 'Já tenho senha' : 'Primeiro acesso'}
         </button>
+      </form>
+
+      {aviso !== null && (
+        <p
+          role="status"
+          className="rounded-[11px] border border-[var(--color-folha-500)] bg-[var(--color-folha-300)]/40 p-3.5 text-[13px] text-[var(--color-tinta)]"
+        >
+          {aviso}
+        </p>
       )}
-
-      <div className="border-t border-[var(--color-linha)] pt-4">
-        {linkEnviado ? (
-          <p className="text-[13.5px] text-[var(--color-apoio)]">
-            Enviamos um link de acesso para <b className="text-[var(--color-tinta)]">{email}</b>.
-            Abra o e-mail e clique no link para entrar. Se não chegar em alguns
-            minutos, confira a caixa de spam.
-          </p>
-        ) : (
-          <form onSubmit={enviarLink} className="space-y-2.5">
-            <label
-              htmlFor="email-convidado"
-              className="block text-[13px] text-[var(--color-apoio)]"
-            >
-              {confirmandoLink
-                ? 'Confirme o e-mail para o qual o link foi enviado:'
-                : 'Não tem conta corporativa? Receba um link de acesso por e-mail. O primeiro acesso passa por aprovação.'}
-            </label>
-            <input
-              id="email-convidado"
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="seu@email.com"
-              className={campo}
-            />
-            <button
-              type="submit"
-              disabled={entrando}
-              className="w-full rounded-[11px] border border-[var(--color-folha-700)] px-4 py-3 text-sm font-semibold text-[var(--color-folha-900)] transition-colors duration-150 hover:bg-[var(--color-folha-300)]/40 disabled:opacity-60"
-            >
-              {confirmandoLink ? 'Entrar' : 'Enviar link de acesso'}
-            </button>
-          </form>
-        )}
-      </div>
-
       {erro !== null && (
         <p role="alert" className="text-[13px] text-red-700">
           {erro}
