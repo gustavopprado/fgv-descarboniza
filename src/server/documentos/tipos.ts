@@ -26,10 +26,24 @@ export type Periodicidade = 'mensal' | 'evento'
 export type Escopo = 1 | 3
 export type Severidade = 'informativo' | 'atencao' | 'erro'
 
+/**
+ * Papéis de acesso — ver POS-DEPLOY.md.
+ *
+ * - `admin` e `gestor` — tudo, inclusive liberar acesso de convidado externo.
+ *   Hoje têm as mesmas funções; `gestor` é concedido por script.
+ * - `usuario` — o padrão de quem é do domínio corporativo e não tem documento:
+ *   vê o inventário, registra a própria viagem e **não** vê quem registrou cada
+ *   viagem do programa.
+ * - `externo` — convidado de fora do domínio, liberado na tela de acessos: só
+ *   visualiza. Não registra viagem e não vê quem registrou.
+ * - `sustentabilidade`, `importacao` e `colaborador` continuam como eram.
+ */
 export type Papel =
   | 'admin'
   | 'sustentabilidade'
   | 'gestor'
+  | 'usuario'
+  | 'externo'
   | 'importacao'
   | 'colaborador'
 
@@ -542,6 +556,29 @@ export type DocUsuarioPerfil = {
   papel: Papel
   empresa: string | null
   funcionarioId: string | null
+  /** Quem liberou, quando o perfil veio da tela de acessos. Ausente nos de script. */
+  aprovadoPor?: string | null
+  /** Instante ISO da liberação. */
+  aprovadoEm?: string | null
+}
+
+export type StatusDaSolicitacao = 'pendente' | 'aprovada' | 'recusada' | 'revogada'
+
+/**
+ * Pedido de acesso de quem é de fora do domínio — `solicitacaoAcesso/{uid}`.
+ *
+ * Nasce quando um e-mail externo **já verificado** tenta entrar sem perfil. O
+ * pedido não concede nada: quem libera é `admin` ou `gestor`, na tela de acessos.
+ * Os instantes são ISO completos, e não `AAAA-MM-DD`, porque aqui servem de
+ * registro de quem decidiu e quando, não de recorte de período.
+ */
+export type DocSolicitacaoAcesso = {
+  email: string
+  status: StatusDaSolicitacao
+  pedidoEm: string
+  ultimaTentativaEm: string
+  decididoPor: string | null
+  decididoEm: string | null
 }
 
 /* --------------------------------------------------------------- auxiliares */

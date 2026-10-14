@@ -15,12 +15,15 @@ import { test } from 'node:test'
 import type { Papel } from '../documentos/tipos'
 import {
   AcessoNegadoError,
+  exigirAgregadoDoPrograma,
   exigirInventario,
+  exigirLiberarAcessos,
   exigirModulo,
   exigirProgramaDeViagens,
   exigirVisaoGeral,
   limiteDeEmpresa,
   modulosVisiveis,
+  podeLiberarAcessos,
   podeVerQuemRegistrou,
   type ContextoDeAcesso,
 } from './acesso'
@@ -55,8 +58,8 @@ test('importacao não alcança mobilidade, viagens nem transportadoras', () => {
   )
 })
 
-test('admin, sustentabilidade e gestor veem a visão geral e os quatro módulos', () => {
-  for (const papel of ['admin', 'sustentabilidade', 'gestor'] as const) {
+test('admin, sustentabilidade, gestor, usuario e externo veem a visão geral e os quatro módulos', () => {
+  for (const papel of ['admin', 'sustentabilidade', 'gestor', 'usuario', 'externo'] as const) {
     exigirVisaoGeral(ctx(papel))
     assert.deepEqual(modulosVisiveis(ctx(papel)), [
       'mobilidade',
@@ -82,8 +85,38 @@ test('só importacao é recortado por empresa', () => {
   assert.equal(limiteDeEmpresa(ctx('importacao')), null)
 })
 
-test('gestor não vê quem registrou, nem no programa', () => {
-  assert.equal(podeVerQuemRegistrou(ctx('gestor')), false)
+test('usuario e externo não veem quem registrou, nem no programa', () => {
+  assert.equal(podeVerQuemRegistrou(ctx('usuario')), false)
+  assert.equal(podeVerQuemRegistrou(ctx('externo')), false)
+  assert.equal(podeVerQuemRegistrou(ctx('gestor')), true)
   assert.equal(podeVerQuemRegistrou(ctx('admin')), true)
   assert.equal(podeVerQuemRegistrou(ctx('sustentabilidade')), true)
+})
+
+test('externo só visualiza: vê o agregado do programa e não registra viagem', () => {
+  assert.throws(() => exigirProgramaDeViagens(ctx('externo')), AcessoNegadoError)
+  exigirAgregadoDoPrograma(ctx('externo'))
+})
+
+test('colaborador registra e não vê o agregado do programa', () => {
+  exigirProgramaDeViagens(ctx('colaborador'))
+  assert.throws(() => exigirAgregadoDoPrograma(ctx('colaborador')), AcessoNegadoError)
+})
+
+test('só admin e gestor liberam acesso de convidado', () => {
+  const todos: Papel[] = [
+    'admin',
+    'gestor',
+    'usuario',
+    'externo',
+    'sustentabilidade',
+    'importacao',
+    'colaborador',
+  ]
+  assert.deepEqual(
+    todos.filter((p) => podeLiberarAcessos(ctx(p))),
+    ['admin', 'gestor'],
+  )
+  assert.throws(() => exigirLiberarAcessos(ctx('usuario')), AcessoNegadoError)
+  assert.throws(() => exigirLiberarAcessos(ctx('externo')), AcessoNegadoError)
 })

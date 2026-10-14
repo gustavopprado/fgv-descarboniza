@@ -16,12 +16,14 @@ import {
   exigirVisaoGeral,
   limiteDeEmpresa,
   MODULOS,
+  podeLiberarAcessos,
   podeVerQuemRegistrou,
 } from './consultas/acesso'
 import {
   DURACAO_MAXIMA_MS,
   DURACAO_MINIMA_MS,
   DURACAO_SESSAO_MS,
+  PAPEL_DE_FORA_DO_DOMINIO,
   PAPEL_PADRAO_DO_DOMINIO,
 } from './sessao'
 
@@ -87,12 +89,28 @@ test('o padrão NÃO vê quem registrou cada viagem — é a guarda desta mudan�
   )
 })
 
-test('o padrão não é admin nem sustentabilidade, e o motivo é o teste acima', () => {
+test('o padrão não é admin, gestor nem sustentabilidade, e o motivo é o teste acima', () => {
   assert.ok(
     PAPEL_PADRAO_DO_DOMINIO !== 'admin' &&
+      PAPEL_PADRAO_DO_DOMINIO !== 'gestor' &&
       PAPEL_PADRAO_DO_DOMINIO !== 'sustentabilidade',
-    'os dois veem quem registrou; como padrão, dariam isso a todo mundo do domínio',
+    'os três veem quem registrou; como padrão, dariam isso a todo mundo do domínio',
   )
+})
+
+test('o padrão NÃO libera acesso de convidado externo', () => {
+  assert.equal(
+    podeLiberarAcessos(padrao),
+    false,
+    'se o padrão liberasse, qualquer pessoa da empresa abriria a porta para alguém de fora',
+  )
+})
+
+test('fora do domínio o único papel é o de convidado, que não administra nada', () => {
+  assert.equal(PAPEL_DE_FORA_DO_DOMINIO, 'externo')
+  const convidado = { ...padrao, papel: PAPEL_DE_FORA_DO_DOMINIO }
+  assert.equal(podeLiberarAcessos(convidado), false)
+  assert.equal(podeVerQuemRegistrou(convidado), false)
 })
 
 test('o padrão não é recortado por empresa', () => {

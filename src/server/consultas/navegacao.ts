@@ -16,9 +16,15 @@
  * (§10): a sexta entrada do menu virou lastro junto do dado, em vez de uma
  * página separada que só quem já desconfiava do número abria.
  */
-import { MODULOS, podeVerModulo, type ContextoDeAcesso, type Modulo } from './acesso'
+import {
+  MODULOS,
+  podeLiberarAcessos,
+  podeVerModulo,
+  type ContextoDeAcesso,
+  type Modulo,
+} from './acesso'
 
-export type Secao = 'inventario' | 'programa'
+export type Secao = 'inventario' | 'programa' | 'administracao'
 
 export type ItemDeNavegacao = {
   rotulo: string
@@ -41,6 +47,7 @@ const CONSTRUIDAS: ReadonlySet<string> = new Set([
   '/programa/registrar',
   '/programa/emissoes',
   '/programa/minhas-viagens',
+  '/acessos',
 ])
 
 function item(
@@ -86,9 +93,16 @@ export function navegacaoPara(ctx: ContextoDeAcesso): ItemDeNavegacao[] {
   if (ctx.papel === 'colaborador') {
     itens.push(item('Registrar viagem', '/programa/registrar', 'programa'))
     itens.push(item('Minhas viagens', '/programa/minhas-viagens', 'programa'))
+  } else if (ctx.papel === 'externo') {
+    // Convidado de fora só visualiza: o agregado, sem o formulário.
+    itens.push(item('Emissões registradas', '/programa/emissoes', 'programa'))
   } else {
     itens.push(item('Registrar viagem', '/programa/registrar', 'programa'))
     itens.push(item('Emissões registradas', '/programa/emissoes', 'programa'))
+  }
+
+  if (podeLiberarAcessos(ctx)) {
+    itens.push(item('Acessos', '/acessos', 'administracao'))
   }
 
   return itens

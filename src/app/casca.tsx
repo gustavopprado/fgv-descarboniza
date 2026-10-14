@@ -37,12 +37,15 @@ import { Sair } from './sair'
 const TITULO_DA_SECAO = {
   inventario: 'Inventário',
   programa: 'Programa de viagens',
+  administracao: 'Administração',
 } as const
 
 const NOME_DO_PAPEL: Record<ContextoDeAcesso['papel'], string> = {
   admin: 'Administrador',
   sustentabilidade: 'Sustentabilidade',
-  gestor: 'Gestor de área',
+  gestor: 'Gestor',
+  usuario: 'Usuário',
+  externo: 'Convidado externo',
   importacao: 'Importação',
   colaborador: 'Colaborador',
 }
@@ -89,7 +92,7 @@ export function Casca({
   children: React.ReactNode
 }) {
   const itens = navegacaoPara(ctx)
-  const secoes = (['inventario', 'programa'] as const).filter((s) =>
+  const secoes = (['inventario', 'programa', 'administracao'] as const).filter((s) =>
     itens.some((i) => i.secao === s),
   )
 

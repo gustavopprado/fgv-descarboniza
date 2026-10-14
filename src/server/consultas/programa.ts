@@ -74,6 +74,7 @@ import { COLECAO, firestore } from '../firestore'
 import { trajetoRodoviario } from '../rotas'
 import { emToneladas, serieMensal, somar } from './agregacao'
 import {
+  exigirAgregadoDoPrograma,
   exigirProgramaDeViagens,
   podeVerQuemRegistrou,
   type ContextoDeAcesso,
@@ -241,21 +242,17 @@ export type ResumoDoPrograma = {
 }
 
 /**
- * Visão de adesão do programa. `gestor` recebe tudo agregado e sem nome; `admin`
- * e `sustentabilidade` veem quem registrou nas últimas viagens.
+ * Visão de adesão do programa. `usuario` e `externo` recebem tudo agregado e sem
+ * nome; `admin`, `gestor` e `sustentabilidade` veem quem registrou nas últimas
+ * viagens.
  */
 export async function consultarPrograma(
   ctx: ContextoDeAcesso,
   filtros: { ano?: number } = {},
   db: Firestore = firestore(),
 ): Promise<ResumoDoPrograma> {
-  exigirProgramaDeViagens(ctx)
-  if (ctx.papel === 'colaborador') {
-    // O viajante não vê agregado do programa; a porta dele é `consultarMinhasViagens`.
-    throw new Error(
-      'O perfil "colaborador" não vê o agregado do programa, apenas as próprias submissões.',
-    )
-  }
+  // `colaborador` não vê agregado; a porta dele é `consultarMinhasViagens`.
+  exigirAgregadoDoPrograma(ctx)
 
   let consulta: Query = db.collection(COLECAO.viagemRegistrada)
   if (filtros.ano !== undefined) consulta = consulta.where('ano', '==', filtros.ano)

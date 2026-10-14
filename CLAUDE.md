@@ -3,6 +3,9 @@
 Inventário de emissões de CO₂ da FGV Ferragens para Móveis.
 Este documento é a especificação do sistema. Leia inteiro antes de escrever código.
 
+> **Mudanças depois do deploy estão em `POS-DEPLOY.md`.** Onde os dois divergirem —
+> por exemplo, papéis de acesso e tela de liberação de convidado —, vale ele.
+
 ---
 
 ## 0. Regras de trabalho

@@ -60,6 +60,8 @@ const VE_INVENTARIO: ReadonlySet<Papel> = new Set([
   'admin',
   'sustentabilidade',
   'gestor',
+  'usuario',
+  'externo',
   'importacao',
 ])
 
@@ -73,19 +75,28 @@ const VE_VISAO_GERAL: ReadonlySet<Papel> = new Set([
   'admin',
   'sustentabilidade',
   'gestor',
+  'usuario',
+  'externo',
 ])
 
 /** Quem pode ver cada módulo do inventário. */
 const VE_MODULO: Record<Modulo, ReadonlySet<Papel>> = {
-  mobilidade: new Set(['admin', 'sustentabilidade', 'gestor']),
-  viagens: new Set(['admin', 'sustentabilidade', 'gestor']),
-  maritimo: new Set(['admin', 'sustentabilidade', 'gestor', 'importacao']),
+  mobilidade: new Set(['admin', 'sustentabilidade', 'gestor', 'usuario', 'externo']),
+  viagens: new Set(['admin', 'sustentabilidade', 'gestor', 'usuario', 'externo']),
+  maritimo: new Set([
+    'admin',
+    'sustentabilidade',
+    'gestor',
+    'usuario',
+    'externo',
+    'importacao',
+  ]),
   /**
    * `importacao` fica de fora: o escopo dele é o módulo marítimo (§5), e
    * distribuição rodoviária às filiais é outro assunto — frete de saída, não
    * importação.
    */
-  transportadoras: new Set(['admin', 'sustentabilidade', 'gestor']),
+  transportadoras: new Set(['admin', 'sustentabilidade', 'gestor', 'usuario', 'externo']),
 }
 
 /** Na ordem das telas (§11). */
@@ -142,23 +153,65 @@ export function limiteDeEmpresa(ctx: ContextoDeAcesso): string | null {
 /**
  * Quem pode ver quem registrou uma viagem no programa (§3.2).
  *
- * `gestor` não vê nome nem aqui: para ele o programa também é agregado. E nas
- * telas de inventário ninguém vê, seja qual for o papel — por isso esta função
- * não vale para lá.
+ * `usuario` — o padrão de toda a empresa — e `externo` não veem nome nem aqui:
+ * para eles o programa também é agregado. E nas telas de inventário ninguém vê,
+ * seja qual for o papel — por isso esta função não vale para lá.
  */
 export function podeVerQuemRegistrou(ctx: ContextoDeAcesso): boolean {
-  return ctx.papel === 'admin' || ctx.papel === 'sustentabilidade'
+  return (
+    ctx.papel === 'admin' || ctx.papel === 'sustentabilidade' || ctx.papel === 'gestor'
+  )
 }
 
-/** O viajante só enxerga as próprias submissões (§5.1). */
+/**
+ * Quem registra viagem e lê as próprias submissões (§5.1).
+ *
+ * `externo` fica de fora: convidado de fora da empresa só visualiza, e uma
+ * viagem dele entraria na adesão do programa, que conta quem é da empresa.
+ */
 export function exigirProgramaDeViagens(ctx: ContextoDeAcesso): void {
   const permitidos: ReadonlySet<Papel> = new Set([
     'admin',
     'sustentabilidade',
     'gestor',
+    'usuario',
     'colaborador',
   ])
   if (!permitidos.has(ctx.papel)) {
-    throw new AcessoNegadoError(ctx.papel, 'ao programa de viagens')
+    throw new AcessoNegadoError(ctx.papel, 'ao registro de viagens')
+  }
+}
+
+/**
+ * Quem vê o agregado do programa — a tela "Emissões registradas".
+ *
+ * `colaborador` não vê agregado (§5.1); `externo` vê, sem nome de ninguém.
+ */
+export function exigirAgregadoDoPrograma(ctx: ContextoDeAcesso): void {
+  const permitidos: ReadonlySet<Papel> = new Set([
+    'admin',
+    'sustentabilidade',
+    'gestor',
+    'usuario',
+    'externo',
+  ])
+  if (!permitidos.has(ctx.papel)) {
+    throw new AcessoNegadoError(ctx.papel, 'ao agregado do programa de viagens')
+  }
+}
+
+/**
+ * Quem libera e revoga acesso de convidado externo — a tela de acessos.
+ *
+ * Só `admin` e `gestor`. **Nunca o padrão do domínio**: se `usuario` pudesse
+ * liberar, qualquer pessoa da empresa abriria a porta para alguém de fora.
+ */
+export function podeLiberarAcessos(ctx: ContextoDeAcesso): boolean {
+  return ctx.papel === 'admin' || ctx.papel === 'gestor'
+}
+
+export function exigirLiberarAcessos(ctx: ContextoDeAcesso): void {
+  if (!podeLiberarAcessos(ctx)) {
+    throw new AcessoNegadoError(ctx.papel, 'à liberação de acessos')
   }
 }

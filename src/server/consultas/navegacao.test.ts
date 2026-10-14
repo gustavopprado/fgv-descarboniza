@@ -20,9 +20,25 @@ const PAPEIS: Papel[] = [
   'admin',
   'sustentabilidade',
   'gestor',
+  'usuario',
+  'externo',
   'importacao',
   'colaborador',
 ]
+
+test('externo não recebe o formulário de viagem no menu', () => {
+  const hrefs = navegacaoPara(ctx('externo')).map((i) => i.href)
+  assert.equal(hrefs.includes('/programa/registrar'), false)
+  assert.equal(hrefs.includes('/programa/emissoes'), true)
+  assert.equal(hrefs.includes('/'), true)
+})
+
+test('só admin e gestor recebem a tela de acessos no menu', () => {
+  const comAcessos = PAPEIS.filter((p) =>
+    navegacaoPara(ctx(p)).some((i) => i.href === '/acessos'),
+  )
+  assert.deepEqual(comAcessos, ['admin', 'gestor'])
+})
 
 function ctx(papel: Papel): ContextoDeAcesso {
   return {

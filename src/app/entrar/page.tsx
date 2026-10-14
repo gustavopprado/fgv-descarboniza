@@ -30,8 +30,8 @@ export default async function Page() {
           Descarboniza
         </h1>
         <p className="mt-1.5 mb-7 text-[13.5px] text-[var(--color-apoio)]">
-          Inventário de emissões de CO₂ da FGV. Acesso restrito às contas
-          corporativas.
+          Inventário de emissões de CO₂ da FGV. Contas corporativas entram com
+          o Google; convidados entram pelo e-mail, após aprovação.
         </p>
 
         {semPerfil !== null ? (

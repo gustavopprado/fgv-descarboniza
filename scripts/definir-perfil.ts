@@ -1,14 +1,19 @@
 /**
  * Concede e revoga perfil de acesso — CLAUDE.md §5 e §11.12.
  *
- * **Conta do domínio sem documento em `usuarioPerfil` recebe `gestor`** (§5.2):
- * vê as sete telas e registra a própria viagem. Este script existe para o que o
- * padrão não dá — `admin`, `sustentabilidade` e `importacao` — e para o que ele
- * dá demais: `colaborador`, que é **mais restrito** que o padrão.
+ * **Conta do domínio sem documento em `usuarioPerfil` recebe `usuario`** (§5.2,
+ * POS-DEPLOY.md): vê as telas e registra a própria viagem. Este script existe
+ * para o que o padrão não dá — `admin`, `gestor`, `sustentabilidade` e
+ * `importacao` — e para o que ele dá demais: `colaborador`, que é **mais
+ * restrito** que o padrão.
  *
- * **`remover` devolve a pessoa ao padrão, não a tira do sistema.** Para
- * restringir alguém, grave `colaborador`; apagar o documento afrouxa. Tirar do
- * sistema inteiro é assunto do Workspace — fora do domínio não há login.
+ * **`remover` devolve quem é do domínio ao padrão, não o tira do sistema.** Para
+ * restringir alguém do domínio, grave `colaborador`; apagar o documento afrouxa.
+ *
+ * **Fora do domínio, só `externo`.** Convidado externo é normalmente liberado
+ * pela tela de acessos; o script aceita o mesmo papel, e nenhum outro, para um
+ * erro de digitação não virar acesso administrativo de alguém de fora. Remover
+ * um convidado pelo script tira o acesso dele de verdade.
  *
  * Roda fora da aplicação, como as cargas.
  *
@@ -18,7 +23,8 @@
  *   npm run perfil -- alguem@dominio papel [empresa]
  *   npm run perfil -- alguem@dominio remover
  *
- * Papéis: admin | sustentabilidade | gestor | importacao | colaborador
+ * Papéis: admin | gestor | usuario | sustentabilidade | importacao | colaborador
+ *         | externo (só fora do domínio)
  */
 import 'dotenv/config'
 
@@ -29,10 +35,12 @@ import { conectarFirestore, ehEntrada, executar } from './_comum'
 
 const PAPEIS: readonly Papel[] = [
   'admin',
-  'sustentabilidade',
   'gestor',
+  'usuario',
+  'sustentabilidade',
   'importacao',
   'colaborador',
+  'externo',
 ]
 
 export const REMOVER = 'remover'
@@ -68,9 +76,15 @@ export function interpretarComando(
   }
 
   const dominio = dominioPermitido.toLowerCase()
-  if (!email.toLowerCase().endsWith(`@${dominio}`)) {
+  const doDominio = email.toLowerCase().endsWith(`@${dominio}`)
+  if (!doDominio && alvo !== REMOVER && alvo !== 'externo') {
     throw new Error(
-      `${email} está fora do domínio corporativo (@${dominio}). O login recusaria essa conta.`,
+      `${email} está fora do domínio corporativo (@${dominio}). Fora do domínio o único papel é "externo".`,
+    )
+  }
+  if (doDominio && alvo === 'externo') {
+    throw new Error(
+      `"externo" é papel de convidado de fora do domínio. Para restringir alguém do domínio, use "colaborador".`,
     )
   }
 
@@ -125,9 +139,10 @@ async function principal(): Promise<void> {
       await authAdmin().revokeRefreshTokens(usuario.uid)
       console.log(
         `Perfil de ${comando.email} removido e sessão encerrada.\n` +
-          'ATENÇÃO: remover NÃO tira o acesso. Sendo do domínio, a pessoa volta\n' +
-          'ao papel padrão (§5.2) e continua vendo tudo. Para restringir, grave\n' +
-          '"colaborador", que é mais restrito que o padrão.',
+          'ATENÇÃO: para quem é do domínio, remover NÃO tira o acesso — a pessoa\n' +
+          'volta ao papel padrão ("usuario") e continua vendo tudo. Para\n' +
+          'restringir, grave "colaborador". Para convidado externo, remover tira\n' +
+          'o acesso de verdade.',
       )
       return
     }

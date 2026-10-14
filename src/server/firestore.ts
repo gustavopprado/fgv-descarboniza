@@ -91,6 +91,8 @@ export const COLECAO = {
   municipio: 'municipio',
   rotaCache: 'rotaCache',
   usuarioPerfil: 'usuarioPerfil',
+  /** Pedidos de acesso de quem é de fora do domínio. Ver POS-DEPLOY.md. */
+  solicitacaoAcesso: 'solicitacaoAcesso',
 } as const
 
 export type NomeDeColecao = (typeof COLECAO)[keyof typeof COLECAO]

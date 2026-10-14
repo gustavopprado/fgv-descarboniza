@@ -49,11 +49,25 @@ test('remover é comando próprio, não um papel', () => {
   assert.throws(() => interpretarComando([PESSOA, 'remover', 'algo'], DOMINIO))
 })
 
-test('conta fora do domínio corporativo é recusada', () => {
-  assert.throws(
-    () => interpretarComando(['pessoa.ficticia@outro.invalid', 'admin'], DOMINIO),
-    /domínio corporativo/,
-  )
+test('fora do domínio só vale o papel de convidado', () => {
+  const fora = 'pessoa.ficticia@outro.invalid'
+  assert.throws(() => interpretarComando([fora, 'admin'], DOMINIO), /domínio corporativo/)
+  assert.throws(() => interpretarComando([fora, 'gestor'], DOMINIO), /domínio corporativo/)
+  assert.throws(() => interpretarComando([fora, 'usuario'], DOMINIO), /domínio corporativo/)
+  assert.deepEqual(interpretarComando([fora, 'externo'], DOMINIO), {
+    acao: 'conceder',
+    email: fora,
+    papel: 'externo',
+    empresa: null,
+  })
+  assert.deepEqual(interpretarComando([fora, 'remover'], DOMINIO), {
+    acao: 'remover',
+    email: fora,
+  })
+})
+
+test('convidado não é papel de quem é do domínio', () => {
+  assert.throws(() => interpretarComando([PESSOA, 'externo'], DOMINIO), /colaborador/)
 })
 
 test('papel desconhecido não vira padrão silencioso', () => {

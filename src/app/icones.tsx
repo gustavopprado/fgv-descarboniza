@@ -84,6 +84,17 @@ function Lista({ className }: Props) {
   )
 }
 
+/** Pessoa com sinal de mais: liberar acesso a alguém. */
+function Acessos({ className }: Props) {
+  return (
+    <svg {...COMUM} className={className}>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5" />
+      <path d="M19 8v6M16 11h6" />
+    </svg>
+  )
+}
+
 /** Ícone de cada rota do menu. Rota sem ícone cai na lista. */
 const POR_ROTA: Record<string, (props: Props) => React.ReactElement> = {
   '/': VisaoGeral,
@@ -94,6 +105,7 @@ const POR_ROTA: Record<string, (props: Props) => React.ReactElement> = {
   '/programa/registrar': Mais,
   '/programa/emissoes': Lista,
   '/programa/minhas-viagens': Lista,
+  '/acessos': Acessos,
 }
 
 export function IconeDaRota({

@@ -1,7 +1,9 @@
 /**
  * Sessão — CLAUDE.md §11.2, §11.3 e §11.4.
  *
- * Login por Firebase Auth com provedor Google, restrito ao domínio corporativo.
+ * Login por Firebase Auth: Google para quem é do domínio corporativo, e link por
+ * e-mail para convidado externo — que só entra depois de liberado por `admin` ou
+ * `gestor` na tela de acessos (POS-DEPLOY.md).
  * O navegador troca o ID token por um **cookie de sessão httpOnly** emitido aqui;
  * daí em diante o cliente não carrega credencial nenhuma e não fala com o
  * Firestore — quem lê é o Admin SDK, no servidor.
@@ -11,12 +13,13 @@
  * valendo depois de o acesso ter sido revogado.
  *
  * **Conta do domínio corporativo sem documento de perfil recebe o papel padrão**
- * (§5.2), que é `gestor`. Quem tem documento usa o que está nele — o documento
- * manda, para cima e para baixo.
+ * (§5.2), que é `usuario`. Quem tem documento usa o que está nele — o documento
+ * manda, para cima e para baixo. Fora do domínio não há padrão: só o perfil
+ * `externo`, gravado por quem libera.
  *
  * A versão anterior desta regra não dava papel nenhum, e o motivo escrito era
  * que perfil implícito é privilégio concedido por descuido. O argumento vale, e
- * é por isso que o padrão é `gestor` e não `admin`: o que se concede aqui é
+ * é por isso que o padrão é `usuario` e não `admin`: o que se concede aqui é
  * **ver**, e o que fica de fora é a única coisa deste sistema que é dado
  * pessoal — quem registrou cada viagem do programa (§3.2). Conceder por
  * descuido o direito de ler o inventário é outra ordem de problema, e foi
@@ -27,6 +30,7 @@ import { redirect } from 'next/navigation'
 
 import { dominioWorkspace } from '@/lib/env'
 import type { ContextoDeAcesso } from './consultas/acesso'
+import { registrarSolicitacaoDeAcesso } from './consultas/acessos'
 import type { DocUsuarioPerfil, Papel } from './documentos/tipos'
 import { COLECAO, authAdmin, firestore } from './firestore'
 
@@ -68,13 +72,14 @@ function dominioDe(email: string): string {
 }
 
 /**
- * **Papel de quem é do domínio corporativo e não tem perfil cadastrado** (§5.2).
+ * **Papel de quem é do domínio corporativo e não tem perfil cadastrado** (§5.2,
+ * POS-DEPLOY.md).
  *
- * `gestor` vê as sete telas, todos os números e registra a própria viagem. O que
- * ele **não** vê é quem registrou cada viagem do programa (§3.2) — a única coisa
- * deste sistema que identifica pessoa. É por isso que o padrão é este e não
- * `admin` ou `sustentabilidade`: o pedido foi que todos vejam tudo, e "tudo"
- * aqui é o inventário inteiro, que não tem pessoa dentro (§3.1).
+ * `usuario` vê todas as telas, todos os números e registra a própria viagem. O
+ * que ele **não** vê é quem registrou cada viagem do programa (§3.2) — a única
+ * coisa deste sistema que identifica pessoa — e não libera acesso de ninguém.
+ * Até a mudança pós-deploy este papel se chamava `gestor`; o nome passou a ser
+ * de quem libera convidado externo.
  *
  * **É constante, e não variável de ambiente, de propósito.** Um valor de exemplo
  * plausível num `.env` viraria papel concedido sem ninguém decidir — é a mesma
@@ -82,30 +87,70 @@ function dominioDe(email: string): string {
  * de que aqui o que vaza é acesso e não número. Mudar o padrão passa por editar
  * esta linha, que aparece em revisão.
  */
-export const PAPEL_PADRAO_DO_DOMINIO: Papel = 'gestor'
+export const PAPEL_PADRAO_DO_DOMINIO: Papel = 'usuario'
+
+/**
+ * O único papel que uma conta de fora do domínio pode ter.
+ *
+ * A tela de acessos só concede este, e a sessão recusa qualquer outro fora do
+ * domínio — mesmo que alguém o grave por engano no banco. Convidado de fora não
+ * vira administrador por um erro de digitação no script.
+ */
+export const PAPEL_DE_FORA_DO_DOMINIO: Papel = 'externo'
+
+/**
+ * Provedores aceitos: Google, para quem é do domínio, e o link enviado por
+ * e-mail, para convidado externo que não tem conta Google.
+ *
+ * O link por e-mail chega no token como `password` — é o provedor de e-mail do
+ * Firebase, do qual o link é uma forma de entrar. Senha mesmo ninguém cadastra
+ * aqui, e a conta criada por senha sem confirmar o e-mail cai na recusa de
+ * e-mail não verificado logo abaixo.
+ */
+const PROVEDORES_ACEITOS: ReadonlySet<string> = new Set(['google.com', 'password'])
+
+/** Recusa que diz à pessoa que o pedido dela está na fila. */
+export class AcessoEmAnaliseError extends LoginRecusadoError {
+  constructor(motivo: string) {
+    super(motivo)
+    this.name = 'AcessoEmAnaliseError'
+  }
+}
 
 /**
  * Verifica o ID token recém-emitido e devolve o cookie de sessão.
  *
- * Três recusas, todas antes de qualquer cookie existir: provedor diferente de
- * Google, e-mail não verificado e domínio fora do Workspace corporativo.
+ * Recusas, todas antes de qualquer cookie existir: provedor fora dos aceitos,
+ * e-mail não verificado e, fora do domínio, conta sem perfil `externo`. Neste
+ * último caso o pedido de acesso é registrado para quem libera decidir.
  */
 export async function criarCookieDeSessao(idToken: string): Promise<string> {
   const auth = authAdmin()
   const token = await auth.verifyIdToken(idToken, true)
 
-  if (token.firebase?.sign_in_provider !== 'google.com') {
-    throw new LoginRecusadoError('Entre com a conta Google corporativa.')
+  if (!PROVEDORES_ACEITOS.has(token.firebase?.sign_in_provider ?? '')) {
+    throw new LoginRecusadoError(
+      'Entre com a conta Google corporativa ou pelo link enviado ao seu e-mail.',
+    )
   }
   if (token.email === undefined || token.email_verified !== true) {
     throw new LoginRecusadoError('A conta precisa ter e-mail verificado.')
   }
 
-  const permitido = dominioWorkspace().toLowerCase()
-  if (dominioDe(token.email) !== permitido) {
-    throw new LoginRecusadoError(
-      `Este sistema é restrito às contas @${permitido}.`,
-    )
+  if (dominioDe(token.email) !== dominioWorkspace().toLowerCase()) {
+    const perfil = await firestore()
+      .collection(COLECAO.usuarioPerfil)
+      .doc(token.uid)
+      .get()
+    const papel = perfil.exists ? (perfil.data() as DocUsuarioPerfil).papel : null
+    if (papel !== PAPEL_DE_FORA_DO_DOMINIO) {
+      const status = await registrarSolicitacaoDeAcesso(token.uid, token.email)
+      throw new AcessoEmAnaliseError(
+        status === 'pendente'
+          ? 'Seu pedido de acesso foi registrado. Você poderá entrar assim que ele for aprovado.'
+          : 'Seu acesso não está liberado. Fale com quem administra o sistema.',
+      )
+    }
   }
 
   return auth.createSessionCookie(idToken, { expiresIn: DURACAO_SESSAO_MS })
@@ -156,6 +201,14 @@ export async function sessaoAtual(): Promise<ContextoDeAcesso | null> {
   }
 
   const dados = perfil.data() as DocUsuarioPerfil
+  // Fora do domínio só vale o papel de convidado. Qualquer outro ali é engano
+  // de gravação, e engano de gravação não pode virar acesso administrativo.
+  if (
+    dominioDe(email) !== dominioWorkspace().toLowerCase() &&
+    dados.papel !== PAPEL_DE_FORA_DO_DOMINIO
+  ) {
+    throw new PerfilAusenteError(email)
+  }
   return {
     uid,
     email: dados.email ?? email,
